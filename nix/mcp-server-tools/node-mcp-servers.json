@@ -1,0 +1,4 @@
+[
+  "@modelcontextprotocol/server-filesystem",
+  "@modelcontextprotocol/server-memory"
+]

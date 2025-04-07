@@ -24,15 +24,23 @@
       pkgs = import nixpkgs {inherit system;};
       toolchain = fenix.packages.${system}.fromToolchainFile {
         file = ./rust-toolchain.toml;
-        sha256 = "sha256-Hn2uaQzRLidAWpfmRwSRdImifGUCAb9HeAqTYFXWeQk=";
+        sha256 = "sha256-X/4ZBHO3iW0fOenQ3foEvscgAPJYl2abspaBThDOukI=";
       };
+
+      mcphost = pkgs.callPackage ./nix/mcphost.nix {};
+      mcp-server-tools = pkgs.callPackage ./nix/mcp-server-tools {};
     in {
       devShells.default = pkgs.mkShell {
         buildInputs =
           [
+            mcphost
             toolchain
           ]
+          ++ mcp-server-tools
           ++ (with pkgs; [
+            # For autogenerating nix evaluations for MCP server tools
+            node2nix
+
             # For local LLM testing
             ollama
           ]);
