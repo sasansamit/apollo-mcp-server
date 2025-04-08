@@ -1,4 +1,5 @@
 [
+  "@modelcontextprotocol/inspector",
   "@modelcontextprotocol/server-filesystem",
   "@modelcontextprotocol/server-memory"
 ]

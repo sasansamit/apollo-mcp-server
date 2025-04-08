@@ -41,6 +41,10 @@
             # For autogenerating nix evaluations for MCP server tools
             node2nix
 
+            # Some of the mcp tooling likes to spawn arbitrary node runtimes,
+            # so we need nodejs in the path here :(
+            nodejs_22
+
             # For local LLM testing
             ollama
           ]);
