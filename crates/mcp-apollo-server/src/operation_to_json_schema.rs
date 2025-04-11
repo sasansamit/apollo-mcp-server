@@ -23,7 +23,7 @@ pub struct ToolDefinition {
 pub fn operation_to_json_schema(
     uri: &str,
     source_text: &str,
-    graphql_schema: GraphqlSchema,
+    graphql_schema: &GraphqlSchema,
 ) -> ToolDefinition {
     let document = Parser::new()
         .parse_ast(source_text, uri)
@@ -49,7 +49,7 @@ pub fn operation_to_json_schema(
 
     operation.variables.iter().for_each(|variable| {
         let variable_name = variable.name.to_string();
-        let schema = type_to_schema(variable.ty.as_ref(), graphql_schema.clone());
+        let schema = type_to_schema(variable.ty.as_ref(), graphql_schema);
         obj.properties.insert(variable_name.clone(), schema);
         if variable.ty.is_non_null() {
             obj.required.insert(variable_name);
@@ -74,7 +74,7 @@ pub fn operation_to_json_schema(
     }
 }
 
-fn type_to_schema(variable_type: &Type, graphql_schema: GraphqlSchema) -> Schema {
+fn type_to_schema(variable_type: &Type, graphql_schema: &GraphqlSchema) -> Schema {
     match variable_type {
         Type::NonNullNamed(named) | Type::Named(named) => {
             let mut input_validation: Option<ObjectValidation> = None;
@@ -87,7 +87,7 @@ fn type_to_schema(variable_type: &Type, graphql_schema: GraphqlSchema) -> Schema
                         let mut obj = ObjectValidation::default();
 
                         input_type.fields.iter().for_each(|(name, field)| {
-                            let schema = type_to_schema(field.ty.as_ref(), graphql_schema.clone());
+                            let schema = type_to_schema(field.ty.as_ref(), graphql_schema);
                             if field.is_required() {
                                 obj.properties.insert(name.to_string(), schema);
                                 obj.required.insert(name.to_string());
@@ -125,7 +125,7 @@ fn type_to_schema(variable_type: &Type, graphql_schema: GraphqlSchema) -> Schema
             } else {
                 Some(Box::new(SubschemaValidation {
                     one_of: Some(vec![
-                        type_to_schema(list_type, graphql_schema.clone()),
+                        type_to_schema(list_type, graphql_schema),
                         Schema::Object(SchemaObject {
                             instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Null))),
                             ..Default::default()
@@ -177,7 +177,7 @@ mod tests {
             name: _name,
             description: _desciption,
             schema,
-        } = operation_to_json_schema("operation.graphql", source_text, grpahql_schema);
+        } = operation_to_json_schema("operation.graphql", source_text, &grpahql_schema);
         assert_eq!(json!(schema), expected_json)
     }
 
