@@ -1,4 +1,5 @@
 use apollo_compiler::{
+    Schema as GraphqlSchema,
     ast::{Definition, Type},
     parser::Parser,
 };
@@ -19,7 +20,11 @@ pub struct ToolDefinition {
  * - support for custom scalars
  * - error handling
  */
-pub fn operation_to_json_schema(uri: &str, source_text: &str) -> ToolDefinition {
+pub fn operation_to_json_schema(
+    uri: &str,
+    source_text: &str,
+    _graphql_schema: GraphqlSchema,
+) -> ToolDefinition {
     let document = Parser::new()
         .parse_ast(source_text, uri)
         .expect("failed to parse operation");
@@ -112,60 +117,56 @@ fn type_to_schema(variable_type: &Type) -> Schema {
 #[cfg(test)]
 mod tests {
     use crate::operation_to_json_schema::{ToolDefinition, operation_to_json_schema};
-    use rmcp::serde_json::json;
+    use apollo_compiler::parser::Parser;
+    use rmcp::serde_json::{self, json};
 
-    #[test]
-    fn no_variables() {
+    fn expect_json_schema(source_text: &str, expected_json: serde_json::Value) {
+        let mut parser = Parser::new();
+        let document = parser
+            .parse_ast("type Query { id: String }", "operation.graphql")
+            .expect("failed to parse operation");
+        let grpahql_schema = document.to_schema().unwrap();
+
         let ToolDefinition {
             name: _name,
             description: _desciption,
             schema,
-        } = operation_to_json_schema("operation.graphql", "query { id }");
-        assert_eq!(json!(schema), json!({"type": "object"}))
+        } = operation_to_json_schema("operation.graphql", source_text, grpahql_schema);
+        assert_eq!(json!(schema), expected_json)
+    }
+
+    #[test]
+    fn no_variables() {
+        expect_json_schema("query QueryName { id }", json!({"type": "object"}))
     }
 
     #[test]
     fn nullable_named_type() {
-        let ToolDefinition {
-            name: _name,
-            description: _desciption,
-            schema,
-        } = operation_to_json_schema("operation.graphql", "query($id: ID) { id }");
-        assert_eq!(
-            json!(schema),
+        expect_json_schema(
+            "query QueryName($id: ID) { id }",
             json!({
                 "type": "object",
                 "properties": { "id": {"type": "string"} }
-            })
+            }),
         )
     }
 
     #[test]
     fn non_nullable_named_type() {
-        let ToolDefinition {
-            name: _name,
-            description: _desciption,
-            schema,
-        } = operation_to_json_schema("operation.graphql", "query($id: ID!) { id }");
-        assert_eq!(
-            json!(schema),
+        expect_json_schema(
+            "query QueryName($id: ID!) { id }",
             json!({
                 "type": "object",
                 "properties": { "id": {"type": "string"} },
                 "required": ["id"]
-            })
+            }),
         )
     }
 
     #[test]
     fn non_nullable_list_of_nullable_named_type() {
-        let ToolDefinition {
-            name: _name,
-            description: _desciption,
-            schema,
-        } = operation_to_json_schema("operation.graphql", "query($id: [ID]!) { id }");
-        assert_eq!(
-            json!(schema),
+        expect_json_schema(
+            "query QueryName($id: [ID]!) { id }",
             json!({
                 "type": "object",
                 "properties": {
@@ -175,36 +176,26 @@ mod tests {
                     }
                 },
                 "required": ["id"]
-            })
+            }),
         )
     }
 
     #[test]
     fn non_nullable_list_of_non_nullable_named_type() {
-        let ToolDefinition {
-            name: _name,
-            description: _desciption,
-            schema,
-        } = operation_to_json_schema("operation.graphql", "query($id: [ID!]!) { id }");
-        assert_eq!(
-            json!(schema),
+        expect_json_schema(
+            "query QueryName($id: [ID!]!) { id }",
             json!({
                 "type": "object",
                 "properties": { "id": {"type": "array", "items": { "type": "string" }} },
                 "required": ["id"]
-            })
+            }),
         )
     }
 
     #[test]
     fn nullable_list_of_nullable_named_type() {
-        let ToolDefinition {
-            name: _name,
-            description: _desciption,
-            schema,
-        } = operation_to_json_schema("operation.graphql", "query($id: [ID]) { id }");
-        assert_eq!(
-            json!(schema),
+        expect_json_schema(
+            "query QueryName($id: [ID]) { id }",
             json!({
                 "type": "object",
                 "properties": {
@@ -213,35 +204,25 @@ mod tests {
                         "oneOf": [{"type": "string"}, {"type": "null"}]
                     }
                 },
-            })
+            }),
         )
     }
 
     #[test]
     fn nullable_list_of_non_nullable_named_type() {
-        let ToolDefinition {
-            name: _name,
-            description: _desciption,
-            schema,
-        } = operation_to_json_schema("operation.graphql", "query($id: [ID!]) { id }");
-        assert_eq!(
-            json!(schema),
+        expect_json_schema(
+            "query QueryName($id: [ID!]) { id }",
             json!({
                 "type": "object",
                 "properties": { "id": {"type": "array", "items": { "type": "string" }} },
-            })
+            }),
         )
     }
 
     #[test]
     fn nullable_list_of_nullable_lists_of_nullable_named_types() {
-        let ToolDefinition {
-            name: _name,
-            description: _desciption,
-            schema,
-        } = operation_to_json_schema("operation.graphql", "query($id: [[ID]]) { id }");
-        assert_eq!(
-            json!(schema),
+        expect_json_schema(
+            "query QueryName($id: [[ID]]) { id }",
             json!({
                 "type": "object",
                 "properties": {
@@ -253,31 +234,52 @@ mod tests {
                         ]
                     }
                 },
-            })
+            }),
         )
     }
 
     #[test]
     #[should_panic]
     fn multiple_operations_should_panic() {
-        operation_to_json_schema("operation.graphql", "query { id } query { id }");
+        expect_json_schema(
+            "query QueryName { id } query QueryName { id }",
+            json!({}),
+        )
+    }
+
+    #[test]
+    #[should_panic]
+    fn unnamed_operations_should_panic() {
+        expect_json_schema(
+            "query { id }",
+            json!({}),
+        )
     }
 
     #[test]
     #[should_panic]
     fn no_operations_should_panic() {
-        operation_to_json_schema("operation.graphql", "fragment Test on Query { id }");
+        expect_json_schema(
+            "fragment Test on Query { id }",
+            json!({}),
+        )
     }
 
     #[test]
     #[should_panic]
     fn custom_scalar_should_panic() {
-        operation_to_json_schema("operation.graphql", "query($id: CustomId) { id }");
+        expect_json_schema(
+            "query QueryName($id: CustomId) { id }",
+            json!({}),
+        )
     }
 
     #[test]
     #[should_panic]
     fn schema_should_panic() {
-        operation_to_json_schema("operation.graphql", "type Query { id: String }");
+        expect_json_schema(
+            "type Query { id: String }",
+            json!({}),
+        )
     }
 }
