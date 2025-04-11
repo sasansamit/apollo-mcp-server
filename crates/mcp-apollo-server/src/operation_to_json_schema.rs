@@ -23,7 +23,7 @@ pub struct ToolDefinition {
 pub fn operation_to_json_schema(
     uri: &str,
     source_text: &str,
-    _graphql_schema: GraphqlSchema,
+    graphql_schema: GraphqlSchema,
 ) -> ToolDefinition {
     let document = Parser::new()
         .parse_ast(source_text, uri)
@@ -49,7 +49,7 @@ pub fn operation_to_json_schema(
 
     operation.variables.iter().for_each(|variable| {
         let variable_name = variable.name.to_string();
-        let schema = type_to_schema(variable.ty.as_ref());
+        let schema = type_to_schema(variable.ty.as_ref(), graphql_schema.clone());
         obj.properties.insert(variable_name.clone(), schema);
         if variable.ty.is_non_null() {
             obj.required.insert(variable_name);
@@ -74,17 +74,50 @@ pub fn operation_to_json_schema(
     }
 }
 
-fn type_to_schema(variable_type: &Type) -> Schema {
+fn type_to_schema(variable_type: &Type, graphql_schema: GraphqlSchema) -> Schema {
     match variable_type {
-        Type::NonNullNamed(named) | Type::Named(named) => Schema::Object(SchemaObject {
-            instance_type: Some(SingleOrVec::Single(match named.as_str() {
-                "String" | "ID" => Box::new(InstanceType::String),
-                "Int" | "Float" => Box::new(InstanceType::Number),
-                "Boolean" => Box::new(InstanceType::Boolean),
-                _ => panic!("Only build in scalars are currently supported"),
-            })),
-            ..Default::default()
-        }),
+        Type::NonNullNamed(named) | Type::Named(named) => {
+            let mut input_validation: Option<ObjectValidation> = None;
+            let instance_type = match named.as_str() {
+                "String" | "ID" => InstanceType::String,
+                "Int" | "Float" => InstanceType::Number,
+                "Boolean" => InstanceType::Boolean,
+                _ => {
+                    if let Some(input_type) = graphql_schema.get_input_object(named) {
+                        let mut obj = ObjectValidation::default();
+
+                        input_type.fields.iter().for_each(|(name, field)| {
+                            let schema = type_to_schema(field.ty.as_ref(), graphql_schema.clone());
+                            if field.is_required() {
+                                obj.properties.insert(name.to_string(), schema);
+                                obj.required.insert(name.to_string());
+                            } else {
+                                obj.properties.insert(name.to_string(), schema);
+                            }
+                        });
+
+                        input_validation = Some(obj);
+                        InstanceType::Object
+                    } else if let Some(_scalar_type) = graphql_schema.get_scalar(named) {
+                        // TODO: Should this be an "any" type or an error?
+                        panic!("custom scalars aren't currently supported")
+                    } else {
+                        // TODO: Should this be an "any" type or an error?
+                        panic!("Type not found in schema! {named}")
+                    }
+                }
+            };
+
+            Schema::Object(SchemaObject {
+                instance_type: Some(SingleOrVec::Single(Box::new(instance_type))),
+                object: if let Some(input_validation) = input_validation {
+                    Some(Box::new(input_validation))
+                } else {
+                    None
+                },
+                ..Default::default()
+            })
+        }
         Type::NonNullList(list_type) | Type::List(list_type) => Schema::Object(SchemaObject {
             instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Array))),
             subschemas: if list_type.is_non_null() {
@@ -92,7 +125,7 @@ fn type_to_schema(variable_type: &Type) -> Schema {
             } else {
                 Some(Box::new(SubschemaValidation {
                     one_of: Some(vec![
-                        type_to_schema(list_type),
+                        type_to_schema(list_type, graphql_schema.clone()),
                         Schema::Object(SchemaObject {
                             instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Null))),
                             ..Default::default()
@@ -103,7 +136,10 @@ fn type_to_schema(variable_type: &Type) -> Schema {
             },
             array: if list_type.is_non_null() {
                 Some(Box::new(ArrayValidation {
-                    items: Some(SingleOrVec::Single(Box::new(type_to_schema(list_type)))),
+                    items: Some(SingleOrVec::Single(Box::new(type_to_schema(
+                        list_type,
+                        graphql_schema,
+                    )))),
                     ..Default::default()
                 }))
             } else {
@@ -123,7 +159,17 @@ mod tests {
     fn expect_json_schema(source_text: &str, expected_json: serde_json::Value) {
         let mut parser = Parser::new();
         let document = parser
-            .parse_ast("type Query { id: String }", "operation.graphql")
+            .parse_ast(
+                "
+                    type Query { id: String }
+                    scalar RealCustomScalar
+                    input RealInputObject {
+                        optional: String
+                        required: String!
+                    }
+                ",
+                "operation.graphql",
+            )
             .expect("failed to parse operation");
         let grpahql_schema = document.to_schema().unwrap();
 
@@ -239,47 +285,60 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    fn nullable_input_object() {
+        expect_json_schema(
+            "query QueryName($id: RealInputObject) { id }",
+            json!({
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "object",
+                        "properties": {
+                            "optional": { "type": "string" },
+                            "required": { "type": "string" }
+                        },
+                        "required": ["required"]
+                    }
+                },
+            }),
+        )
+    }
+
+    #[test]
+    #[should_panic(expected = "too many operations in document: 2")]
     fn multiple_operations_should_panic() {
-        expect_json_schema(
-            "query QueryName { id } query QueryName { id }",
-            json!({}),
-        )
+        expect_json_schema("query QueryName { id } query QueryName { id }", json!({}))
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "Operations require names")]
     fn unnamed_operations_should_panic() {
-        expect_json_schema(
-            "query { id }",
-            json!({}),
-        )
+        expect_json_schema("query { id }", json!({}))
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "no operations in document")]
     fn no_operations_should_panic() {
-        expect_json_schema(
-            "fragment Test on Query { id }",
-            json!({}),
-        )
+        expect_json_schema("fragment Test on Query { id }", json!({}))
     }
 
     #[test]
-    #[should_panic]
-    fn custom_scalar_should_panic() {
-        expect_json_schema(
-            "query QueryName($id: CustomId) { id }",
-            json!({}),
-        )
-    }
-
-    #[test]
-    #[should_panic]
+    #[should_panic(
+        expected = "Schema definitions were passed in, only operations and fragments are allowed"
+    )]
     fn schema_should_panic() {
-        expect_json_schema(
-            "type Query { id: String }",
-            json!({}),
-        )
+        expect_json_schema("type Query { id: String }", json!({}))
+    }
+
+    #[test]
+    #[should_panic(expected = "Type not found in schema! FakeType")]
+    fn unknown_type_should_panic() {
+        expect_json_schema("query QueryName($id: FakeType) { id }", json!({}))
+    }
+
+    #[test]
+    #[should_panic(expected = "TODO: custom scalars aren't currently supported")]
+    fn custom_scalar_should_panic() {
+        expect_json_schema("query QueryName($id: RealCustomScalar) { id }", json!({}))
     }
 }
