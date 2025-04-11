@@ -337,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "TODO: custom scalars aren't currently supported")]
+    #[should_panic(expected = "custom scalars aren't currently supported")]
     fn custom_scalar_should_panic() {
         expect_json_schema("query QueryName($id: RealCustomScalar) { id }", json!({}))
     }
