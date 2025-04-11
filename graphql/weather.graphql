@@ -1,0 +1,70 @@
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.10")
+  @link(
+    url: "https://specs.apollo.dev/connect/v0.1"
+    import: ["@connect", "@source"]
+  )
+  @source(
+    name: "NWS"
+    http: {
+      baseURL: "https://api.weather.gov"
+      headers: [
+        { name: "User-Agent", value: "weather-app/1.0" }
+        { name: "Accept", value: "application/geo+json" }
+      ]
+    }
+  )
+
+type Query {
+  forecast(latitude: String!, longitude: String!): Forecast
+    @connect(
+      source: "NWS"
+      http: { GET: "/points/{$args.latitude},{$args.longitude}" }
+      selection: """
+      latitude: $args.latitude
+      longitude: $args.longitude
+      forecastURL: properties.forecast
+      """
+      entity: true
+    )
+
+  alerts(state: String!): [Alert]
+    @connect(
+      source: "NWS"
+      http: { GET: "/alerts/active/area/{$args.state}" }
+      selection: """
+      $.features.properties {
+        severity
+        description
+        instruction
+      }
+      """
+    )
+}
+
+type Forecast {
+  latitude: String!
+  longitude: String!
+  forecastURL: String!
+  detailed: String!
+    @connect(
+      http: {
+        # GET: "{$this.forecastURL->urlSafe}" # TODO: Use this when urlSafe is implemented
+        GET: "https://api.weather.gov/gridpoints/FFC/51,87/forecast" # TODO: remove this hardcoded value
+        headers: [
+          { name: "foo", value: "{$this.forecastURL}" } # required to make composition not throw a satisfiability error
+          { name: "Accept", value: "application/geo+json" }
+          { name: "User-Agent", value: "weather-app/1.0" }
+        ]
+      }
+      selection: """
+      $.properties.periods->first.detailedForecast
+      """
+    )
+}
+
+type Alert {
+  severity: String
+  description: String
+  instruction: String
+}
