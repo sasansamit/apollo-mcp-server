@@ -42,30 +42,31 @@ pub fn operation_to_json_schema(uri: &str, source_text: &str) -> ToolDefinition 
         .nth(0)
         .expect("no operations in document");
 
-    operation
-        .variables
-        .iter()
-        .for_each(|variable| {
-            let variable_name = variable.name.to_string();
-            let schema = type_to_schema(variable.ty.as_ref());
-            obj.properties.insert(variable_name.clone(), schema);
-            if variable.ty.is_non_null() {
-                obj.required.insert(variable_name);
-            }
-        });
+    operation.variables.iter().for_each(|variable| {
+        let variable_name = variable.name.to_string();
+        let schema = type_to_schema(variable.ty.as_ref());
+        obj.properties.insert(variable_name.clone(), schema);
+        if variable.ty.is_non_null() {
+            obj.required.insert(variable_name);
+        }
+    });
 
-        ToolDefinition {
-            name: operation.name.clone().expect("Operations require names").to_string(),
-            description: "".to_string(),
-            schema: RootSchema {
-                schema: SchemaObject {
-                    instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Object))),
-                    object: Some(Box::new(obj)),
-                    ..Default::default()
-                },
+    ToolDefinition {
+        name: operation
+            .name
+            .clone()
+            .expect("Operations require names")
+            .to_string(),
+        description: "".to_string(),
+        schema: RootSchema {
+            schema: SchemaObject {
+                instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Object))),
+                object: Some(Box::new(obj)),
                 ..Default::default()
             },
-        }
+            ..Default::default()
+        },
+    }
 }
 
 fn type_to_schema(variable_type: &Type) -> Schema {
@@ -110,18 +111,26 @@ fn type_to_schema(variable_type: &Type) -> Schema {
 
 #[cfg(test)]
 mod tests {
-    use crate::operation_to_json_schema::{operation_to_json_schema, ToolDefinition};
+    use crate::operation_to_json_schema::{ToolDefinition, operation_to_json_schema};
     use rmcp::serde_json::json;
 
     #[test]
     fn no_variables() {
-        let ToolDefinition { name: _name, description: _desciption, schema } = operation_to_json_schema("operation.graphql", "query { id }");
+        let ToolDefinition {
+            name: _name,
+            description: _desciption,
+            schema,
+        } = operation_to_json_schema("operation.graphql", "query { id }");
         assert_eq!(json!(schema), json!({"type": "object"}))
     }
 
     #[test]
     fn nullable_named_type() {
-        let ToolDefinition { name: _name, description: _desciption, schema } = operation_to_json_schema("operation.graphql", "query($id: ID) { id }");
+        let ToolDefinition {
+            name: _name,
+            description: _desciption,
+            schema,
+        } = operation_to_json_schema("operation.graphql", "query($id: ID) { id }");
         assert_eq!(
             json!(schema),
             json!({
@@ -133,7 +142,11 @@ mod tests {
 
     #[test]
     fn non_nullable_named_type() {
-        let ToolDefinition { name: _name, description: _desciption, schema } = operation_to_json_schema("operation.graphql", "query($id: ID!) { id }");
+        let ToolDefinition {
+            name: _name,
+            description: _desciption,
+            schema,
+        } = operation_to_json_schema("operation.graphql", "query($id: ID!) { id }");
         assert_eq!(
             json!(schema),
             json!({
@@ -146,7 +159,11 @@ mod tests {
 
     #[test]
     fn non_nullable_list_of_nullable_named_type() {
-        let ToolDefinition { name: _name, description: _desciption, schema } = operation_to_json_schema("operation.graphql", "query($id: [ID]!) { id }");
+        let ToolDefinition {
+            name: _name,
+            description: _desciption,
+            schema,
+        } = operation_to_json_schema("operation.graphql", "query($id: [ID]!) { id }");
         assert_eq!(
             json!(schema),
             json!({
@@ -164,8 +181,11 @@ mod tests {
 
     #[test]
     fn non_nullable_list_of_non_nullable_named_type() {
-        let ToolDefinition { name: _name, description: _desciption, schema } =
-            operation_to_json_schema("operation.graphql", "query($id: [ID!]!) { id }");
+        let ToolDefinition {
+            name: _name,
+            description: _desciption,
+            schema,
+        } = operation_to_json_schema("operation.graphql", "query($id: [ID!]!) { id }");
         assert_eq!(
             json!(schema),
             json!({
@@ -178,7 +198,11 @@ mod tests {
 
     #[test]
     fn nullable_list_of_nullable_named_type() {
-        let ToolDefinition { name: _name, description: _desciption, schema } = operation_to_json_schema("operation.graphql", "query($id: [ID]) { id }");
+        let ToolDefinition {
+            name: _name,
+            description: _desciption,
+            schema,
+        } = operation_to_json_schema("operation.graphql", "query($id: [ID]) { id }");
         assert_eq!(
             json!(schema),
             json!({
@@ -195,7 +219,11 @@ mod tests {
 
     #[test]
     fn nullable_list_of_non_nullable_named_type() {
-        let ToolDefinition { name: _name, description: _desciption, schema } = operation_to_json_schema("operation.graphql", "query($id: [ID!]) { id }");
+        let ToolDefinition {
+            name: _name,
+            description: _desciption,
+            schema,
+        } = operation_to_json_schema("operation.graphql", "query($id: [ID!]) { id }");
         assert_eq!(
             json!(schema),
             json!({
@@ -207,8 +235,11 @@ mod tests {
 
     #[test]
     fn nullable_list_of_nullable_lists_of_nullable_named_types() {
-        let ToolDefinition { name: _name, description: _desciption, schema } =
-            operation_to_json_schema("operation.graphql", "query($id: [[ID]]) { id }");
+        let ToolDefinition {
+            name: _name,
+            description: _desciption,
+            schema,
+        } = operation_to_json_schema("operation.graphql", "query($id: [[ID]]) { id }");
         assert_eq!(
             json!(schema),
             json!({
