@@ -77,103 +77,87 @@ pub fn operation_to_json_schema(
     }
 }
 
+fn schema_factory(
+    instance_type: InstanceType,
+    object_validation: Option<ObjectValidation>,
+    array_validation: Option<ArrayValidation>,
+    subschema_validation: Option<SubschemaValidation>,
+) -> Schema {
+    Schema::Object(SchemaObject {
+        instance_type: Some(SingleOrVec::Single(Box::new(instance_type))),
+        object: object_validation.map(|validation| Box::new(validation)),
+        array: array_validation.map(|validation| Box::new(validation)),
+        subschemas: subschema_validation.map(|validation| Box::new(validation)),
+        ..Default::default()
+    })
+}
 fn type_to_schema(
     variable_type: &Type,
     graphql_schema: &GraphqlSchema,
     custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
 ) -> Schema {
     match variable_type {
-        Type::NonNullNamed(named) | Type::Named(named) => {
-            let mut input_validation: Option<ObjectValidation> = None;
-            let mut custom_scalar_schema_object: Option<&SchemaObject> = None;
-            let instance_type = match named.as_str() {
-                "String" | "ID" => Some(SingleOrVec::Single(Box::new(InstanceType::String))),
-                "Int" | "Float" => Some(SingleOrVec::Single(Box::new(InstanceType::Number))),
-                "Boolean" => Some(SingleOrVec::Single(Box::new(InstanceType::Boolean))),
-                _ => {
-                    if let Some(input_type) = graphql_schema.get_input_object(named) {
-                        let mut obj = ObjectValidation::default();
+        Type::NonNullNamed(named) | Type::Named(named) => match named.as_str() {
+            "String" | "ID" => schema_factory(InstanceType::String, None, None, None),
+            "Int" | "Float" => schema_factory(InstanceType::Number, None, None, None),
+            "Boolean" => schema_factory(InstanceType::Boolean, None, None, None),
+            _ => {
+                if let Some(input_type) = graphql_schema.get_input_object(named) {
+                    let mut obj = ObjectValidation::default();
 
-                        input_type.fields.iter().for_each(|(name, field)| {
-                            let schema = type_to_schema(
-                                field.ty.as_ref(),
-                                graphql_schema,
-                                custom_scalar_map,
-                            );
-                            if field.is_required() {
-                                obj.properties.insert(name.to_string(), schema);
-                                obj.required.insert(name.to_string());
-                            } else {
-                                obj.properties.insert(name.to_string(), schema);
-                            }
-                        });
+                    input_type.fields.iter().for_each(|(name, field)| {
+                        obj.properties.insert(
+                            name.to_string(),
+                            type_to_schema(field.ty.as_ref(), graphql_schema, custom_scalar_map),
+                        );
 
-                        input_validation = Some(obj);
-                        Some(SingleOrVec::Single(Box::new(InstanceType::Object)))
-                    } else if let Some(_scalar_type) = graphql_schema.get_scalar(named) {
-                        if let Some(custom_scalar_map) = custom_scalar_map {
-                            custom_scalar_schema_object = custom_scalar_map.get(named.as_str());
-                            if custom_scalar_schema_object.is_some() {
-                                None
-                            } else {
-                                panic!("custom scalar missing from custom_scalar_map")
-                            }
+                        if field.is_required() {
+                            obj.required.insert(name.to_string());
+                        }
+                    });
+
+                    schema_factory(InstanceType::Object, Some(obj), None, None)
+                } else if graphql_schema.get_scalar(named).is_some() {
+                    if let Some(custom_scalar_map) = custom_scalar_map {
+                        if let Some(custom_scalar_schema_object) =
+                            custom_scalar_map.get(named.as_str())
+                        {
+                            Schema::Object(custom_scalar_schema_object.clone())
                         } else {
-                            panic!(
-                                "custom scalars aren't currently supported without a custom_scalar_map"
-                            )
+                            panic!("custom scalar missing from custom_scalar_map")
                         }
                     } else {
-                        // TODO: Should this be an "any" type or an error?
-                        panic!("Type not found in schema! {named}")
+                        panic!(
+                            "custom scalars aren't currently supported without a custom_scalar_map"
+                        )
                     }
+                } else {
+                    // TODO: Should this be an "any" type or an error?
+                    panic!("Type not found in schema! {named}")
                 }
-            };
-
-            if let Some(custom_scalar_schema_object) = custom_scalar_schema_object {
-                Schema::Object(custom_scalar_schema_object.clone())
-            } else {
-                Schema::Object(SchemaObject {
-                    instance_type: instance_type,
-                    object: if let Some(input_validation) = input_validation {
-                        Some(Box::new(input_validation))
-                    } else {
-                        None
-                    },
-                    ..Default::default()
-                })
             }
-        }
-        Type::NonNullList(list_type) | Type::List(list_type) => Schema::Object(SchemaObject {
-            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Array))),
-            subschemas: if list_type.is_non_null() {
-                None
-            } else {
-                Some(Box::new(SubschemaValidation {
+        },
+        Type::NonNullList(list_type) | Type::List(list_type) => {
+            let inner_type_schema = type_to_schema(list_type, graphql_schema, custom_scalar_map);
+            schema_factory(
+                InstanceType::Array,
+                None,
+                list_type.is_non_null().then(|| ArrayValidation {
+                    items: Some(SingleOrVec::Single(Box::new(inner_type_schema.clone()))),
+                    ..Default::default()
+                }),
+                (!list_type.is_non_null()).then(|| SubschemaValidation {
                     one_of: Some(vec![
-                        type_to_schema(list_type, graphql_schema, custom_scalar_map),
+                        inner_type_schema,
                         Schema::Object(SchemaObject {
                             instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Null))),
                             ..Default::default()
                         }),
                     ]),
                     ..Default::default()
-                }))
-            },
-            array: if list_type.is_non_null() {
-                Some(Box::new(ArrayValidation {
-                    items: Some(SingleOrVec::Single(Box::new(type_to_schema(
-                        list_type,
-                        graphql_schema,
-                        custom_scalar_map,
-                    )))),
-                    ..Default::default()
-                }))
-            } else {
-                None
-            },
-            ..Default::default()
-        }),
+                }),
+            )
+        }
     }
 }
 
