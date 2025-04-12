@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use apollo_compiler::{
     Schema as GraphqlSchema,
     ast::{Definition, Type},
@@ -24,6 +26,7 @@ pub fn operation_to_json_schema(
     uri: &str,
     source_text: &str,
     graphql_schema: &GraphqlSchema,
+    custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
 ) -> ToolDefinition {
     let document = Parser::new()
         .parse_ast(source_text, uri)
@@ -49,7 +52,7 @@ pub fn operation_to_json_schema(
 
     operation.variables.iter().for_each(|variable| {
         let variable_name = variable.name.to_string();
-        let schema = type_to_schema(variable.ty.as_ref(), graphql_schema);
+        let schema = type_to_schema(variable.ty.as_ref(), graphql_schema, custom_scalar_map);
         obj.properties.insert(variable_name.clone(), schema);
         if variable.ty.is_non_null() {
             obj.required.insert(variable_name);
@@ -74,20 +77,29 @@ pub fn operation_to_json_schema(
     }
 }
 
-fn type_to_schema(variable_type: &Type, graphql_schema: &GraphqlSchema) -> Schema {
+fn type_to_schema(
+    variable_type: &Type,
+    graphql_schema: &GraphqlSchema,
+    custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
+) -> Schema {
     match variable_type {
         Type::NonNullNamed(named) | Type::Named(named) => {
             let mut input_validation: Option<ObjectValidation> = None;
+            let mut custom_scalar_schema_object: Option<&SchemaObject> = None;
             let instance_type = match named.as_str() {
-                "String" | "ID" => InstanceType::String,
-                "Int" | "Float" => InstanceType::Number,
-                "Boolean" => InstanceType::Boolean,
+                "String" | "ID" => Some(SingleOrVec::Single(Box::new(InstanceType::String))),
+                "Int" | "Float" => Some(SingleOrVec::Single(Box::new(InstanceType::Number))),
+                "Boolean" => Some(SingleOrVec::Single(Box::new(InstanceType::Boolean))),
                 _ => {
                     if let Some(input_type) = graphql_schema.get_input_object(named) {
                         let mut obj = ObjectValidation::default();
 
                         input_type.fields.iter().for_each(|(name, field)| {
-                            let schema = type_to_schema(field.ty.as_ref(), graphql_schema);
+                            let schema = type_to_schema(
+                                field.ty.as_ref(),
+                                graphql_schema,
+                                custom_scalar_map,
+                            );
                             if field.is_required() {
                                 obj.properties.insert(name.to_string(), schema);
                                 obj.required.insert(name.to_string());
@@ -97,10 +109,20 @@ fn type_to_schema(variable_type: &Type, graphql_schema: &GraphqlSchema) -> Schem
                         });
 
                         input_validation = Some(obj);
-                        InstanceType::Object
+                        Some(SingleOrVec::Single(Box::new(InstanceType::Object)))
                     } else if let Some(_scalar_type) = graphql_schema.get_scalar(named) {
-                        // TODO: Should this be an "any" type or an error?
-                        panic!("custom scalars aren't currently supported")
+                        if let Some(custom_scalar_map) = custom_scalar_map {
+                            custom_scalar_schema_object = custom_scalar_map.get(named.as_str());
+                            if custom_scalar_schema_object.is_some() {
+                                None
+                            } else {
+                                panic!("custom scalar missing from custom_scalar_map")
+                            }
+                        } else {
+                            panic!(
+                                "custom scalars aren't currently supported without a custom_scalar_map"
+                            )
+                        }
                     } else {
                         // TODO: Should this be an "any" type or an error?
                         panic!("Type not found in schema! {named}")
@@ -108,15 +130,19 @@ fn type_to_schema(variable_type: &Type, graphql_schema: &GraphqlSchema) -> Schem
                 }
             };
 
-            Schema::Object(SchemaObject {
-                instance_type: Some(SingleOrVec::Single(Box::new(instance_type))),
-                object: if let Some(input_validation) = input_validation {
-                    Some(Box::new(input_validation))
-                } else {
-                    None
-                },
-                ..Default::default()
-            })
+            if let Some(custom_scalar_schema_object) = custom_scalar_schema_object {
+                Schema::Object(custom_scalar_schema_object.clone())
+            } else {
+                Schema::Object(SchemaObject {
+                    instance_type: instance_type,
+                    object: if let Some(input_validation) = input_validation {
+                        Some(Box::new(input_validation))
+                    } else {
+                        None
+                    },
+                    ..Default::default()
+                })
+            }
         }
         Type::NonNullList(list_type) | Type::List(list_type) => Schema::Object(SchemaObject {
             instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Array))),
@@ -125,7 +151,7 @@ fn type_to_schema(variable_type: &Type, graphql_schema: &GraphqlSchema) -> Schem
             } else {
                 Some(Box::new(SubschemaValidation {
                     one_of: Some(vec![
-                        type_to_schema(list_type, graphql_schema),
+                        type_to_schema(list_type, graphql_schema, custom_scalar_map),
                         Schema::Object(SchemaObject {
                             instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Null))),
                             ..Default::default()
@@ -139,6 +165,7 @@ fn type_to_schema(variable_type: &Type, graphql_schema: &GraphqlSchema) -> Schem
                     items: Some(SingleOrVec::Single(Box::new(type_to_schema(
                         list_type,
                         graphql_schema,
+                        custom_scalar_map,
                     )))),
                     ..Default::default()
                 }))
@@ -152,11 +179,20 @@ fn type_to_schema(variable_type: &Type, graphql_schema: &GraphqlSchema) -> Schem
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::operation_to_json_schema::{ToolDefinition, operation_to_json_schema};
     use apollo_compiler::parser::Parser;
-    use rmcp::serde_json::{self, json};
+    use rmcp::{
+        schemars::schema::{InstanceType, SchemaObject, SingleOrVec},
+        serde_json::{self, json},
+    };
 
-    fn expect_json_schema(source_text: &str, expected_json: serde_json::Value) {
+    fn expect_json_schema(
+        source_text: &str,
+        expected_json: serde_json::Value,
+        custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
+    ) {
         let mut parser = Parser::new();
         let document = parser
             .parse_ast(
@@ -177,13 +213,18 @@ mod tests {
             name: _name,
             description: _desciption,
             schema,
-        } = operation_to_json_schema("operation.graphql", source_text, &grpahql_schema);
+        } = operation_to_json_schema(
+            "operation.graphql",
+            source_text,
+            &grpahql_schema,
+            custom_scalar_map,
+        );
         assert_eq!(json!(schema), expected_json)
     }
 
     #[test]
     fn no_variables() {
-        expect_json_schema("query QueryName { id }", json!({"type": "object"}))
+        expect_json_schema("query QueryName { id }", json!({"type": "object"}), None)
     }
 
     #[test]
@@ -194,6 +235,7 @@ mod tests {
                 "type": "object",
                 "properties": { "id": {"type": "string"} }
             }),
+            None,
         )
     }
 
@@ -206,6 +248,7 @@ mod tests {
                 "properties": { "id": {"type": "string"} },
                 "required": ["id"]
             }),
+            None,
         )
     }
 
@@ -223,6 +266,7 @@ mod tests {
                 },
                 "required": ["id"]
             }),
+            None,
         )
     }
 
@@ -235,6 +279,7 @@ mod tests {
                 "properties": { "id": {"type": "array", "items": { "type": "string" }} },
                 "required": ["id"]
             }),
+            None,
         )
     }
 
@@ -251,6 +296,7 @@ mod tests {
                     }
                 },
             }),
+            None,
         )
     }
 
@@ -262,6 +308,7 @@ mod tests {
                 "type": "object",
                 "properties": { "id": {"type": "array", "items": { "type": "string" }} },
             }),
+            None,
         )
     }
 
@@ -281,6 +328,7 @@ mod tests {
                     }
                 },
             }),
+            None,
         )
     }
 
@@ -301,25 +349,30 @@ mod tests {
                     }
                 },
             }),
+            None,
         )
     }
 
     #[test]
     #[should_panic(expected = "too many operations in document: 2")]
     fn multiple_operations_should_panic() {
-        expect_json_schema("query QueryName { id } query QueryName { id }", json!({}))
+        expect_json_schema(
+            "query QueryName { id } query QueryName { id }",
+            json!({}),
+            None,
+        )
     }
 
     #[test]
     #[should_panic(expected = "Operations require names")]
     fn unnamed_operations_should_panic() {
-        expect_json_schema("query { id }", json!({}))
+        expect_json_schema("query { id }", json!({}), None)
     }
 
     #[test]
     #[should_panic(expected = "no operations in document")]
     fn no_operations_should_panic() {
-        expect_json_schema("fragment Test on Query { id }", json!({}))
+        expect_json_schema("fragment Test on Query { id }", json!({}), None)
     }
 
     #[test]
@@ -327,18 +380,56 @@ mod tests {
         expected = "Schema definitions were passed in, only operations and fragments are allowed"
     )]
     fn schema_should_panic() {
-        expect_json_schema("type Query { id: String }", json!({}))
+        expect_json_schema("type Query { id: String }", json!({}), None)
     }
 
     #[test]
     #[should_panic(expected = "Type not found in schema! FakeType")]
     fn unknown_type_should_panic() {
-        expect_json_schema("query QueryName($id: FakeType) { id }", json!({}))
+        expect_json_schema("query QueryName($id: FakeType) { id }", json!({}), None)
     }
 
     #[test]
     #[should_panic(expected = "custom scalars aren't currently supported")]
-    fn custom_scalar_should_panic() {
-        expect_json_schema("query QueryName($id: RealCustomScalar) { id }", json!({}))
+    fn custom_scalar_without_map_should_panic() {
+        expect_json_schema(
+            "query QueryName($id: RealCustomScalar) { id }",
+            json!({}),
+            None,
+        )
+    }
+
+    #[test]
+    #[should_panic(expected = "custom scalar missing from custom_scalar_map")]
+    fn custom_scalar_with_map_but_not_found_should_panic() {
+        expect_json_schema(
+            "query QueryName($id: RealCustomScalar) { id }",
+            json!({}),
+            Some(&HashMap::new()),
+        )
+    }
+
+    #[test]
+    fn custom_scalar_with_map() {
+        let mut custom_scalar_map = HashMap::new();
+        custom_scalar_map.insert(
+            "RealCustomScalar".to_string(),
+            SchemaObject {
+                instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::String))),
+                ..Default::default()
+            },
+        );
+        expect_json_schema(
+            "query QueryName($id: RealCustomScalar) { id }",
+            json!({
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    }
+                },
+            }),
+            Some(&custom_scalar_map),
+        )
     }
 }
