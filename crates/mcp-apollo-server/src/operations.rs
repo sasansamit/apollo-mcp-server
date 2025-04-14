@@ -162,7 +162,7 @@ fn type_to_schema(
 mod tests {
     use std::collections::HashMap;
 
-    use crate::operation_to_json_schema::{ToolDefinition, operation_to_json_schema};
+    use crate::operations::{ToolDefinition, operation_to_json_schema};
     use apollo_compiler::parser::Parser;
     use rmcp::{
         schemars::schema::{InstanceType, SchemaObject, SingleOrVec},
