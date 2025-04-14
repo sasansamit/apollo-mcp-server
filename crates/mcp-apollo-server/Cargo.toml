@@ -5,4 +5,4 @@ edition = "2024"
 
 [dependencies]
 rmcp = { version = "0.1", features = ["server"] }
-apollo-parser = "0.8.3"
+apollo-compiler = "1.27.0"
