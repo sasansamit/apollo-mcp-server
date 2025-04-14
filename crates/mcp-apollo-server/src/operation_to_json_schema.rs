@@ -16,12 +16,6 @@ pub struct ToolDefinition {
     pub schema: RootSchema,
 }
 
-/**
- * TODO
- * - support for input objects
- * - support for custom scalars
- * - error handling
- */
 pub fn operation_to_json_schema(
     uri: &str,
     source_text: &str,
@@ -34,7 +28,10 @@ pub fn operation_to_json_schema(
     let operation_defs = document.definitions.iter().filter_map(|def| match def {
         Definition::OperationDefinition(operation_def) => Some(operation_def),
         Definition::FragmentDefinition(_) => None,
-        _ => panic!("Schema definitions were passed in, only operations and fragments are allowed"),
+        _ => {
+            eprintln!("Schema definitions were passed in, only operations and fragments are allowed");
+            None
+        },
     });
 
     let operation_count = operation_defs.clone().count();
