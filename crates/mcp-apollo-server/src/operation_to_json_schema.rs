@@ -358,7 +358,7 @@ mod tests {
 
     #[test]
     #[should_panic(
-        expected = "Schema definitions were passed in, only operations and fragments are allowed"
+        expected = "no operations in document"
     )]
     fn schema_should_panic() {
         expect_json_schema("type Query { id: String }", json!({}), None)
