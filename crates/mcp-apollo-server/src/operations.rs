@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 
 use apollo_compiler::{
-    Node, Schema as GraphqlSchema,
+    Name, Node, Schema as GraphqlSchema,
     ast::{Definition, OperationDefinition, Type},
     parser::Parser,
 };
 use rmcp::{
     model::Tool,
     schemars::schema::{
-        ArrayValidation, InstanceType, ObjectValidation, RootSchema, Schema, SchemaObject,
-        SingleOrVec, SubschemaValidation,
+        ArrayValidation, InstanceType, Metadata, ObjectValidation, RootSchema, Schema,
+        SchemaObject, SingleOrVec, SubschemaValidation,
     },
     serde_json,
 };
@@ -17,6 +17,17 @@ use rmcp::{
 pub struct Operation {
     tool: Tool,
     source_text: String,
+}
+impl AsRef<Tool> for Operation {
+    fn as_ref(&self) -> &Tool {
+        &self.tool
+    }
+}
+
+impl From<Operation> for Tool {
+    fn from(value: Operation) -> Tool {
+        value.tool
+    }
 }
 
 impl Operation {
@@ -53,14 +64,14 @@ impl Operation {
                     .expect("Operations require names")
                     .to_string();
 
-                let object = rmcp::serde_json::to_value(get_json_schema(
+                let object = serde_json::to_value(get_json_schema(
                     operation_def,
                     graphql_schema,
                     custom_scalar_map,
                 ))
                 .expect("failed to serialize schema"); // TODO: error handling
                 let schema = match object {
-                    rmcp::serde_json::Value::Object(object) => object,
+                    serde_json::Value::Object(object) => object,
                     _ => panic!("unexpected schema value"), // TODO: error handling
                 };
 
@@ -96,10 +107,6 @@ impl Operation {
             Err(e) => Err(e),
         }
     }
-
-    pub fn as_tool(&self) -> &Tool {
-        &self.tool
-    }
 }
 
 fn get_json_schema(
@@ -111,7 +118,14 @@ fn get_json_schema(
 
     operation.variables.iter().for_each(|variable| {
         let variable_name = variable.name.to_string();
-        let schema = type_to_schema(variable.ty.as_ref(), graphql_schema, custom_scalar_map);
+        let type_name = variable.ty.inner_named_type();
+        let schema = type_to_schema(
+            // For the root description, for now we can use the type description.
+            get_description(type_name, graphql_schema),
+            variable.ty.as_ref(),
+            graphql_schema,
+            custom_scalar_map,
+        );
         obj.properties.insert(variable_name.clone(), schema);
         if variable.ty.is_non_null() {
             obj.required.insert(variable_name);
@@ -129,6 +143,7 @@ fn get_json_schema(
 }
 
 fn schema_factory(
+    description: Option<String>,
     instance_type: InstanceType,
     object_validation: Option<ObjectValidation>,
     array_validation: Option<ArrayValidation>,
@@ -139,27 +154,48 @@ fn schema_factory(
         object: object_validation.map(|validation| Box::new(validation)),
         array: array_validation.map(|validation| Box::new(validation)),
         subschemas: subschema_validation.map(|validation| Box::new(validation)),
+        metadata: Some(Box::new(Metadata {
+            description: description,
+            ..Default::default()
+        })),
         ..Default::default()
     })
 }
+fn get_description(name: &Name, graphql_schema: &GraphqlSchema) -> Option<String> {
+    let description = if let Some(input_object) = graphql_schema.get_input_object(name) {
+        input_object.description.clone()
+    } else if let Some(scalar) = graphql_schema.get_scalar(name) {
+        scalar.description.clone()
+    } else {
+        None
+    };
+    description.map(|n| n.to_string())
+}
 fn type_to_schema(
+    description: Option<String>,
     variable_type: &Type,
     graphql_schema: &GraphqlSchema,
     custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
 ) -> Schema {
     match variable_type {
         Type::NonNullNamed(named) | Type::Named(named) => match named.as_str() {
-            "String" | "ID" => schema_factory(InstanceType::String, None, None, None),
-            "Int" | "Float" => schema_factory(InstanceType::Number, None, None, None),
-            "Boolean" => schema_factory(InstanceType::Boolean, None, None, None),
+            "String" | "ID" => schema_factory(description, InstanceType::String, None, None, None),
+            "Int" | "Float" => schema_factory(description, InstanceType::Number, None, None, None),
+            "Boolean" => schema_factory(description, InstanceType::Boolean, None, None, None),
             _ => {
                 if let Some(input_type) = graphql_schema.get_input_object(named) {
                     let mut obj = ObjectValidation::default();
 
                     input_type.fields.iter().for_each(|(name, field)| {
+                        let description = field.description.as_ref().map(|n| n.to_string());
                         obj.properties.insert(
                             name.to_string(),
-                            type_to_schema(field.ty.as_ref(), graphql_schema, custom_scalar_map),
+                            type_to_schema(
+                                description,
+                                field.ty.as_ref(),
+                                graphql_schema,
+                                custom_scalar_map,
+                            ),
                         );
 
                         if field.is_required() {
@@ -167,13 +203,20 @@ fn type_to_schema(
                         }
                     });
 
-                    schema_factory(InstanceType::Object, Some(obj), None, None)
+                    schema_factory(description, InstanceType::Object, Some(obj), None, None)
                 } else if graphql_schema.get_scalar(named).is_some() {
                     if let Some(custom_scalar_map) = custom_scalar_map {
                         if let Some(custom_scalar_schema_object) =
                             custom_scalar_map.get(named.as_str())
                         {
-                            Schema::Object(custom_scalar_schema_object.clone())
+                            let mut custom_schema = custom_scalar_schema_object.clone();
+                            let mut meta = *custom_schema.metadata.unwrap_or_default();
+                            // If description isn't included in custom schema, inject the one from the schema
+                            if meta.description.is_none() {
+                                meta.description = description;
+                            }
+                            custom_schema.metadata = Some(Box::new(meta));
+                            Schema::Object(custom_schema)
                         } else {
                             panic!("custom scalar missing from custom_scalar_map")
                         }
@@ -189,8 +232,10 @@ fn type_to_schema(
             }
         },
         Type::NonNullList(list_type) | Type::List(list_type) => {
-            let inner_type_schema = type_to_schema(list_type, graphql_schema, custom_scalar_map);
+            let inner_type_schema =
+                type_to_schema(description, list_type, graphql_schema, custom_scalar_map);
             schema_factory(
+                None,
                 InstanceType::Array,
                 None,
                 list_type.is_non_null().then(|| ArrayValidation {
@@ -218,8 +263,9 @@ mod tests {
 
     use apollo_compiler::parser::Parser;
     use rmcp::{
+        model::Tool,
         schemars::schema::{InstanceType, SchemaObject, SingleOrVec},
-        serde_json::{self, json},
+        serde_json,
     };
 
     use crate::operations::Operation;
@@ -227,6 +273,8 @@ mod tests {
     fn expect_json_schema(
         source_text: &str,
         expected_json: serde_json::Value,
+        expected_name: &str,
+        expected_description: &str,
         custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
     ) {
         let mut parser = Parser::new();
@@ -234,9 +282,18 @@ mod tests {
             .parse_ast(
                 "
                     type Query { id: String }
+                    \"\"\"
+                    RealCustomScalar exists
+                    \"\"\"
                     scalar RealCustomScalar
                     input RealInputObject {
+                        \"\"\"
+                        optional is a input field that is optional
+                        \"\"\"
                         optional: String
+                        \"\"\"
+                        required is a input field that is required
+                        \"\"\"
                         required: String!
                     }
                 ",
@@ -246,23 +303,42 @@ mod tests {
         let graphql_schema = document.to_schema().unwrap();
 
         let operation = Operation::new(source_text, &graphql_schema, custom_scalar_map);
-        let tool = operation.as_tool();
-        assert_eq!(json!(tool.input_schema), expected_json);
+        let Tool {
+            name,
+            description,
+            input_schema,
+        } = operation.into();
+        assert_eq!(serde_json::json!(input_schema), expected_json);
+        assert_eq!(name, expected_name);
+        assert_eq!(description, expected_description)
     }
 
     #[test]
     fn no_variables() {
-        expect_json_schema("query QueryName { id }", json!({"type": "object"}), None)
+        expect_json_schema(
+            "query QueryName { id }",
+            serde_json::json!({"type": "object"}),
+            "QueryName",
+            "",
+            None,
+        )
     }
 
     #[test]
     fn nullable_named_type() {
         expect_json_schema(
             "query QueryName($id: ID) { id }",
-            json!({
+            serde_json::json!({
                 "type": "object",
-                "properties": { "id": {"type": "string"} }
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
+                    }
+                }
             }),
+            "QueryName",
+            "",
             None,
         )
     }
@@ -271,11 +347,18 @@ mod tests {
     fn non_nullable_named_type() {
         expect_json_schema(
             "query QueryName($id: ID!) { id }",
-            json!({
+            serde_json::json!({
                 "type": "object",
-                "properties": { "id": {"type": "string"} },
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
+                    }
+                },
                 "required": ["id"]
             }),
+            "QueryName",
+            "",
             None,
         )
     }
@@ -284,16 +367,24 @@ mod tests {
     fn non_nullable_list_of_nullable_named_type() {
         expect_json_schema(
             "query QueryName($id: [ID]!) { id }",
-            json!({
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "id": {
                         "type": "array",
-                        "oneOf": [{"type": "string"}, {"type": "null"}]
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "description": "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID.",
+                            },
+                            {"type": "null"}
+                        ]
                     }
                 },
                 "required": ["id"]
             }),
+            "QueryName",
+            "",
             None,
         )
     }
@@ -302,11 +393,21 @@ mod tests {
     fn non_nullable_list_of_non_nullable_named_type() {
         expect_json_schema(
             "query QueryName($id: [ID!]!) { id }",
-            json!({
+            serde_json::json!({
                 "type": "object",
-                "properties": { "id": {"type": "array", "items": { "type": "string" }} },
+                "properties": {
+                    "id": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "description": "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID.",
+                        }
+                    }
+                },
                 "required": ["id"]
             }),
+            "QueryName",
+            "",
             None,
         )
     }
@@ -315,15 +416,23 @@ mod tests {
     fn nullable_list_of_nullable_named_type() {
         expect_json_schema(
             "query QueryName($id: [ID]) { id }",
-            json!({
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "id": {
                         "type": "array",
-                        "oneOf": [{"type": "string"}, {"type": "null"}]
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "description": "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID.",
+                            },
+                            {"type": "null"}
+                        ]
                     }
                 },
             }),
+            "QueryName",
+            "",
             None,
         )
     }
@@ -332,10 +441,20 @@ mod tests {
     fn nullable_list_of_non_nullable_named_type() {
         expect_json_schema(
             "query QueryName($id: [ID!]) { id }",
-            json!({
+            serde_json::json!({
                 "type": "object",
-                "properties": { "id": {"type": "array", "items": { "type": "string" }} },
+                "properties": {
+                    "id": {
+                        "type": "array",
+                        "items": { 
+                            "type": "string",
+                            "description": "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID.", 
+                        }
+                    }
+                },
             }),
+            "QueryName",
+            "",
             None,
         )
     }
@@ -344,18 +463,23 @@ mod tests {
     fn nullable_list_of_nullable_lists_of_nullable_named_types() {
         expect_json_schema(
             "query QueryName($id: [[ID]]) { id }",
-            json!({
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "id": {
                         "type": "array",
                         "oneOf": [
-                            {"type": "array", "oneOf": [{"type": "string"}, {"type": "null"}]},
+                            {"type": "array", "oneOf": [{
+                                "type": "string",
+                                "description": "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID.",
+                            }, {"type": "null"}]},
                             {"type": "null"}
                         ]
                     }
                 },
             }),
+            "QueryName",
+            "",
             None,
         )
     }
@@ -364,19 +488,24 @@ mod tests {
     fn nullable_input_object() {
         expect_json_schema(
             "query QueryName($id: RealInputObject) { id }",
-            json!({
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "id": {
                         "type": "object",
                         "properties": {
-                            "optional": { "type": "string" },
-                            "required": { "type": "string" }
+                            "optional": {
+                                "type": "string",
+                                "description": "optional is a input field that is optional"
+                             },
+                            "required": { "type": "string", "description": "required is a input field that is required" }
                         },
                         "required": ["required"]
                     }
                 },
             }),
+            "QueryName",
+            "",
             None,
         )
     }
@@ -386,7 +515,9 @@ mod tests {
     fn multiple_operations_should_panic() {
         expect_json_schema(
             "query QueryName { id } query QueryName { id }",
-            json!({}),
+            serde_json::json!({}),
+            "",
+            "",
             None,
         )
     }
@@ -394,25 +525,43 @@ mod tests {
     #[test]
     #[should_panic(expected = "Operations require names")]
     fn unnamed_operations_should_panic() {
-        expect_json_schema("query { id }", json!({}), None)
+        expect_json_schema("query { id }", serde_json::json!({}), "", "", None)
     }
 
     #[test]
     #[should_panic(expected = "no operations in document")]
     fn no_operations_should_panic() {
-        expect_json_schema("fragment Test on Query { id }", json!({}), None)
+        expect_json_schema(
+            "fragment Test on Query { id }",
+            serde_json::json!({}),
+            "",
+            "",
+            None,
+        )
     }
 
     #[test]
     #[should_panic(expected = "no operations in document")]
     fn schema_should_panic() {
-        expect_json_schema("type Query { id: String }", json!({}), None)
+        expect_json_schema(
+            "type Query { id: String }",
+            serde_json::json!({}),
+            "",
+            "",
+            None,
+        )
     }
 
     #[test]
     #[should_panic(expected = "Type not found in schema! FakeType")]
     fn unknown_type_should_panic() {
-        expect_json_schema("query QueryName($id: FakeType) { id }", json!({}), None)
+        expect_json_schema(
+            "query QueryName($id: FakeType) { id }",
+            serde_json::json!({}),
+            "",
+            "",
+            None,
+        )
     }
 
     #[test]
@@ -420,7 +569,9 @@ mod tests {
     fn custom_scalar_without_map_should_panic() {
         expect_json_schema(
             "query QueryName($id: RealCustomScalar) { id }",
-            json!({}),
+            serde_json::json!({}),
+            "",
+            "",
             None,
         )
     }
@@ -430,7 +581,9 @@ mod tests {
     fn custom_scalar_with_map_but_not_found_should_panic() {
         expect_json_schema(
             "query QueryName($id: RealCustomScalar) { id }",
-            json!({}),
+            serde_json::json!({}),
+            "",
+            "",
             Some(&HashMap::new()),
         )
     }
@@ -447,14 +600,17 @@ mod tests {
         );
         expect_json_schema(
             "query QueryName($id: RealCustomScalar) { id }",
-            json!({
+            serde_json::json!({
                 "type": "object",
                 "properties": {
                     "id": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "RealCustomScalar exists"
                     }
                 },
             }),
+            "QueryName",
+            "",
             Some(&custom_scalar_map),
         )
     }
