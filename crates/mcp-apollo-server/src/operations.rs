@@ -11,7 +11,7 @@ use rmcp::{
         ArrayValidation, InstanceType, Metadata, ObjectValidation, RootSchema, Schema,
         SchemaObject, SingleOrVec, SubschemaValidation,
     },
-    serde_json,
+    serde_json::{self, Value},
 };
 
 pub struct Operation {
@@ -148,12 +148,14 @@ fn schema_factory(
     object_validation: Option<ObjectValidation>,
     array_validation: Option<ArrayValidation>,
     subschema_validation: Option<SubschemaValidation>,
+    enum_values: Option<Vec<Value>>,
 ) -> Schema {
     Schema::Object(SchemaObject {
         instance_type: Some(SingleOrVec::Single(Box::new(instance_type))),
         object: object_validation.map(|validation| Box::new(validation)),
         array: array_validation.map(|validation| Box::new(validation)),
         subschemas: subschema_validation.map(|validation| Box::new(validation)),
+        enum_values: enum_values,
         metadata: Some(Box::new(Metadata {
             description: description,
             ..Default::default()
@@ -179,9 +181,13 @@ fn type_to_schema(
 ) -> Schema {
     match variable_type {
         Type::NonNullNamed(named) | Type::Named(named) => match named.as_str() {
-            "String" | "ID" => schema_factory(description, InstanceType::String, None, None, None),
-            "Int" | "Float" => schema_factory(description, InstanceType::Number, None, None, None),
-            "Boolean" => schema_factory(description, InstanceType::Boolean, None, None, None),
+            "String" | "ID" => {
+                schema_factory(description, InstanceType::String, None, None, None, None)
+            }
+            "Int" | "Float" => {
+                schema_factory(description, InstanceType::Number, None, None, None, None)
+            }
+            "Boolean" => schema_factory(description, InstanceType::Boolean, None, None, None, None),
             _ => {
                 if let Some(input_type) = graphql_schema.get_input_object(named) {
                     let mut obj = ObjectValidation::default();
@@ -203,7 +209,14 @@ fn type_to_schema(
                         }
                     });
 
-                    schema_factory(description, InstanceType::Object, Some(obj), None, None)
+                    schema_factory(
+                        description,
+                        InstanceType::Object,
+                        Some(obj),
+                        None,
+                        None,
+                        None,
+                    )
                 } else if graphql_schema.get_scalar(named).is_some() {
                     if let Some(custom_scalar_map) = custom_scalar_map {
                         if let Some(custom_scalar_schema_object) =
@@ -225,6 +238,21 @@ fn type_to_schema(
                             "custom scalars aren't currently supported without a custom_scalar_map"
                         )
                     }
+                } else if let Some(enum_type) = graphql_schema.get_enum(named) {
+                    schema_factory(
+                        description,
+                        InstanceType::String,
+                        None,
+                        None,
+                        None,
+                        Some(
+                            enum_type
+                                .values
+                                .iter()
+                                .map(|(_name, value)| serde_json::json!(value.value))
+                                .collect(),
+                        ),
+                    )
                 } else {
                     // TODO: Should this be an "any" type or an error?
                     panic!("Type not found in schema! {named}")
@@ -252,6 +280,7 @@ fn type_to_schema(
                     ]),
                     ..Default::default()
                 }),
+                None,
             )
         }
     }
@@ -295,6 +324,17 @@ mod tests {
                         required is a input field that is required
                         \"\"\"
                         required: String!
+                    }
+
+                    enum RealEnum {
+                        \"\"\"
+                        ENUM_VALUE_1 is a value
+                        \"\"\"
+                        ENUM_VALUE_1
+                        \"\"\"
+                        ENUM_VALUE_2 is a value
+                        \"\"\"
+                        ENUM_VALUE_2
                     }
                 ",
                 "operation.graphql",
@@ -446,9 +486,9 @@ mod tests {
                 "properties": {
                     "id": {
                         "type": "array",
-                        "items": { 
+                        "items": {
                             "type": "string",
-                            "description": "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID.", 
+                            "description": "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID.",
                         }
                     }
                 },
@@ -503,6 +543,30 @@ mod tests {
                         "required": ["required"]
                     }
                 },
+            }),
+            "QueryName",
+            "",
+            None,
+        )
+    }
+
+    #[test]
+    fn non_nullable_enum() {
+        expect_json_schema(
+            "query QueryName($id: RealEnum!) { id }",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "enum": [
+                            "ENUM_VALUE_1",
+                            "ENUM_VALUE_2",
+                        ]
+
+                    },
+                },
+                "required": ["id"]
             }),
             "QueryName",
             "",
