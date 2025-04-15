@@ -1,8 +1,5 @@
 extend schema
-  @link(
-    url: "https://specs.apollo.dev/federation/v2.10"
-    import: ["@tag"]
-  )
+  @link(url: "https://specs.apollo.dev/federation/v2.10", import: ["@tag"])
   @link(
     url: "https://specs.apollo.dev/connect/v0.1"
     import: ["@connect", "@source"]
@@ -19,6 +16,9 @@ extend schema
   )
 
 type Query {
+  """
+  Get the weather forecast for a latitude and longitude
+  """
   forecast(latitude: String!, longitude: String!): Forecast
     @connect(
       source: "NWS"
@@ -31,7 +31,11 @@ type Query {
       entity: true
     )
 
-  alerts(state: String!): [Alert] @tag(name: "mcp")
+  """
+  Get the weather alerts for a state, using the two-letter abbreviation for the state - for example, CO for Colorado
+  """
+  alerts(state: String!): [Alert]
+    @tag(name: "mcp")
     @connect(
       source: "NWS"
       http: { GET: "/alerts/active/area/{$args.state}" }
@@ -45,10 +49,28 @@ type Query {
     )
 }
 
+"""
+A weather forecast
+"""
 type Forecast {
+  """
+  The latitude associated with this forecast
+  """
   latitude: String!
+
+  """
+  The longitude associated with this forecast
+  """
   longitude: String!
+
+  """
+  The National Weather Service (NWS) URL where the forecast data can be read
+  """
   forecastURL: String!
+
+  """
+  A detailed weather forecast from the National Weather Service (NWS)
+  """
   detailed: String!
     @connect(
       http: {
@@ -66,8 +88,22 @@ type Forecast {
     )
 }
 
+"""
+A weather alert
+"""
 type Alert @tag(name: "mcp") {
+  """
+  The severity of this alert
+  """
   severity: String
+
+  """
+  A description of the alert
+  """
   description: String
+
+  """
+  Information about people should respond to the alert
+  """
   instruction: String
 }
