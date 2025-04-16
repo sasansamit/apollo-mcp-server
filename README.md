@@ -57,7 +57,7 @@ You can easily run the server with your own GraphQL schema and operations in the
 ```json
 {
   "mcpServers": {
-    "weather": {
+    "<name for your server>": {
         "command": "<absolute path to repo>/target/debug/mcp-apollo-server",
         "args": [
             "--directory",
