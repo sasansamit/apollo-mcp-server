@@ -1,6 +1,7 @@
 #![deny(clippy::expect_used)]
 #![deny(clippy::unwrap_used)]
 
+pub mod errors;
 pub mod operations;
 pub mod server;
 

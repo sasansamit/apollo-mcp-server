@@ -16,7 +16,7 @@ use rmcp::{
 };
 use serde_derive::Serialize;
 
-use crate::OperationError;
+use crate::errors::OperationError;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Operation {
@@ -225,10 +225,31 @@ fn description(name: &Name, graphql_schema: &GraphqlSchema) -> Option<String> {
     } else if let Some(scalar) = graphql_schema.get_scalar(name) {
         scalar.description.as_ref().map(|d| d.to_string())
     } else if let Some(enum_type) = graphql_schema.get_enum(name) {
-        let values = enum_type.values.iter().map(|(name, value)| {
-            format!("{}: {}", name, value.description.as_ref().map(|d| d.to_string()).unwrap_or_default())
-        }).collect::<Vec<_>>().join("\n");
-        Some(format!("{}\n\nValues:\n{}", enum_type.description.as_ref().map(|d| d.to_string()).unwrap_or_default(), values))
+        let values = enum_type
+            .values
+            .iter()
+            .map(|(name, value)| {
+                format!(
+                    "{}: {}",
+                    name,
+                    value
+                        .description
+                        .as_ref()
+                        .map(|d| d.to_string())
+                        .unwrap_or_default()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        Some(format!(
+            "{}\n\nValues:\n{}",
+            enum_type
+                .description
+                .as_ref()
+                .map(|d| d.to_string())
+                .unwrap_or_default(),
+            values
+        ))
     } else {
         None
     }

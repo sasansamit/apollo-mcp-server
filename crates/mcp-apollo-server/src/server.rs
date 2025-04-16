@@ -1,5 +1,5 @@
 use crate::operations::Operation;
-use crate::{OperationsList, ServerError};
+use crate::{OperationsList, errors::ServerError};
 use apollo_compiler::parser::Parser;
 use futures_util::TryFutureExt;
 use rmcp::model::{
