@@ -121,7 +121,7 @@ fn get_json_schema(
         let type_name = variable.ty.inner_named_type();
         let schema = type_to_schema(
             // For the root description, for now we can use the type description.
-            get_description(type_name, graphql_schema),
+            description(type_name, graphql_schema),
             variable.ty.as_ref(),
             graphql_schema,
             custom_scalar_map,
@@ -163,7 +163,7 @@ fn schema_factory(
         ..Default::default()
     })
 }
-fn get_description(name: &Name, graphql_schema: &GraphqlSchema) -> Option<String> {
+fn description(name: &Name, graphql_schema: &GraphqlSchema) -> Option<String> {
     let description = if let Some(input_object) = graphql_schema.get_input_object(name) {
         input_object.description.clone()
     } else if let Some(scalar) = graphql_schema.get_scalar(name) {
