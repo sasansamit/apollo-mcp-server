@@ -5,10 +5,7 @@ use rmcp::serde_json;
 #[derive(Debug, thiserror::Error)]
 pub enum OperationError {
     #[error("Could not parse GraphQL document: {0}")]
-    GraphQLDocument(WithErrors<Document>),
-
-    #[error("Could not parse GraphQL schema: {0}")]
-    GraphQLSchema(WithErrors<Schema>),
+    GraphQLDocument(Box<WithErrors<Document>>),
 
     #[error("Internal error: {0}")]
     Internal(String),

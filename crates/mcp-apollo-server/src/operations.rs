@@ -43,7 +43,7 @@ impl Operation {
     ) -> Result<Self, OperationError> {
         let document = Parser::new()
             .parse_ast(source_text, "operation.graphql")
-            .map_err(OperationError::GraphQLDocument)?;
+            .map_err(|e| OperationError::GraphQLDocument(Box::new(e)))?;
 
         let mut operation_defs = document.definitions.into_iter().filter_map(|def| match def {
             Definition::OperationDefinition(operation_def) => Some(operation_def),
