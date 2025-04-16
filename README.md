@@ -65,7 +65,9 @@ You can easily run the server with your own GraphQL schema and operations in the
             "--schema",
             "<relative path to the schema from the directory specified above>",
             "--operations",
-            "<relative path to the operations file from the directory specified above>"
+            "<relative path to the operations file from the directory specified above>",
+            "--endpoint",
+            "<your GraphQL endpoint>"
         ]
     }
   }
@@ -74,6 +76,6 @@ You can easily run the server with your own GraphQL schema and operations in the
 
 Follow the format from `graphql/operations.json` to specify the operations. Make sure to give your operations meaningful names, and document your schema as much as possible.
 
-Run your schema in Apollo Router.
+Run your schema in Apollo Router at the endpoint given in your configuration file.
 
 In Claude Desktop, click the hammer icon to see the description generated for your tools.
