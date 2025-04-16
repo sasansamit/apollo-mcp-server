@@ -2,7 +2,7 @@
 
 The MCP Server exposes a pre-defined set of GraphQL queries as MCP tools.
 
-# Running
+# Running the Example
 
 The repo has an example schema in `.graphql/weather.graphql`, and an example set of operations in `.graphql/operations.json`.
 
@@ -48,4 +48,32 @@ Restart your AI agent. You should now see the tools successfully registered. For
 
 You can now issue prompts related to weather forecasts and alerts, which will call out to the tools and invoke the GraphQL operations.
 
-**Note** that due to current limitations of Apollo Connectors, the schema is using a hard-coded weather forecast link, so the forecast will always be the same.
+**Note** that due to current limitations of Apollo Connectors, the schema is using a hard-coded weather forecast link, so the forecast will be for a fixed location.
+
+# Running Your Own Graph
+
+You can easily run the server with your own GraphQL schema and operations in the AI agent configuration file:
+
+```json
+{
+  "mcpServers": {
+    "weather": {
+        "command": "<absolute path to repo>/target/debug/mcp-apollo-server",
+        "args": [
+            "--directory",
+            "<absolute path to the directory containing your schema and operations file>",
+            "--schema",
+            "<relative path to the schema from the directory specified above>",
+            "--operations",
+            "<relative path to the operations file from the directory specified above>"
+        ]
+    }
+  }
+}
+```
+
+Follow the format from `graphql/operations.json` to specify the operations. Make sure to give your operations meaningful names, and document your schema as much as possible.
+
+Run your schema in Apollo Router.
+
+In Claude Desktop, click the hammer icon to see the description generated for your tools.
