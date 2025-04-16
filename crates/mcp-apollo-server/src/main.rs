@@ -1,11 +1,11 @@
+use clap::Parser;
+use clap::builder::Styles;
+use clap::builder::styling::{AnsiColor, Effects};
 use mcp_apollo_server::server::Server;
 use rmcp::ServiceExt;
 use rmcp::transport::stdio;
 use std::env;
 use std::io::Error;
-use clap::builder::Styles;
-use clap::builder::styling::{AnsiColor, Effects};
-use clap::Parser;
 use tracing_subscriber::EnvFilter;
 
 /// Clap styling
@@ -23,16 +23,20 @@ const STYLES: Styles = Styles::styled()
 )]
 struct Args {
     /// The working directory to use
-    #[clap(long, short='d')]
+    #[clap(long, short = 'd')]
     directory: String,
 
     /// The path to the GraphQL schema file
-    #[clap(long, short='s', default_value = "graphql/weather.graphql")]
+    #[clap(long, short = 's', default_value = "graphql/weather.graphql")]
     schema: String,
 
     /// The path to the GraphQL operations file
-    #[clap(long, short='o', default_value = "graphql/operations.json")]
+    #[clap(long, short = 'o', default_value = "graphql/operations.json")]
     operations: String,
+
+    /// The GraphQL endpoint the server will invoke
+    #[clap(long, short = 'e', default_value = "http://127.0.0.1:4000")]
+    endpoint: String,
 }
 
 #[tokio::main]
@@ -47,7 +51,7 @@ async fn main() -> Result<(), Error> {
     let _ = env::set_current_dir(args.directory);
 
     tracing::info!("Starting MCP server");
-    let server = Server::new(args.schema, args.operations);
+    let server = Server::new(args.schema, args.operations, args.endpoint);
     let service = server.serve(stdio()).await.inspect_err(|e| {
         tracing::error!("serving error: {:?}", e);
     })?;

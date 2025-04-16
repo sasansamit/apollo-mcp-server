@@ -17,10 +17,11 @@ type McpError = rmcp::model::ErrorData;
 #[derive(Clone)]
 pub struct Server {
     operations: Vec<Operation>,
+    endpoint: String,
 }
 
 impl Server {
-    pub fn new<P: AsRef<Path>>(schema: P, operations: P) -> Self {
+    pub fn new<P: AsRef<Path>>(schema: P, operations: P, endpoint: String) -> Self {
         let schema_path = schema.as_ref();
         info!(schema_path=?schema_path, "Loading schema");
         let graphql_schema = std::fs::read_to_string(schema_path).unwrap();
@@ -46,7 +47,10 @@ impl Server {
             serde_json::to_string_pretty(&operations).unwrap()
         );
 
-        Self { operations }
+        Self {
+            operations,
+            endpoint,
+        }
     }
 }
 
@@ -56,8 +60,6 @@ impl ServerHandler for Server {
         request: CallToolRequestParam,
         _context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<CallToolResult, McpError>> + Send + '_ {
-        const ENDPOINT: &str = "http://127.0.0.1:4000";
-
         Box::pin(async move {
             self.operations
                 .iter()
@@ -69,7 +71,7 @@ impl ServerHandler for Server {
                         None,
                     )
                 })?
-                .execute(ENDPOINT, Value::from(request.arguments))
+                .execute(&self.endpoint, Value::from(request.arguments))
                 .map(|result| {
                     Ok(CallToolResult {
                         content: vec![Content::json(result.unwrap()).unwrap()],
