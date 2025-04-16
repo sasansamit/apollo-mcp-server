@@ -16,6 +16,8 @@ use rmcp::{
 };
 use serde_derive::Serialize;
 
+use crate::OperationError;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Operation {
     tool: Tool,
@@ -34,60 +36,62 @@ impl From<Operation> for Tool {
 }
 
 impl Operation {
-    pub fn new(
+    pub fn from_document(
         source_text: &str,
         graphql_schema: &GraphqlSchema,
         custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
-    ) -> Self {
+    ) -> Result<Self, OperationError> {
         let document = Parser::new()
             .parse_ast(source_text, "operation.graphql")
-            .expect("failed to parse operation");
+            .map_err(OperationError::GraphQLDocument)?;
 
-        let mut operation_defs = document.definitions.iter().filter_map(|def| match def {
+        let mut operation_defs = document.definitions.into_iter().filter_map(|def| match def {
             Definition::OperationDefinition(operation_def) => Some(operation_def),
             Definition::FragmentDefinition(_) => None,
             _ => {
-                eprintln!(
+                tracing::error!(
+                    spec=?def,
                     "Schema definitions were passed in, only operations and fragments are allowed"
                 );
                 None
             }
         });
-        let operation_count = operation_defs.clone().count();
-        assert!(
-            operation_count <= 1,
-            "too many operations in document: {operation_count}"
-        );
 
-        match operation_defs.nth(0) {
-            Some(operation_def) => {
-                let operation_name = operation_def
-                    .name
-                    .clone()
-                    .expect("Operations require names")
-                    .to_string();
-
-                let description = Self::tool_description(graphql_schema, operation_def)
-                    .unwrap_or(String::from(""));
-
-                let object = serde_json::to_value(get_json_schema(
-                    operation_def,
-                    graphql_schema,
-                    custom_scalar_map,
-                ))
-                .expect("failed to serialize schema"); // TODO: error handling
-                let schema = match object {
-                    serde_json::Value::Object(object) => object,
-                    _ => panic!("unexpected schema value"), // TODO: error handling
-                };
-
-                Operation {
-                    tool: Tool::new(operation_name, description, schema),
-                    source_text: source_text.to_string(),
-                }
+        let operation = match (operation_defs.next(), operation_defs.next()) {
+            (None, _) => return Err(OperationError::NoOperations),
+            (_, Some(_)) => {
+                return Err(OperationError::TooManyOperations(
+                    1 + operation_defs.count(),
+                ));
             }
-            _ => panic!("no operations in document"),
-        }
+            (Some(op), None) => op,
+        };
+
+        let operation_name = operation
+            .name
+            .as_ref()
+            .ok_or_else(|| {
+                OperationError::MissingName(operation.serialize().no_indent().to_string())
+            })?
+            .to_string();
+
+        let description = Self::tool_description(graphql_schema, &operation).unwrap_or_default();
+
+        let object = serde_json::to_value(get_json_schema(
+            &operation,
+            graphql_schema,
+            custom_scalar_map,
+        ))?;
+        let serde_json::Value::Object(schema) = object else {
+            return Err(OperationError::Internal(
+                "Schemars should have returned an object".to_string(),
+            ));
+        };
+
+        Ok(Operation {
+            tool: Tool::new(operation_name, description, schema),
+            source_text: source_text.to_string(),
+        })
     }
 
     /// Generate a description for an operation based on documentation in the schema
@@ -401,7 +405,8 @@ mod tests {
             .expect("failed to parse operation");
         let graphql_schema = document.to_schema().unwrap();
 
-        let operation = Operation::new(source_text, &graphql_schema, custom_scalar_map);
+        let operation =
+            Operation::from_document(source_text, &graphql_schema, custom_scalar_map).unwrap();
         let Tool {
             name,
             description,
