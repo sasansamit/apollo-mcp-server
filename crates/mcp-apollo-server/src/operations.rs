@@ -61,7 +61,7 @@ impl Operation {
             (None, _) => return Err(OperationError::NoOperations),
             (_, Some(_)) => {
                 return Err(OperationError::TooManyOperations(
-                    1 + operation_defs.count(),
+                    2 + operation_defs.count(),
                 ));
             }
             (Some(op), None) => op,
@@ -661,7 +661,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "too many operations in document: 2")]
+    #[should_panic(expected = "called `Result::unwrap()` on an `Err` value: TooManyOperations(2)")]
     fn multiple_operations_should_panic() {
         expect_json_schema(
             "query QueryName { id } query QueryName { id }",
@@ -673,13 +673,15 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Operations require names")]
+    #[should_panic(
+        expected = "called `Result::unwrap()` on an `Err` value: MissingName(\"{ id }\")"
+    )]
     fn unnamed_operations_should_panic() {
         expect_json_schema("query { id }", serde_json::json!({}), "", "", None)
     }
 
     #[test]
-    #[should_panic(expected = "no operations in document")]
+    #[should_panic(expected = "called `Result::unwrap()` on an `Err` value: NoOperations")]
     fn no_operations_should_panic() {
         expect_json_schema(
             "fragment Test on Query { id }",
@@ -691,7 +693,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "no operations in document")]
+    #[should_panic(expected = "called `Result::unwrap()` on an `Err` value: NoOperations")]
     fn schema_should_panic() {
         expect_json_schema(
             "type Query { id: String }",
