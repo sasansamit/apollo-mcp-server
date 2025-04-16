@@ -216,14 +216,18 @@ fn schema_factory(
     })
 }
 fn description(name: &Name, graphql_schema: &GraphqlSchema) -> Option<String> {
-    let description = if let Some(input_object) = graphql_schema.get_input_object(name) {
-        input_object.description.clone()
+    if let Some(input_object) = graphql_schema.get_input_object(name) {
+        input_object.description.as_ref().map(|d| d.to_string())
     } else if let Some(scalar) = graphql_schema.get_scalar(name) {
-        scalar.description.clone()
+        scalar.description.as_ref().map(|d| d.to_string())
+    } else if let Some(enum_type) = graphql_schema.get_enum(name) {
+        let values = enum_type.values.iter().map(|(name, value)| {
+            format!("{}: {}", name, value.description.as_ref().map(|d| d.to_string()).unwrap_or_default())
+        }).collect::<Vec<_>>().join("\n");
+        Some(format!("{}\n\nValues:\n{}", enum_type.description.as_ref().map(|d| d.to_string()).unwrap_or_default(), values))
     } else {
         None
-    };
-    description.map(|n| n.to_string())
+    }
 }
 fn type_to_schema(
     description: Option<String>,
@@ -378,6 +382,9 @@ mod tests {
                         required: String!
                     }
 
+                    \"\"\"
+                    the description for the enum
+                    \"\"\"
                     enum RealEnum {
                         \"\"\"
                         ENUM_VALUE_1 is a value
@@ -611,6 +618,7 @@ mod tests {
                 "properties": {
                     "id": {
                         "type": "string",
+                        "description": "the description for the enum\n\nValues:\nENUM_VALUE_1: ENUM_VALUE_1 is a value\nENUM_VALUE_2: ENUM_VALUE_2 is a value",
                         "enum": [
                             "ENUM_VALUE_1",
                             "ENUM_VALUE_2",
