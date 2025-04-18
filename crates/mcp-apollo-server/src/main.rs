@@ -26,7 +26,7 @@ struct Args {
     directory: String,
 
     /// The path to the GraphQL schema file
-    #[clap(long, short = 's', default_value = "graphql/weather/weather.graphql")]
+    #[clap(long, short = 's')]
     schema: String,
 
     /// The GraphQL endpoint the server will invoke
@@ -41,7 +41,7 @@ struct Args {
     #[clap(long)]
     sse_port: Option<u16>,
 
-    /// Operation files to include in planning
+    /// Operation files to expose as MCP tools
     #[arg(long = "operations", short = 'o', num_args=0..)]
     operations: Vec<String>,
 }
