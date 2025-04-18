@@ -26,11 +26,11 @@ struct Args {
     directory: String,
 
     /// The path to the GraphQL schema file
-    #[clap(long, short = 's', default_value = "graphql/weather.graphql")]
+    #[clap(long, short = 's', default_value = "graphql/weather/weather.graphql")]
     schema: String,
 
     /// The path to the GraphQL operations file
-    #[clap(long, short = 'o', default_value = "graphql/operations.json")]
+    #[clap(long, short = 'o', default_value = "graphql/weather/operations.json")]
     operations: String,
 
     /// The GraphQL endpoint the server will invoke
