@@ -1,10 +1,14 @@
+use apollo_compiler::Schema;
 use clap::Parser;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
+use mcp_apollo_server::errors::ServerError;
 use mcp_apollo_server::server::Server;
 use rmcp::ServiceExt;
 use rmcp::transport::{SseServer, stdio};
 use std::env;
+use std::path::Path;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 /// Clap styling
@@ -61,8 +65,14 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     env::set_current_dir(args.directory)?;
 
+    let schema_path: &Path = args.schema.as_ref();
+    info!(schema_path=?schema_path, "Loading schema");
+    let schema = std::fs::read_to_string(schema_path)?;
+    let schema = Schema::parse_and_validate(schema, schema_path)
+        .map_err(|e| ServerError::GraphQLSchema(Box::new(e)))?;
+
     let server = Server::builder()
-        .schema(args.schema)
+        .schema(schema)
         .endpoint(args.endpoint)
         .operations(args.operations)
         .headers(args.headers)
@@ -70,16 +80,16 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     if let Some(port) = args.sse_port {
-        tracing::info!(port = ?port, "Starting MCP server in SSE mode");
+        info!(port = ?port, "Starting MCP server in SSE mode");
         let cancellation_token = SseServer::serve(format!("127.0.0.1:{port}").parse()?)
             .await?
             .with_service(move || server.clone());
         tokio::signal::ctrl_c().await?;
         cancellation_token.cancel();
     } else {
-        tracing::info!("Starting MCP server in stdio mode");
+        info!("Starting MCP server in stdio mode");
         let service = server.serve(stdio()).await.inspect_err(|e| {
-            tracing::error!("serving error: {:?}", e);
+            error!("serving error: {:?}", e);
         })?;
         service.waiting().await?;
     }

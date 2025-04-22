@@ -3,6 +3,7 @@
 use crate::errors::McpError;
 use crate::graphql;
 use apollo_compiler::Schema;
+use apollo_compiler::validation::Valid;
 use rmcp::model::{ErrorCode, Tool};
 use rmcp::schemars::JsonSchema;
 use rmcp::serde_json::Value;
@@ -23,7 +24,7 @@ macro_rules! schema_from_type {
 
 #[derive(Clone)]
 pub struct GetSchema {
-    pub schema: Schema,
+    pub schema: Valid<Schema>,
     pub tool: Tool,
 }
 
@@ -31,7 +32,7 @@ pub struct GetSchema {
 pub struct GetSchemaInput {}
 
 impl GetSchema {
-    pub fn new(schema: Schema) -> Self {
+    pub fn new(schema: Valid<Schema>) -> Self {
         Self {
             schema,
             tool: Tool::new(

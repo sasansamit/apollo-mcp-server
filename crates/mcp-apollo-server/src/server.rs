@@ -3,7 +3,8 @@ use crate::graphql;
 use crate::graphql::Executable;
 use crate::introspection::{EXECUTE_TOOL_NAME, Execute, GET_SCHEMA_TOOL_NAME, GetSchema};
 use crate::operations::Operation;
-use apollo_compiler::parser::Parser;
+use apollo_compiler::Schema;
+use apollo_compiler::validation::Valid;
 use buildstructor::buildstructor;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use rmcp::model::{
@@ -16,6 +17,10 @@ use rmcp::{RoleServer, ServerHandler, serde_json};
 use std::path::Path;
 use std::str::FromStr;
 use tracing::info;
+
+pub use rmcp::ServiceExt;
+pub use rmcp::transport::SseServer;
+pub use rmcp::transport::stdio;
 
 /// An MCP Server for Apollo GraphQL operations
 #[derive(Clone)]
@@ -31,30 +36,18 @@ pub struct Server {
 impl Server {
     #[builder]
     pub fn new<P: AsRef<Path>>(
-        schema: P,
+        schema: Valid<Schema>,
         operations: Vec<P>,
         endpoint: String,
         headers: Vec<String>,
         introspection: bool,
     ) -> Result<Self, ServerError> {
-        // Load GraphQL schema
-        let schema_path = schema.as_ref();
-        info!(schema_path=?schema_path, "Loading schema");
-        let graphql_schema = std::fs::read_to_string(schema_path)?;
-        let mut parser = Parser::new();
-        let graphql_schema = parser
-            .parse_ast(graphql_schema, schema_path)
-            .map_err(|e| ServerError::GraphQLDocument(Box::new(e)))?;
-        let graphql_schema = graphql_schema
-            .to_schema()
-            .map_err(|e| ServerError::GraphQLSchema(Box::new(e)))?;
-
         let operations = operations
             .into_iter()
             .map(|operation| {
                 info!(operation_path=?operation.as_ref(), "Loading operation");
                 let operation = std::fs::read_to_string(operation)?;
-                Operation::from_document(&operation, &graphql_schema, None)
+                Operation::from_document(&operation, &schema, None)
             })
             .collect::<Result<Vec<_>, _>>()?;
         info!(
@@ -86,7 +79,7 @@ impl Server {
                 None
             },
             get_schema_tool: if introspection {
-                Some(GetSchema::new(graphql_schema))
+                Some(GetSchema::new(schema))
             } else {
                 None
             },

@@ -97,7 +97,7 @@ To use the stdio transport, add the following to the MCP configuration file for 
 
 To use the HTTP+SSE transport, first start the MCP server as described above for MCP Inspector.
 
-Set the following in the MCP configuration file for your client:
+For Claude Desktop, you can use `mcp-remote` to give Claude access to the MCP Server over SSE:
 
 ```json
 {
@@ -108,6 +108,18 @@ Set the following in the MCP configuration file for your client:
             "mcp-remote",
             "http://127.0.0.1:5000/sse"
         ]
+    }
+  }
+}
+```
+
+For Cursor, you can directly specify the SSE URL:
+
+```json
+{
+  "mcpServers": {
+    "weather": {
+        "url": "http://127.0.0.1:5000/sse"
     }
   }
 }
