@@ -1136,8 +1136,8 @@ dependencies = [
  "insta",
  "reqwest",
  "rmcp",
+ "rover-copy",
  "serde",
- "serde_derive",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
@@ -1569,6 +1569,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "rover-copy"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "apollo-parser",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tracing",
 ]
 
 [[package]]
