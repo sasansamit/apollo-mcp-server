@@ -6,7 +6,7 @@ type Alert {
   """A description of the alert"""
   description: String
 
-  """Information about people should respond to the alert"""
+  """Information about how people should respond to the alert"""
   instruction: String
 }
 
