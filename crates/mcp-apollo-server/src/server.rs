@@ -3,8 +3,6 @@ use crate::graphql;
 use crate::graphql::Executable;
 use crate::introspection::{EXECUTE_TOOL_NAME, Execute, GET_SCHEMA_TOOL_NAME, GetSchema};
 use crate::operations::Operation;
-use apollo_compiler::Schema;
-use apollo_compiler::validation::Valid;
 use buildstructor::buildstructor;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use rmcp::model::{
@@ -19,6 +17,8 @@ use std::path::Path;
 use std::str::FromStr;
 use tracing::info;
 
+pub use apollo_compiler::Schema;
+pub use apollo_compiler::validation::Valid;
 pub use rmcp::ServiceExt;
 pub use rmcp::transport::SseServer;
 pub use rmcp::transport::stdio;
