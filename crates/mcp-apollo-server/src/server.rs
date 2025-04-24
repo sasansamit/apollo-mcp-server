@@ -21,6 +21,7 @@ pub use apollo_compiler::Schema;
 pub use apollo_compiler::validation::Valid;
 pub use rmcp::ServiceExt;
 pub use rmcp::transport::SseServer;
+pub use rmcp::transport::sse_server::SseServerConfig;
 pub use rmcp::transport::stdio;
 
 /// An MCP Server for Apollo GraphQL operations
