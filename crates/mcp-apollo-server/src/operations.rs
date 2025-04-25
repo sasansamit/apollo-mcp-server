@@ -262,14 +262,15 @@ fn get_json_schema(
 
 fn schema_factory(
     description: Option<String>,
-    instance_type: InstanceType,
+    instance_type: Option<InstanceType>,
     object_validation: Option<ObjectValidation>,
     array_validation: Option<ArrayValidation>,
     subschema_validation: Option<SubschemaValidation>,
     enum_values: Option<Vec<Value>>,
 ) -> Schema {
     Schema::Object(SchemaObject {
-        instance_type: Some(SingleOrVec::Single(Box::new(instance_type))),
+        instance_type: instance_type
+            .map(|instance_type| SingleOrVec::Single(Box::new(instance_type))),
         object: object_validation.map(Box::new),
         array: array_validation.map(Box::new),
         subschemas: subschema_validation.map(Box::new),
@@ -324,13 +325,30 @@ fn type_to_schema(
 ) -> Schema {
     match variable_type {
         Type::NonNullNamed(named) | Type::Named(named) => match named.as_str() {
-            "String" | "ID" => {
-                schema_factory(description, InstanceType::String, None, None, None, None)
-            }
-            "Int" | "Float" => {
-                schema_factory(description, InstanceType::Number, None, None, None, None)
-            }
-            "Boolean" => schema_factory(description, InstanceType::Boolean, None, None, None, None),
+            "String" | "ID" => schema_factory(
+                description,
+                Some(InstanceType::String),
+                None,
+                None,
+                None,
+                None,
+            ),
+            "Int" | "Float" => schema_factory(
+                description,
+                Some(InstanceType::Number),
+                None,
+                None,
+                None,
+                None,
+            ),
+            "Boolean" => schema_factory(
+                description,
+                Some(InstanceType::Boolean),
+                None,
+                None,
+                None,
+                None,
+            ),
             _ => {
                 if let Some(input_type) = graphql_schema.get_input_object(named) {
                     let mut obj = ObjectValidation::default();
@@ -354,7 +372,7 @@ fn type_to_schema(
 
                     schema_factory(
                         description,
-                        InstanceType::Object,
+                        Some(InstanceType::Object),
                         Some(obj),
                         None,
                         None,
@@ -374,17 +392,17 @@ fn type_to_schema(
                             custom_schema.metadata = Some(Box::new(meta));
                             Schema::Object(custom_schema)
                         } else {
-                            panic!("custom scalar missing from custom_scalar_map")
+                            tracing::warn!(name=?named, "custom scalar missing from custom_scalar_map");
+                            schema_factory(description, None, None, None, None, None)
                         }
                     } else {
-                        panic!(
-                            "custom scalars aren't currently supported without a custom_scalar_map"
-                        )
+                        tracing::warn!(name=?named, "custom scalars aren't currently supported without a custom_scalar_map");
+                        Schema::Object(SchemaObject::default())
                     }
                 } else if let Some(enum_type) = graphql_schema.get_enum(named) {
                     schema_factory(
                         description,
-                        InstanceType::String,
+                        Some(InstanceType::String),
                         None,
                         None,
                         None,
@@ -407,7 +425,7 @@ fn type_to_schema(
                 type_to_schema(description, list_type, graphql_schema, custom_scalar_map);
             schema_factory(
                 None,
-                InstanceType::Array,
+                Some(InstanceType::Array),
                 None,
                 list_type.is_non_null().then(|| ArrayValidation {
                     items: Some(SingleOrVec::Single(Box::new(inner_type_schema.clone()))),
@@ -1006,28 +1024,56 @@ mod tests {
             Operation::from_document("query QueryName($id: FakeType) { id }", &SCHEMA, None);
     }
 
-    // TODO: This should not cause a panic
     #[test]
-    #[should_panic(
-        expected = "custom scalars aren't currently supported without a custom_scalar_map"
-    )]
-    fn custom_scalar_without_map_should_error() {
-        let _operation = Operation::from_document(
+    fn custom_scalar_without_map_should_be_any() {
+        // TODO: should this test that the warning was logged?
+        let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",
             &SCHEMA,
             None,
-        );
+        )
+        .unwrap();
+        let tool = Tool::from(operation);
+
+        insta::assert_debug_snapshot!(tool, @r###"
+        Tool {
+            name: "QueryName",
+            description: "The returned value is optional and has type `String`",
+            input_schema: {
+                "properties": Object {
+                    "id": Object {},
+                },
+                "type": String("object"),
+            },
+        }
+        "###);
     }
 
-    // TODO: This should not cause a panic
     #[test]
-    #[should_panic(expected = "custom scalar missing from custom_scalar_map")]
     fn custom_scalar_with_map_but_not_found_should_error() {
-        let _operation = Operation::from_document(
+        // TODO: should this test that the warning was logged?
+        let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",
             &SCHEMA,
             Some(&HashMap::new()),
-        );
+        )
+        .unwrap();
+        let tool = Tool::from(operation);
+
+        insta::assert_debug_snapshot!(tool, @r###"
+        Tool {
+            name: "QueryName",
+            description: "The returned value is optional and has type `String`",
+            input_schema: {
+                "properties": Object {
+                    "id": Object {
+                        "description": String("RealCustomScalar exists"),
+                    },
+                },
+                "type": String("object"),
+            },
+        }
+        "###);
     }
 
     #[test]
