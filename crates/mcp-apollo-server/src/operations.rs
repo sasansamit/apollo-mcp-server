@@ -1020,7 +1020,8 @@ mod tests {
     fn unknown_type_should_be_any() {
         // TODO: should this test that the warning was logged?
         let operation =
-            Operation::from_document("query QueryName($id: FakeType) { id }", &SCHEMA, None).unwrap();
+            Operation::from_document("query QueryName($id: FakeType) { id }", &SCHEMA, None)
+                .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
