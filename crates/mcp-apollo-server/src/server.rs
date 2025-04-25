@@ -11,8 +11,9 @@ use rmcp::model::{
 };
 use rmcp::serde_json::Value;
 use rmcp::service::RequestContext;
-use rmcp::{RoleServer, ServerHandler, serde_json};
+use rmcp::{RoleServer, ServerHandler, schemars, serde_json};
 use rover_copy::pq_manifest::ApolloPersistedQueryManifest;
+use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 use tracing::info;
@@ -44,6 +45,7 @@ impl Server {
         headers: Vec<String>,
         introspection: bool,
         persisted_query_manifest: Option<ApolloPersistedQueryManifest>,
+        custom_scalar_map: Option<HashMap<String, schemars::schema::SchemaObject>>,
     ) -> Result<Self, ServerError> {
         // Load operations
         let mut operations = operations
@@ -51,13 +53,17 @@ impl Server {
             .map(|operation| {
                 info!(operation_path=?operation.as_ref(), "Loading operation");
                 let operation = std::fs::read_to_string(operation)?;
-                Operation::from_document(&operation, &schema, None)
+                Operation::from_document(&operation, &schema, custom_scalar_map.as_ref())
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         // Optionally load queries from a persisted query manifest
         if let Some(pq_manifest) = persisted_query_manifest {
-            operations.extend(Operation::from_manifest(&schema, pq_manifest)?);
+            operations.extend(Operation::from_manifest(
+                &schema,
+                pq_manifest,
+                custom_scalar_map.as_ref(),
+            )?);
         }
 
         info!(

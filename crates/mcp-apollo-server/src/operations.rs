@@ -110,6 +110,7 @@ impl Operation {
     pub fn from_manifest(
         schema: &GraphqlSchema,
         manifest: ApolloPersistedQueryManifest,
+        custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
     ) -> Result<Vec<Self>, OperationError> {
         manifest
             .operations
@@ -117,7 +118,7 @@ impl Operation {
             .map(|pq| {
                 tracing::info!(pesisted_query = pq.name, "Loading persisted query");
 
-                Self::from_document(&pq.body, schema, None)
+                Self::from_document(&pq.body, schema, custom_scalar_map)
             })
             .collect::<Result<Vec<_>, _>>()
     }
@@ -1355,7 +1356,7 @@ mod tests {
         }))
         .expect("apollo pq should be valid");
 
-        let operations = Operation::from_manifest(&SCHEMA, apollo_pq.clone())
+        let operations = Operation::from_manifest(&SCHEMA, apollo_pq.clone(), None)
             .expect("operations from manifest should parse");
         assert_eq!(
             operations

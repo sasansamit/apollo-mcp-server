@@ -4,6 +4,7 @@ use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
 use clap::{Parser, ValueEnum};
 use mcp_apollo_server::errors::ServerError;
+use mcp_apollo_server::json_schema_helpers::str_to_custom_scalar_map;
 use mcp_apollo_server::server::Server;
 use rmcp::ServiceExt;
 use rmcp::transport::{SseServer, stdio};
@@ -34,6 +35,10 @@ struct Args {
     /// The path to the GraphQL API schema file
     #[clap(long, short = 's')]
     schema: PathBuf,
+
+    /// The path to the GraphQL custom_scalars_config file
+    #[clap(long, short = 'c', required = false)]
+    custom_scalars_config: Option<PathBuf>,
 
     /// The GraphQL endpoint the server will invoke
     #[clap(long, short = 'e', default_value = "http://127.0.0.1:4000")]
@@ -102,6 +107,14 @@ async fn main() -> anyhow::Result<()> {
         .operations(args.operations)
         .headers(args.headers)
         .introspection(args.introspection)
+        .and_custom_scalar_map(
+            args.custom_scalars_config.map(|custom_scalars_config| {
+                let custom_scalars_config_path = custom_scalars_config.as_path();
+                info!(custom_scalars_config=?custom_scalars_config_path, "Loading custom_scalars_config");
+                let string_custom_scalar_file = std::fs::read_to_string(custom_scalars_config.as_path())?;
+                str_to_custom_scalar_map(&string_custom_scalar_file)
+            }).transpose()?
+        )
         .and_persisted_query_manifest(
             args.pq_manifest
                 .map(
