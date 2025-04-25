@@ -397,7 +397,7 @@ fn type_to_schema(
                         }
                     } else {
                         tracing::warn!(name=?named, "custom scalars aren't currently supported without a custom_scalar_map");
-                        Schema::Object(SchemaObject::default())
+                        schema_factory(None, None, None, None, None, None)
                     }
                 } else if let Some(enum_type) = graphql_schema.get_enum(named) {
                     schema_factory(
@@ -416,7 +416,7 @@ fn type_to_schema(
                     )
                 } else {
                     tracing::warn!(name=?named, "Type not found in schema");
-                    Schema::Object(SchemaObject::default())
+                    schema_factory(None, None, None, None, None, None)
                 }
             }
         },
