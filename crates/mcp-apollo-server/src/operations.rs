@@ -415,8 +415,8 @@ fn type_to_schema(
                         ),
                     )
                 } else {
-                    // TODO: Should this be an "any" type or an error?
-                    panic!("Type not found in schema! {named}")
+                    tracing::warn!(name=?named, "Type not found in schema");
+                    Schema::Object(SchemaObject::default())
                 }
             }
         },
@@ -1016,12 +1016,25 @@ mod tests {
         "###);
     }
 
-    // TODO: This should not cause a panic
     #[test]
-    #[should_panic(expected = "Type not found in schema! FakeType")]
-    fn unknown_type_should_error() {
-        let _operation =
-            Operation::from_document("query QueryName($id: FakeType) { id }", &SCHEMA, None);
+    fn unknown_type_should_be_any() {
+        // TODO: should this test that the warning was logged?
+        let operation =
+            Operation::from_document("query QueryName($id: FakeType) { id }", &SCHEMA, None).unwrap();
+        let tool = Tool::from(operation);
+
+        insta::assert_debug_snapshot!(tool, @r###"
+        Tool {
+            name: "QueryName",
+            description: "The returned value is optional and has type `String`",
+            input_schema: {
+                "properties": Object {
+                    "id": Object {},
+                },
+                "type": String("object"),
+            },
+        }
+        "###);
     }
 
     #[test]
