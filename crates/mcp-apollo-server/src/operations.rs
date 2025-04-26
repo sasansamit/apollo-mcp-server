@@ -21,6 +21,8 @@ use crate::errors::{McpError, OperationError};
 use crate::graphql;
 use crate::tree_shake::TreeShaker;
 
+const INCLUDE_COMMENT_DESCRIPTION: bool = true;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Operation {
     tool: Tool,
@@ -48,17 +50,38 @@ impl Operation {
             .parse_ast(source_text, "operation.graphql")
             .map_err(|e| OperationError::GraphQLDocument(Box::new(e)))?;
 
-        let mut operation_defs = document.definitions.iter().filter_map(|def| match def {
-            Definition::OperationDefinition(operation_def) => Some(operation_def),
-            Definition::FragmentDefinition(_) => None,
-            _ => {
-                tracing::error!(
-                    spec=?def,
-                    "Schema definitions were passed in, only operations and fragments are allowed"
-                );
-                None
-            }
-        });
+        let mut last_offset: usize = 0;
+        let operation_defs = document
+            .definitions
+            .iter()
+            .filter_map(|def| match def.location() {
+                Some(source_span) => {
+                    let start_offset = last_offset;
+                    last_offset = source_span.end_offset();
+                    match def {
+                        Definition::OperationDefinition(operation_def) => Some(Ok((
+                            operation_def,
+                            INCLUDE_COMMENT_DESCRIPTION
+                                .then(|| &source_text[start_offset..source_span.offset()]),
+                        ))),
+                        Definition::FragmentDefinition(_) => None,
+                        _ => {
+                            eprintln!(
+                                // This string needs to be broken into multiple lines or it will break cargo fmt
+                                "
+                                    Schema definitions were passed in, 
+                                    only operations and fragments are allowed
+                                "
+                            );
+                            None
+                        }
+                    }
+                }
+                None => Some(Err(OperationError::Internal(
+                    "definition missing location".to_string(),
+                ))),
+            })
+            .collect::<Result<Vec<(&Node<OperationDefinition>, Option<&str>)>, OperationError>>()?;
 
         let fragment_defs: Vec<&Node<FragmentDefinition>> = document
             .definitions
@@ -69,12 +92,11 @@ impl Operation {
             })
             .collect();
 
-        let operation = match (operation_defs.next(), operation_defs.next()) {
+        let (operation, comment_description) = match (operation_defs.first(), operation_defs.get(1))
+        {
             (None, _) => return Err(OperationError::NoOperations),
             (_, Some(_)) => {
-                return Err(OperationError::TooManyOperations(
-                    2 + operation_defs.count(),
-                ));
+                return Err(OperationError::TooManyOperations(2 + operation_defs.len()));
             }
             (Some(op), None) => op,
         };
@@ -87,7 +109,12 @@ impl Operation {
             })?
             .to_string();
 
-        let description = Self::tool_description(graphql_schema, operation, &fragment_defs);
+        let description = Self::tool_description(
+            comment_description,
+            graphql_schema,
+            operation,
+            &fragment_defs,
+        );
 
         let object = serde_json::to_value(get_json_schema(
             operation,
@@ -124,85 +151,110 @@ impl Operation {
 
     /// Generate a description for an operation based on documentation in the schema
     fn tool_description(
+        comments: &Option<&str>,
         graphql_schema: &GraphqlSchema,
         operation_def: &Node<OperationDefinition>,
         fragment_defs: &[&Node<FragmentDefinition>],
     ) -> String {
-        let mut tree_shaker = TreeShaker::new(graphql_schema, fragment_defs);
-        let descriptions = operation_def
-            .selection_set
-            .iter()
-            .filter_map(|selection| {
-                match selection {
-                    Selection::Field(field) => {
-                        let field_name = field.name.to_string();
-                        let operation_type = operation_def.operation_type;
-                        if let Some(root_name) = graphql_schema.root_operation(operation_type) {
-                            // Find the root field referenced by the operation
-                            let root = graphql_schema.get_object(root_name)?;
-                            let field_definition = root
-                                .fields
-                                .iter()
-                                .find(|(name, _)| {
-                                    let name = name.to_string();
-                                    name == field_name
-                                })
-                                .map(|(_, field_definition)| field_definition.node.clone());
+        let comment_description = comments.and_then(|comments| {
+            // TODO: there is probably a better way to do this with a regex, but I couldn't figure it out. So here is a crude version
+            let formatted = comments
+                .split("\n")
+                .map(|line| line.trim())
+                .collect::<Vec<_>>()
+                .join("\n")
+                .replace("\n#", "\n");
+            let trimmed = formatted.trim();
 
-                            // Add the root field description to the tool description
-                            let field_description = field_definition
-                                .clone()
-                                .and_then(|field| field.description.clone())
-                                .map(|node| node.to_string());
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        });
 
-                            // Add information about the return type
-                            let ty = field_definition.map(|field| field.ty.clone());
-                            let type_description = ty.as_ref().map(Self::type_description);
-
-                            // Retain the return type in the tree shaker
-                            if let Some(ty) = ty {
-                                let type_name = ty.inner_named_type();
-                                if let Some(extended_type) =
-                                    graphql_schema.types.get(type_name.as_str())
+        match comment_description {
+            Some(description) => description,
+            None => {
+                let mut tree_shaker = TreeShaker::new(graphql_schema, fragment_defs);
+                let descriptions = operation_def
+                    .selection_set
+                    .iter()
+                    .filter_map(|selection| {
+                        match selection {
+                            Selection::Field(field) => {
+                                let field_name = field.name.to_string();
+                                let operation_type = operation_def.operation_type;
+                                if let Some(root_name) =
+                                    graphql_schema.root_operation(operation_type)
                                 {
-                                    tree_shaker.retain(
-                                        type_name.clone(),
-                                        extended_type,
-                                        &field.selection_set,
+                                    // Find the root field referenced by the operation
+                                    let root = graphql_schema.get_object(root_name)?;
+                                    let field_definition = root
+                                        .fields
+                                        .iter()
+                                        .find(|(name, _)| {
+                                            let name = name.to_string();
+                                            name == field_name
+                                        })
+                                        .map(|(_, field_definition)| field_definition.node.clone());
+
+                                    // Add the root field description to the tool description
+                                    let field_description = field_definition
+                                        .clone()
+                                        .and_then(|field| field.description.clone())
+                                        .map(|node| node.to_string());
+
+                                    // Add information about the return type
+                                    let ty = field_definition.map(|field| field.ty.clone());
+                                    let type_description = ty.as_ref().map(Self::type_description);
+
+                                    // Retain the return type in the tree shaker
+                                    if let Some(ty) = ty {
+                                        let type_name = ty.inner_named_type();
+                                        if let Some(extended_type) =
+                                            graphql_schema.types.get(type_name.as_str())
+                                        {
+                                            tree_shaker.retain(
+                                                type_name.clone(),
+                                                extended_type,
+                                                &field.selection_set,
+                                            )
+                                        }
+                                    }
+
+                                    Some(
+                                        vec![field_description, type_description]
+                                            .into_iter()
+                                            .flatten()
+                                            .collect::<Vec<String>>()
+                                            .join("\n"),
                                     )
+                                } else {
+                                    None
                                 }
                             }
-
-                            Some(
-                                vec![field_description, type_description]
-                                    .into_iter()
-                                    .flatten()
-                                    .collect::<Vec<String>>()
-                                    .join("\n"),
-                            )
-                        } else {
-                            None
+                            _ => None,
                         }
-                    }
-                    _ => None,
+                    })
+                    .collect::<Vec<String>>()
+                    .join("\n---\n");
+
+                // Add the tree-shaken types to the end of the tool description
+                let mut lines = vec![];
+                lines.push(descriptions);
+
+                let mut shaken = tree_shaker.shaken().peekable();
+                if shaken.peek().is_some() {
+                    lines.push(String::from("---"));
                 }
-            })
-            .collect::<Vec<String>>()
-            .join("\n---\n");
+                for ty in shaken {
+                    lines.push(ty.serialize().to_string());
+                }
 
-        // Add the tree-shaken types to the end of the tool description
-        let mut lines = vec![];
-        lines.push(descriptions);
-
-        let mut shaken = tree_shaker.shaken().peekable();
-        if shaken.peek().is_some() {
-            lines.push(String::from("---"));
+                lines.join("\n")
+            }
         }
-        for ty in shaken {
-            lines.push(ty.serialize().to_string());
-        }
-
-        lines.join("\n")
     }
 
     fn type_description(ty: &Type) -> String {
