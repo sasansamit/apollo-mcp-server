@@ -21,8 +21,6 @@ use crate::errors::{McpError, OperationError};
 use crate::graphql;
 use crate::tree_shake::TreeShaker;
 
-const INCLUDE_COMMENT_DESCRIPTION: bool = true;
-
 #[derive(Debug, Clone, Serialize)]
 pub struct Operation {
     tool: Tool,
@@ -50,38 +48,38 @@ impl Operation {
             .parse_ast(source_text, "operation.graphql")
             .map_err(|e| OperationError::GraphQLDocument(Box::new(e)))?;
 
-        let mut last_offset: usize = 0;
-        let operation_defs = document
-            .definitions
-            .iter()
-            .filter_map(|def| match def.location() {
+        let mut last_offset: Option<usize> = Some(0);
+        let mut operation_defs = document.definitions.iter().filter_map(|def| {
+            let description = match def.location() {
                 Some(source_span) => {
-                    let start_offset = last_offset;
-                    last_offset = source_span.end_offset();
-                    match def {
-                        Definition::OperationDefinition(operation_def) => Some(Ok((
-                            operation_def,
-                            INCLUDE_COMMENT_DESCRIPTION
-                                .then(|| &source_text[start_offset..source_span.offset()]),
-                        ))),
-                        Definition::FragmentDefinition(_) => None,
-                        _ => {
-                            eprintln!(
-                                // This string needs to be broken into multiple lines or it will break cargo fmt
-                                "
-                                    Schema definitions were passed in, 
-                                    only operations and fragments are allowed
-                                "
-                            );
-                            None
-                        }
-                    }
+                    let description = last_offset
+                        .map(|start_offset| &source_text[start_offset..source_span.offset()]);
+                    last_offset = Some(source_span.end_offset());
+                    description
                 }
-                None => Some(Err(OperationError::Internal(
-                    "definition missing location".to_string(),
-                ))),
-            })
-            .collect::<Result<Vec<(&Node<OperationDefinition>, Option<&str>)>, OperationError>>()?;
+                None => {
+                    last_offset = None;
+                    None
+                }
+            };
+
+            match def {
+                Definition::OperationDefinition(operation_def) => {
+                    Some((operation_def, description))
+                }
+                Definition::FragmentDefinition(_) => None,
+                _ => {
+                    eprintln!(
+                        // This string needs to be broken into multiple lines or it will break cargo fmt
+                        "
+                            Schema definitions were passed in, 
+                            only operations and fragments are allowed
+                        "
+                    );
+                    None
+                }
+            }
+        });
 
         let fragment_defs: Vec<&Node<FragmentDefinition>> = document
             .definitions
@@ -92,11 +90,13 @@ impl Operation {
             })
             .collect();
 
-        let (operation, comment_description) = match (operation_defs.first(), operation_defs.get(1))
+        let (operation, comment_description) = match (operation_defs.next(), operation_defs.next())
         {
             (None, _) => return Err(OperationError::NoOperations),
             (_, Some(_)) => {
-                return Err(OperationError::TooManyOperations(operation_defs.len()));
+                return Err(OperationError::TooManyOperations(
+                    2 + operation_defs.count(),
+                ));
             }
             (Some(op), None) => op,
         };
@@ -151,7 +151,7 @@ impl Operation {
 
     /// Generate a description for an operation based on documentation in the schema
     fn tool_description(
-        comments: &Option<&str>,
+        comments: Option<&str>,
         graphql_schema: &GraphqlSchema,
         operation_def: &Node<OperationDefinition>,
         fragment_defs: &[&Node<FragmentDefinition>],
