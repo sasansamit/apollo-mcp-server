@@ -197,3 +197,10 @@ Two new tools will be exposed by the server:
 * `execute` - executes an operation on the GraphQL endpoint
 
 The MCP client can then use these tools to provide schema information to the model, and allow the model to execute GraphQL operations based on that schema.
+
+# Licensing
+
+Source code in this repository is covered by the Elastic License 2.0. The
+default throughout the repository is a license under the Elastic License 2.0,
+unless a file header or a license file in a subdirectory specifies another
+license. [See the LICENSE](./LICENSE) for the full license text.
