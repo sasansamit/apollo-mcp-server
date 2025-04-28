@@ -1134,6 +1134,7 @@ dependencies = [
  "derive-new",
  "futures-util",
  "insta",
+ "regex",
  "reqwest",
  "rmcp",
  "rover-copy",

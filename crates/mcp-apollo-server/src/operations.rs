@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
 use apollo_compiler::ast::{FragmentDefinition, Selection};
 use apollo_compiler::{
     Name, Node, Schema as GraphqlSchema,
     ast::{Definition, OperationDefinition, Type},
     parser::Parser,
 };
+use regex::Regex;
 use rmcp::{
     model::Tool,
     schemars::schema::{
@@ -16,6 +15,7 @@ use rmcp::{
 };
 use rover_copy::pq_manifest::ApolloPersistedQueryManifest;
 use serde::Serialize;
+use std::collections::HashMap;
 
 use crate::errors::{McpError, OperationError};
 use crate::graphql;
@@ -152,14 +152,8 @@ impl Operation {
         fragment_defs: &[&Node<FragmentDefinition>],
     ) -> String {
         let comment_description = comments.and_then(|comments| {
-            // TODO: there is probably a better way to do this with a regex, but I couldn't figure it out. So here is a crude version
-            let formatted = comments
-                .split("\n")
-                .map(|line| line.trim())
-                .collect::<Vec<_>>()
-                .join("\n")
-                .replace("\n#", "\n");
-            let trimmed = formatted.trim();
+            let content = Regex::new(r"(\n|^)\s*#").ok()?.replace_all(comments, "$1");
+            let trimmed = content.trim();
 
             if trimmed.is_empty() {
                 None
@@ -1373,6 +1367,52 @@ mod tests {
           zzz: Int
         }
         "###
+        );
+    }
+
+    #[test]
+    fn tool_comment_description() {
+        let operation = Operation::from_document(
+            r###"
+            # Overridden tool #description
+            query GetABZ($state: String!) {
+              b {
+                d {
+                  f
+                }
+              }
+            }
+            "###,
+            &SCHEMA,
+            None,
+        )
+        .unwrap();
+
+        insta::assert_snapshot!(
+            operation.tool.description.as_ref(),
+            @r###"Overridden tool #description"###
+        );
+    }
+
+    #[test]
+    fn tool_empty_comment_description() {
+        let operation = Operation::from_document(
+            r###"
+            # 
+
+            #   
+            query GetABZ($state: String!) {
+              id
+            }
+            "###,
+            &SCHEMA,
+            None,
+        )
+        .unwrap();
+
+        insta::assert_snapshot!(
+            operation.tool.description.as_ref(),
+            @r###"The returned value is optional and has type `String`"###
         );
     }
 
