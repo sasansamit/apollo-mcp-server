@@ -90,8 +90,7 @@ impl Operation {
             })
             .collect();
 
-        let (operation, comment_description) = match (operation_defs.next(), operation_defs.next())
-        {
+        let (operation, comments) = match (operation_defs.next(), operation_defs.next()) {
             (None, _) => return Err(OperationError::NoOperations),
             (_, Some(_)) => {
                 return Err(OperationError::TooManyOperations(
@@ -109,12 +108,8 @@ impl Operation {
             })?
             .to_string();
 
-        let description = Self::tool_description(
-            comment_description,
-            graphql_schema,
-            operation,
-            &fragment_defs,
-        );
+        let description =
+            Self::tool_description(comments, graphql_schema, operation, &fragment_defs);
 
         let object = serde_json::to_value(get_json_schema(
             operation,
