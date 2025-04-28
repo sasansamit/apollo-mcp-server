@@ -96,7 +96,7 @@ impl Operation {
         {
             (None, _) => return Err(OperationError::NoOperations),
             (_, Some(_)) => {
-                return Err(OperationError::TooManyOperations(2 + operation_defs.len()));
+                return Err(OperationError::TooManyOperations(operation_defs.len()));
             }
             (Some(op), None) => op,
         };
