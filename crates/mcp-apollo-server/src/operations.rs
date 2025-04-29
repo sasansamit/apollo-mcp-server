@@ -459,7 +459,7 @@ impl graphql::Executable for Operation {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, sync::LazyLock};
+    use std::{collections::HashSet, str::FromStr, sync::LazyLock};
 
     use apollo_compiler::{Schema, parser::Parser, validation::Valid};
     use rmcp::{model::Tool, serde_json};
@@ -1062,7 +1062,7 @@ mod tests {
         let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",
             &SCHEMA,
-            Some(&CustomScalarMap::try_from("{}").unwrap()),
+            Some(&CustomScalarMap::from_str("{}").unwrap()),
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1086,7 +1086,7 @@ mod tests {
     #[test]
     fn custom_scalar_with_map() {
         let custom_scalar_map =
-            CustomScalarMap::try_from("{ \"RealCustomScalar\": { \"type\": \"string\" }}");
+            CustomScalarMap::from_str("{ \"RealCustomScalar\": { \"type\": \"string\" }}");
 
         let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",

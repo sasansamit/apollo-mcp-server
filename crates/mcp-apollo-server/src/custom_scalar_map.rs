@@ -3,12 +3,12 @@ use rmcp::{
     schemars::schema::{Schema, SchemaObject, SingleOrVec},
     serde_json,
 };
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
-impl TryFrom<&str> for CustomScalarMap {
-    type Error = ServerError;
+impl FromStr for CustomScalarMap {
+    type Err = ServerError;
 
-    fn try_from(string_custom_scalar_file: &str) -> Result<Self, Self::Error> {
+    fn from_str(string_custom_scalar_file: &str) -> Result<Self, Self::Err> {
         // Parse the string into an initial map of serde_json::Values
         let parsed_custom_scalar_file: serde_json::Map<String, serde_json::Value> =
             serde_json::from_str(string_custom_scalar_file)
@@ -44,7 +44,7 @@ impl TryFrom<&PathBuf> for CustomScalarMap {
         let custom_scalars_config_path = file_path_buf.as_path();
         tracing::info!(custom_scalars_config=?custom_scalars_config_path, "Loading custom_scalars_config");
         let string_custom_scalar_file = std::fs::read_to_string(custom_scalars_config_path)?;
-        CustomScalarMap::try_from(string_custom_scalar_file.as_str())
+        CustomScalarMap::from_str(string_custom_scalar_file.as_str())
     }
 }
 
@@ -79,7 +79,10 @@ fn has_invalid_schema(schema: &Schema) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeMap, HashMap};
+    use std::{
+        collections::{BTreeMap, HashMap},
+        str::FromStr,
+    };
 
     use rmcp::schemars::schema::{
         InstanceType, ObjectValidation, Schema, SchemaObject, SingleOrVec,
@@ -89,7 +92,7 @@ mod tests {
 
     #[test]
     fn empty_file() {
-        let result = CustomScalarMap::try_from("").err().unwrap();
+        let result = CustomScalarMap::from_str("").err().unwrap();
 
         insta::assert_debug_snapshot!(result, @r###"
             CustomScalarConfig(
@@ -100,7 +103,7 @@ mod tests {
 
     #[test]
     fn only_spaces() {
-        let result = CustomScalarMap::try_from("    ").err().unwrap();
+        let result = CustomScalarMap::from_str("    ").err().unwrap();
 
         insta::assert_debug_snapshot!(result, @r###"
             CustomScalarConfig(
@@ -111,7 +114,7 @@ mod tests {
 
     #[test]
     fn invalid_json() {
-        let result = CustomScalarMap::try_from("Hello: }").err().unwrap();
+        let result = CustomScalarMap::from_str("Hello: }").err().unwrap();
 
         insta::assert_debug_snapshot!(result, @r###"
             CustomScalarConfig(
@@ -122,7 +125,7 @@ mod tests {
 
     #[test]
     fn invalid_simple_schema() {
-        let result = CustomScalarMap::try_from(
+        let result = CustomScalarMap::from_str(
             r###"{
                 "custom": {
                     "test": true
@@ -143,7 +146,7 @@ mod tests {
 
     #[test]
     fn invalid_complex_schema() {
-        let result = CustomScalarMap::try_from(
+        let result = CustomScalarMap::from_str(
             r###"{
                 "custom": {
                     "type": "object",
@@ -174,7 +177,7 @@ mod tests {
 
     #[test]
     fn valid_schema() {
-        let result = CustomScalarMap::try_from(
+        let result = CustomScalarMap::from_str(
             r###"
         {
             "simple": {
