@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use apollo_compiler::ast::{FragmentDefinition, Selection};
 use apollo_compiler::{
     Name, Node, Schema as GraphqlSchema,
@@ -17,6 +15,7 @@ use rmcp::{
 use rover_copy::pq_manifest::ApolloPersistedQueryManifest;
 use serde::Serialize;
 
+use crate::custom_scalar_map::CustomScalarMap;
 use crate::errors::{McpError, OperationError};
 use crate::graphql;
 use crate::tree_shake::TreeShaker;
@@ -42,7 +41,7 @@ impl Operation {
     pub fn from_document(
         source_text: &str,
         graphql_schema: &GraphqlSchema,
-        custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
+        custom_scalar_map: Option<&CustomScalarMap>,
     ) -> Result<Self, OperationError> {
         let document = Parser::new()
             .parse_ast(source_text, "operation.graphql")
@@ -110,7 +109,7 @@ impl Operation {
     pub fn from_manifest(
         schema: &GraphqlSchema,
         manifest: ApolloPersistedQueryManifest,
-        custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
+        custom_scalar_map: Option<&CustomScalarMap>,
     ) -> Result<Vec<Self>, OperationError> {
         manifest
             .operations
@@ -231,7 +230,7 @@ impl Operation {
 fn get_json_schema(
     operation: &Node<OperationDefinition>,
     graphql_schema: &GraphqlSchema,
-    custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
+    custom_scalar_map: Option<&CustomScalarMap>,
 ) -> RootSchema {
     let mut obj = ObjectValidation::default();
 
@@ -322,7 +321,7 @@ fn type_to_schema(
     description: Option<String>,
     variable_type: &Type,
     graphql_schema: &GraphqlSchema,
-    custom_scalar_map: Option<&HashMap<String, SchemaObject>>,
+    custom_scalar_map: Option<&CustomScalarMap>,
 ) -> Schema {
     match variable_type {
         Type::NonNullNamed(named) | Type::Named(named) => match named.as_str() {
@@ -460,20 +459,13 @@ impl graphql::Executable for Operation {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::{HashMap, HashSet},
-        sync::LazyLock,
-    };
+    use std::{collections::HashSet, sync::LazyLock};
 
     use apollo_compiler::{Schema, parser::Parser, validation::Valid};
-    use rmcp::{
-        model::Tool,
-        schemars::schema::{InstanceType, SchemaObject, SingleOrVec},
-        serde_json,
-    };
+    use rmcp::{model::Tool, serde_json};
     use rover_copy::pq_manifest::ApolloPersistedQueryManifest;
 
-    use crate::operations::Operation;
+    use crate::{custom_scalar_map::CustomScalarMap, operations::Operation};
 
     // Example schema for tests
     static SCHEMA: LazyLock<Valid<Schema>> = LazyLock::new(|| {
@@ -1070,7 +1062,7 @@ mod tests {
         let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",
             &SCHEMA,
-            Some(&HashMap::new()),
+            Some(&CustomScalarMap::try_from("{}").unwrap()),
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1093,18 +1085,13 @@ mod tests {
 
     #[test]
     fn custom_scalar_with_map() {
-        let custom_scalar_map = HashMap::from([(
-            "RealCustomScalar".to_string(),
-            SchemaObject {
-                instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::String))),
-                ..Default::default()
-            },
-        )]);
+        let custom_scalar_map =
+            CustomScalarMap::try_from("{ \"RealCustomScalar\": { \"type\": \"string\" }}");
 
         let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",
             &SCHEMA,
-            Some(&custom_scalar_map),
+            custom_scalar_map.ok().as_ref(),
         )
         .unwrap();
         let tool = Tool::from(operation);

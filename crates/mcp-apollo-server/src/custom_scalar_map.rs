@@ -3,32 +3,60 @@ use rmcp::{
     schemars::schema::{Schema, SchemaObject, SingleOrVec},
     serde_json,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
-pub fn str_to_custom_scalar_map(
-    string_custom_scalar_file: &str,
-) -> Result<HashMap<String, SchemaObject>, ServerError> {
-    // Parse the string into an initial map of serde_json::Values
-    let parsed_custom_scalar_file: serde_json::Map<String, serde_json::Value> =
-        serde_json::from_str(string_custom_scalar_file).map_err(ServerError::CustomScalarConfig)?;
+impl TryFrom<&str> for CustomScalarMap {
+    type Error = ServerError;
 
-    // Validate each of the values in the map and coerce into schemars::schema::SchemaObject
-    let custom_scalar_map = parsed_custom_scalar_file
-        .into_iter()
-        .map(|(key, value)| {
-            let value_string = value.to_string();
-            // The only way I could find to do this was to reparse it.
-            let schema: SchemaObject = serde_json::from_str(value_string.as_str())
+    fn try_from(string_custom_scalar_file: &str) -> Result<Self, Self::Error> {
+        // Parse the string into an initial map of serde_json::Values
+        let parsed_custom_scalar_file: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(string_custom_scalar_file)
                 .map_err(ServerError::CustomScalarConfig)?;
 
-            if has_invalid_schema(&Schema::Object(schema.clone())) {
-                Err(ServerError::CustomScalarJsonSchema(value))
-            } else {
-                Ok((key, schema))
-            }
-        })
-        .collect::<Result<_, ServerError>>()?;
-    Ok::<_, ServerError>(custom_scalar_map)
+        // Validate each of the values in the map and coerce into schemars::schema::SchemaObject
+        let custom_scalar_map = parsed_custom_scalar_file
+            .into_iter()
+            .map(|(key, value)| {
+                let value_string = value.to_string();
+                // The only way I could find to do this was to reparse it.
+                let schema: SchemaObject = serde_json::from_str(value_string.as_str())
+                    .map_err(ServerError::CustomScalarConfig)?;
+
+                if has_invalid_schema(&Schema::Object(schema.clone())) {
+                    Err(ServerError::CustomScalarJsonSchema(value))
+                } else {
+                    Ok((key, schema))
+                }
+            })
+            .collect::<Result<_, _>>()?;
+
+        // panic!("hello2! {:?}", parsed_custom_scalar_file);
+
+        Ok::<_, ServerError>(CustomScalarMap { custom_scalar_map })
+    }
+}
+
+impl TryFrom<&PathBuf> for CustomScalarMap {
+    type Error = ServerError;
+
+    fn try_from(file_path_buf: &PathBuf) -> Result<Self, Self::Error> {
+        let custom_scalars_config_path = file_path_buf.as_path();
+        tracing::info!(custom_scalars_config=?custom_scalars_config_path, "Loading custom_scalars_config");
+        let string_custom_scalar_file = std::fs::read_to_string(custom_scalars_config_path)?;
+        CustomScalarMap::try_from(string_custom_scalar_file.as_str())
+    }
+}
+
+#[derive(Debug)]
+pub struct CustomScalarMap {
+    custom_scalar_map: HashMap<String, SchemaObject>,
+}
+
+impl CustomScalarMap {
+    pub fn get(&self, key: &str) -> Option<&SchemaObject> {
+        self.custom_scalar_map.get(key)
+    }
 }
 
 // Unknown keys will be put into "extensions" in the schema object, check for those and consider those invalid
@@ -59,11 +87,11 @@ mod tests {
         InstanceType, ObjectValidation, Schema, SchemaObject, SingleOrVec,
     };
 
-    use crate::json_schema_helpers::str_to_custom_scalar_map;
+    use crate::custom_scalar_map::CustomScalarMap;
 
     #[test]
     fn empty_file() {
-        let result = str_to_custom_scalar_map("").err().unwrap();
+        let result = CustomScalarMap::try_from("").err().unwrap();
 
         insta::assert_debug_snapshot!(result, @r###"
             CustomScalarConfig(
@@ -74,7 +102,7 @@ mod tests {
 
     #[test]
     fn only_spaces() {
-        let result = str_to_custom_scalar_map("    ").err().unwrap();
+        let result = CustomScalarMap::try_from("    ").err().unwrap();
 
         insta::assert_debug_snapshot!(result, @r###"
             CustomScalarConfig(
@@ -85,7 +113,7 @@ mod tests {
 
     #[test]
     fn invalid_json() {
-        let result = str_to_custom_scalar_map("Hello: }").err().unwrap();
+        let result = CustomScalarMap::try_from("Hello: }").err().unwrap();
 
         insta::assert_debug_snapshot!(result, @r###"
             CustomScalarConfig(
@@ -96,7 +124,7 @@ mod tests {
 
     #[test]
     fn invalid_simple_schema() {
-        let result = str_to_custom_scalar_map(
+        let result = CustomScalarMap::try_from(
             r###"{
                 "custom": {
                     "test": true
@@ -117,7 +145,7 @@ mod tests {
 
     #[test]
     fn invalid_complex_schema() {
-        let result = str_to_custom_scalar_map(
+        let result = CustomScalarMap::try_from(
             r###"{
                 "custom": {
                     "type": "object",
@@ -148,7 +176,7 @@ mod tests {
 
     #[test]
     fn valid_schema() {
-        let result = str_to_custom_scalar_map(
+        let result = CustomScalarMap::try_from(
             r###"
         {
             "simple": {
@@ -161,7 +189,8 @@ mod tests {
         }
         "###,
         )
-        .unwrap();
+        .unwrap()
+        .custom_scalar_map;
 
         let expected_data = HashMap::from_iter([
             (

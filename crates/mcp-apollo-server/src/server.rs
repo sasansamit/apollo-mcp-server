@@ -1,3 +1,4 @@
+use crate::custom_scalar_map::CustomScalarMap;
 use crate::errors::{McpError, ServerError};
 use crate::graphql;
 use crate::graphql::Executable;
@@ -11,9 +12,8 @@ use rmcp::model::{
 };
 use rmcp::serde_json::Value;
 use rmcp::service::RequestContext;
-use rmcp::{RoleServer, ServerHandler, schemars, serde_json};
+use rmcp::{RoleServer, ServerHandler, serde_json};
 use rover_copy::pq_manifest::ApolloPersistedQueryManifest;
-use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 use tracing::info;
@@ -45,7 +45,7 @@ impl Server {
         headers: Vec<String>,
         introspection: bool,
         persisted_query_manifest: Option<ApolloPersistedQueryManifest>,
-        custom_scalar_map: Option<HashMap<String, schemars::schema::SchemaObject>>,
+        custom_scalar_map: Option<CustomScalarMap>,
     ) -> Result<Self, ServerError> {
         // Load operations
         let mut operations = operations

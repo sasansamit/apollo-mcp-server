@@ -3,8 +3,8 @@ use apollo_compiler::Schema;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
 use clap::{Parser, ValueEnum};
+use mcp_apollo_server::custom_scalar_map::CustomScalarMap;
 use mcp_apollo_server::errors::ServerError;
-use mcp_apollo_server::json_schema_helpers::str_to_custom_scalar_map;
 use mcp_apollo_server::server::Server;
 use rmcp::ServiceExt;
 use rmcp::transport::{SseServer, stdio};
@@ -108,12 +108,9 @@ async fn main() -> anyhow::Result<()> {
         .headers(args.headers)
         .introspection(args.introspection)
         .and_custom_scalar_map(
-            args.custom_scalars_config.map(|custom_scalars_config| {
-                let custom_scalars_config_path = custom_scalars_config.as_path();
-                info!(custom_scalars_config=?custom_scalars_config_path, "Loading custom_scalars_config");
-                let string_custom_scalar_file = std::fs::read_to_string(custom_scalars_config.as_path())?;
-                str_to_custom_scalar_map(&string_custom_scalar_file)
-            }).transpose()?
+            args.custom_scalars_config
+                .map(|custom_scalars_config| CustomScalarMap::try_from(&custom_scalars_config))
+                .transpose()?,
         )
         .and_persisted_query_manifest(
             args.pq_manifest
