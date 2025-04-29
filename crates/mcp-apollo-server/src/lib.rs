@@ -1,3 +1,4 @@
+pub mod custom_scalar_map;
 pub mod errors;
 mod graphql;
 mod introspection;

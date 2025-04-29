@@ -53,6 +53,12 @@ pub enum ServerError {
 
     #[error("invalid header: {0}")]
     Header(String),
+
+    #[error("invalid custom_scalar_config: {0}")]
+    CustomScalarConfig(serde_json::Error),
+
+    #[error("invalid json schema: {0}")]
+    CustomScalarJsonSchema(serde_json::Value),
 }
 
 /// An MCP tool error

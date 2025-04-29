@@ -3,6 +3,7 @@ use apollo_compiler::Schema;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
 use clap::{Parser, ValueEnum};
+use mcp_apollo_server::custom_scalar_map::CustomScalarMap;
 use mcp_apollo_server::errors::ServerError;
 use mcp_apollo_server::server::Server;
 use rmcp::ServiceExt;
@@ -34,6 +35,10 @@ struct Args {
     /// The path to the GraphQL API schema file
     #[clap(long, short = 's')]
     schema: PathBuf,
+
+    /// The path to the GraphQL custom_scalars_config file
+    #[clap(long, short = 'c', required = false)]
+    custom_scalars_config: Option<PathBuf>,
 
     /// The GraphQL endpoint the server will invoke
     #[clap(long, short = 'e', default_value = "http://127.0.0.1:4000")]
@@ -102,6 +107,11 @@ async fn main() -> anyhow::Result<()> {
         .operations(args.operations)
         .headers(args.headers)
         .introspection(args.introspection)
+        .and_custom_scalar_map(
+            args.custom_scalars_config
+                .map(|custom_scalars_config| CustomScalarMap::try_from(&custom_scalars_config))
+                .transpose()?,
+        )
         .and_persisted_query_manifest(
             args.pq_manifest
                 .map(
