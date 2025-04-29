@@ -25,6 +25,7 @@ pub struct Operation {
     tool: Tool,
     source_text: String,
     persisted_query_id: Option<String>,
+    character_count: usize,
 }
 
 impl AsRef<Tool> for Operation {
@@ -118,10 +119,24 @@ impl Operation {
             ));
         };
 
+        let tool = Tool::new(operation_name.clone(), description, schema);
+        let character_count = tool_character_length(&tool);
+        match character_count {
+            Ok(length) => tracing::info!(
+                "Tool {} loaded with a character count of {}",
+                operation_name,
+                length
+            ),
+            Err(_) => tracing::info!(
+                "Tool {} loaded with an unknown character count",
+                operation_name
+            ),
+        }
         Ok(Operation {
-            tool: Tool::new(operation_name, description, schema),
+            tool,
             source_text: source_text.to_string(),
             persisted_query_id,
+            character_count: character_count.unwrap_or_default(),
         })
     }
 
@@ -247,6 +262,15 @@ impl Operation {
 
         lines.join("\n")
     }
+
+    pub fn tool_character_length(&self) -> usize {
+        self.character_count
+    }
+}
+
+fn tool_character_length(tool: &Tool) -> Result<usize, serde_json::Error> {
+    let tool_schema_string = serde_json::to_string_pretty(&serde_json::json!(tool.input_schema))?;
+    Ok(tool.name.len() + tool.description.len() + tool_schema_string.len())
 }
 
 fn get_json_schema(

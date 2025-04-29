@@ -110,6 +110,14 @@ impl Server {
             (None, None)
         };
 
+        tracing::info!("Size of tools:");
+        let total_characters = operations
+            .iter()
+            .map(|op| op.tool_character_length())
+            .sum::<usize>();
+        tracing::info!("    characters: {}", total_characters);
+        tracing::info!("    estimated tokens: {}", total_characters / 4);
+
         // Load headers
         let mut default_headers = HeaderMap::new();
         default_headers.append(CONTENT_TYPE, HeaderValue::from_static("application/json"));
