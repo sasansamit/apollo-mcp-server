@@ -33,7 +33,7 @@ impl TryFrom<&str> for CustomScalarMap {
 
         // panic!("hello2! {:?}", parsed_custom_scalar_file);
 
-        Ok::<_, ServerError>(CustomScalarMap { custom_scalar_map })
+        Ok::<_, ServerError>(CustomScalarMap(custom_scalar_map))
     }
 }
 
@@ -49,13 +49,11 @@ impl TryFrom<&PathBuf> for CustomScalarMap {
 }
 
 #[derive(Debug)]
-pub struct CustomScalarMap {
-    custom_scalar_map: HashMap<String, SchemaObject>,
-}
+pub struct CustomScalarMap(HashMap<String, SchemaObject>);
 
 impl CustomScalarMap {
     pub fn get(&self, key: &str) -> Option<&SchemaObject> {
-        self.custom_scalar_map.get(key)
+        self.0.get(key)
     }
 }
 
@@ -190,7 +188,7 @@ mod tests {
         "###,
         )
         .unwrap()
-        .custom_scalar_map;
+        .0;
 
         let expected_data = HashMap::from_iter([
             (
