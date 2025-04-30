@@ -3,7 +3,7 @@ use crate::errors::{McpError, OperationError, ServerError};
 use crate::graphql;
 use crate::graphql::Executable;
 use crate::introspection::{EXECUTE_TOOL_NAME, Execute, GET_SCHEMA_TOOL_NAME, GetSchema};
-use crate::operations::Operation;
+use crate::operations::{MutationMode, Operation};
 use buildstructor::buildstructor;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use rmcp::model::{
@@ -42,6 +42,7 @@ pub struct Server {
     get_schema_tool: Option<GetSchema>,
     manifest_poller: Option<PersistedQueryManifestPoller>,
     peers: Arc<RwLock<Vec<Peer<RoleServer>>>>,
+    mutation_mode: MutationMode,
 }
 
 #[buildstructor]
@@ -49,6 +50,7 @@ impl Server {
     #[builder]
     pub async fn new<P: 'static + AsRef<Path> + Sync + Send + Clone>(
         schema: Valid<Schema>,
+        introspection_schema: Valid<Schema>,
         operations: Vec<P>,
         endpoint: String,
         headers: Vec<String>,
@@ -56,6 +58,7 @@ impl Server {
         uplink: bool,
         manifests: Vec<P>,
         custom_scalar_map: Option<CustomScalarMap>,
+        mutation_mode: MutationMode,
     ) -> Result<Self, ServerError> {
         // Load operations from static files
         let operations = operations
@@ -63,7 +66,13 @@ impl Server {
             .map(|operation| {
                 info!(operation_path=?operation.as_ref(), "Loading operation");
                 let operation = std::fs::read_to_string(operation)?;
-                Operation::from_document(&operation, &schema, None, custom_scalar_map.as_ref())
+                Operation::from_document(
+                    &operation,
+                    &schema,
+                    None,
+                    custom_scalar_map.as_ref(),
+                    &mutation_mode,
+                )
             })
             .collect::<Result<Vec<_>, _>>()?;
         if !operations.is_empty() {
@@ -117,15 +126,17 @@ impl Server {
             let parts: Vec<&str> = header.split(':').collect();
             match (parts.first(), parts.get(1), parts.get(2)) {
                 (Some(key), Some(value), None) => {
-                    default_headers
-                        .append(HeaderName::from_str(key)?, HeaderValue::from_str(value)?);
+                    default_headers.append(
+                        HeaderName::from_str(key.trim())?,
+                        HeaderValue::from_str(value.trim())?,
+                    );
                 }
                 _ => return Err(ServerError::Header(header)),
             }
         }
 
-        let execute_tool = introspection.then(Execute::new);
-        let get_schema_tool = introspection.then(|| GetSchema::new(schema.clone()));
+        let execute_tool = introspection.then(|| Execute::new(mutation_mode.clone()));
+        let get_schema_tool = introspection.then(|| GetSchema::new(introspection_schema));
 
         let peers = Arc::new(RwLock::new(vec![]));
 
@@ -142,6 +153,7 @@ impl Server {
             get_schema_tool,
             manifest_poller,
             peers,
+            mutation_mode,
         })
     }
 
@@ -185,13 +197,22 @@ impl Server {
     }
 
     /// Get the current set of operations from the manifest, if any
-    fn manifest_operations(&self) -> Result<Vec<Operation>, McpError> {
+    fn manifest_operations(
+        &self,
+        mutation_mode: &MutationMode,
+    ) -> Result<Vec<Operation>, McpError> {
         if let Some(manifest_poller) = self.manifest_poller.as_ref() {
             manifest_poller
                 .get_all_operations()
                 .into_iter()
                 .map(|(pq_id, operation)| {
-                    Operation::from_document(&operation, &self.schema, Some(pq_id), None)
+                    Operation::from_document(
+                        &operation,
+                        &self.schema,
+                        Some(pq_id),
+                        None,
+                        mutation_mode,
+                    )
                 })
                 .collect::<Result<Vec<Operation>, OperationError>>()
                 .map_err(|e| McpError::new(ErrorCode::INTERNAL_ERROR, e.to_string(), None))
@@ -232,7 +253,7 @@ impl ServerHandler for Server {
             } else {
                 self.operations
                     .iter()
-                    .chain(self.manifest_operations()?.iter())
+                    .chain(self.manifest_operations(&self.mutation_mode)?.iter())
                     .find(|op| op.as_ref().name == request.name)
                     .ok_or(tool_not_found(&request.name))?
                     .execute(graphql_request)
@@ -251,7 +272,7 @@ impl ServerHandler for Server {
             tools: self
                 .operations
                 .iter()
-                .chain(self.manifest_operations()?.iter())
+                .chain(self.manifest_operations(&self.mutation_mode)?.iter())
                 .map(|op| op.as_ref().clone())
                 .chain(
                     self.execute_tool

@@ -25,6 +25,12 @@ pub enum OperationError {
 
     #[error(transparent)]
     File(#[from] std::io::Error),
+
+    #[error("Mutations are not allowed: {0}")]
+    MutationNotAllowed(String),
+
+    #[error("Subscriptions are not allowed: {0}")]
+    SubscriptionNotAllowed(String),
 }
 
 /// An error in server initialization
@@ -35,6 +41,9 @@ pub enum ServerError {
 
     #[error("Could not parse GraphQL schema: {0}")]
     GraphQLSchema(Box<WithErrors<Schema>>),
+
+    #[error("Could not parse GraphQL schema: {0}")]
+    GraphQLDocumentSchema(Box<WithErrors<Document>>),
 
     #[error("Invalid JSON: {0}")]
     Json(#[from] serde_json::Error),

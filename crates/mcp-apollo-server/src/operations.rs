@@ -1,7 +1,7 @@
 use crate::errors::{McpError, OperationError};
 use crate::graphql;
 use crate::tree_shake::TreeShaker;
-use apollo_compiler::ast::{FragmentDefinition, Selection};
+use apollo_compiler::ast::{FragmentDefinition, OperationType, Selection};
 use apollo_compiler::{
     Name, Node, Schema as GraphqlSchema,
     ast::{Definition, OperationDefinition, Type},
@@ -19,6 +19,18 @@ use rmcp::{
 use serde::Serialize;
 
 use crate::custom_scalar_map::CustomScalarMap;
+
+// #[derive(Display, PartialEq, Eq)]
+#[derive(clap::ValueEnum, Clone, Default, Debug, Serialize, PartialEq)]
+pub enum MutationMode {
+    /// Don't allow any mutations
+    #[default]
+    None,
+    /// Allow explicit mutations, but don't allow the LLM to build them
+    Explicit,
+    /// Allow the LLM to build mutations
+    All,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Operation {
@@ -45,6 +57,7 @@ impl Operation {
         graphql_schema: &GraphqlSchema,
         persisted_query_id: Option<String>,
         custom_scalar_map: Option<&CustomScalarMap>,
+        mutation_mode: &MutationMode,
     ) -> Result<Self, OperationError> {
         let document = Parser::new()
             .parse_ast(source_text, "operation.graphql")
@@ -103,6 +116,18 @@ impl Operation {
                 OperationError::MissingName(operation.serialize().no_indent().to_string())
             })?
             .to_string();
+
+        match operation.operation_type {
+            OperationType::Subscription => {
+                return Err(OperationError::SubscriptionNotAllowed(operation_name));
+            }
+            OperationType::Mutation => {
+                if *mutation_mode == MutationMode::None {
+                    return Err(OperationError::MutationNotAllowed(operation_name));
+                }
+            }
+            OperationType::Query => {}
+        }
 
         let description =
             Self::tool_description(comments, graphql_schema, operation, &fragment_defs);
@@ -490,13 +515,17 @@ mod tests {
     use apollo_compiler::{Schema, parser::Parser, validation::Valid};
     use rmcp::{model::Tool, serde_json};
 
-    use crate::{custom_scalar_map::CustomScalarMap, operations::Operation};
+    use crate::{
+        custom_scalar_map::CustomScalarMap,
+        operations::{MutationMode, Operation},
+    };
 
     // Example schema for tests
     static SCHEMA: LazyLock<Valid<Schema>> = LazyLock::new(|| {
         Schema::parse(
             r#"
                 type Query { id: String }
+                type Mutation { id: String }
 
                 """
                 RealCustomScalar exists
@@ -537,9 +566,105 @@ mod tests {
     });
 
     #[test]
+    fn subscriptions() {
+        let error = Operation::from_document(
+            "subscription SubscriptionName { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        )
+        .err()
+        .unwrap();
+
+        insta::assert_debug_snapshot!(error, @r###"
+            SubscriptionNotAllowed(
+                "SubscriptionName",
+            )
+        "###);
+    }
+
+    #[test]
+    fn mutation_mode_none() {
+        let error = Operation::from_document(
+            "mutation MutationName { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        )
+        .err()
+        .unwrap();
+
+        insta::assert_debug_snapshot!(error, @r###"
+            MutationNotAllowed(
+                "MutationName",
+            )
+        "###);
+    }
+
+    #[test]
+    fn mutation_mode_explicit() {
+        let operation = Operation::from_document(
+            "mutation MutationName { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::Explicit,
+        )
+        .unwrap();
+
+        insta::assert_debug_snapshot!(operation, @r###"
+            Operation {
+                tool: Tool {
+                    name: "MutationName",
+                    description: "The returned value is optional and has type `String`",
+                    input_schema: {
+                        "type": String("object"),
+                    },
+                },
+                source_text: "mutation MutationName { id }",
+                character_count: 86,
+            }
+        "###);
+    }
+
+    #[test]
+    fn mutation_mode_all() {
+        let operation = Operation::from_document(
+            "mutation MutationName { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::All,
+        )
+        .unwrap();
+
+        insta::assert_debug_snapshot!(operation, @r###"
+            Operation {
+                tool: Tool {
+                    name: "MutationName",
+                    description: "The returned value is optional and has type `String`",
+                    input_schema: {
+                        "type": String("object"),
+                    },
+                },
+                source_text: "mutation MutationName { id }",
+                character_count: 86,
+            }
+        "###);
+    }
+
+    #[test]
     fn no_variables() {
-        let operation =
-            Operation::from_document("query QueryName { id }", &SCHEMA, None, None).unwrap();
+        let operation = Operation::from_document(
+            "query QueryName { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        )
+        .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
@@ -560,9 +685,14 @@ mod tests {
 
     #[test]
     fn nullable_named_type() {
-        let operation =
-            Operation::from_document("query QueryName($id: ID) { id }", &SCHEMA, None, None)
-                .unwrap();
+        let operation = Operation::from_document(
+            "query QueryName($id: ID) { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        )
+        .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
@@ -593,9 +723,14 @@ mod tests {
 
     #[test]
     fn non_nullable_named_type() {
-        let operation =
-            Operation::from_document("query QueryName($id: ID!) { id }", &SCHEMA, None, None)
-                .unwrap();
+        let operation = Operation::from_document(
+            "query QueryName($id: ID!) { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        )
+        .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
@@ -632,9 +767,14 @@ mod tests {
 
     #[test]
     fn non_nullable_list_of_nullable_named_type() {
-        let operation =
-            Operation::from_document("query QueryName($id: [ID]!) { id }", &SCHEMA, None, None)
-                .unwrap();
+        let operation = Operation::from_document(
+            "query QueryName($id: [ID]!) { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        )
+        .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
@@ -687,9 +827,14 @@ mod tests {
 
     #[test]
     fn non_nullable_list_of_non_nullable_named_type() {
-        let operation =
-            Operation::from_document("query QueryName($id: [ID!]!) { id }", &SCHEMA, None, None)
-                .unwrap();
+        let operation = Operation::from_document(
+            "query QueryName($id: [ID!]!) { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        )
+        .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
@@ -732,9 +877,14 @@ mod tests {
 
     #[test]
     fn nullable_list_of_nullable_named_type() {
-        let operation =
-            Operation::from_document("query QueryName($id: [ID]) { id }", &SCHEMA, None, None)
-                .unwrap();
+        let operation = Operation::from_document(
+            "query QueryName($id: [ID]) { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        )
+        .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
@@ -781,9 +931,14 @@ mod tests {
 
     #[test]
     fn nullable_list_of_non_nullable_named_type() {
-        let operation =
-            Operation::from_document("query QueryName($id: [ID!]) { id }", &SCHEMA, None, None)
-                .unwrap();
+        let operation = Operation::from_document(
+            "query QueryName($id: [ID!]) { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        )
+        .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
@@ -820,9 +975,14 @@ mod tests {
 
     #[test]
     fn nullable_list_of_nullable_lists_of_nullable_named_types() {
-        let operation =
-            Operation::from_document("query QueryName($id: [[ID]]) { id }", &SCHEMA, None, None)
-                .unwrap();
+        let operation = Operation::from_document(
+            "query QueryName($id: [[ID]]) { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        )
+        .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
@@ -890,6 +1050,7 @@ mod tests {
             &SCHEMA,
             None,
             None,
+            &MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -953,6 +1114,7 @@ mod tests {
             &SCHEMA,
             None,
             None,
+            &MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1006,6 +1168,7 @@ mod tests {
             &SCHEMA,
             None,
             None,
+            &MutationMode::None,
         );
         insta::assert_debug_snapshot!(operation, @r###"
         Err(
@@ -1018,7 +1181,8 @@ mod tests {
 
     #[test]
     fn unnamed_operations_should_error() {
-        let operation = Operation::from_document("query { id }", &SCHEMA, None, None);
+        let operation =
+            Operation::from_document("query { id }", &SCHEMA, None, None, &MutationMode::None);
         insta::assert_debug_snapshot!(operation, @r###"
         Err(
             MissingName(
@@ -1030,8 +1194,13 @@ mod tests {
 
     #[test]
     fn no_operations_should_error() {
-        let operation =
-            Operation::from_document("fragment Test on Query { id }", &SCHEMA, None, None);
+        let operation = Operation::from_document(
+            "fragment Test on Query { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        );
         insta::assert_debug_snapshot!(operation, @r###"
         Err(
             NoOperations,
@@ -1041,7 +1210,13 @@ mod tests {
 
     #[test]
     fn schema_should_error() {
-        let operation = Operation::from_document("type Query { id: String }", &SCHEMA, None, None);
+        let operation = Operation::from_document(
+            "type Query { id: String }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        );
         insta::assert_debug_snapshot!(operation, @r###"
         Err(
             NoOperations,
@@ -1052,9 +1227,14 @@ mod tests {
     #[test]
     fn unknown_type_should_be_any() {
         // TODO: should this test that the warning was logged?
-        let operation =
-            Operation::from_document("query QueryName($id: FakeType) { id }", &SCHEMA, None, None)
-                .unwrap();
+        let operation = Operation::from_document(
+            "query QueryName($id: FakeType) { id }",
+            &SCHEMA,
+            None,
+            None,
+            &MutationMode::None,
+        )
+        .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
@@ -1079,6 +1259,7 @@ mod tests {
             &SCHEMA,
             None,
             None,
+            &MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1105,6 +1286,7 @@ mod tests {
             &SCHEMA,
             None,
             Some(&CustomScalarMap::from_str("{}").unwrap()),
+            &MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1135,6 +1317,7 @@ mod tests {
             &SCHEMA,
             None,
             custom_scalar_map.ok().as_ref(),
+            &MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1303,6 +1486,7 @@ mod tests {
             &schema,
             None,
             None,
+            &MutationMode::None,
         )
         .unwrap();
 
@@ -1377,6 +1561,7 @@ mod tests {
             &SCHEMA,
             None,
             None,
+            &MutationMode::None,
         )
         .unwrap();
 
@@ -1400,6 +1585,7 @@ mod tests {
             &SCHEMA,
             None,
             None,
+            &MutationMode::None,
         )
         .unwrap();
 

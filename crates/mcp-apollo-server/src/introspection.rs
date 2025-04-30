@@ -2,11 +2,14 @@
 
 use crate::errors::McpError;
 use crate::graphql;
+use crate::operations::MutationMode;
 use apollo_compiler::Schema;
+use apollo_compiler::ast::{Definition, OperationType};
+use apollo_compiler::parser::Parser;
 use apollo_compiler::validation::Valid;
 use rmcp::model::{ErrorCode, Tool};
 use rmcp::schemars::JsonSchema;
-use rmcp::serde_json::Value;
+use rmcp::serde_json::{Value, json};
 use rmcp::{schemars, serde_json};
 use serde::Deserialize;
 
@@ -47,6 +50,7 @@ impl GetSchema {
 #[derive(Clone)]
 pub struct Execute {
     pub tool: Tool,
+    mutation_mode: MutationMode,
 }
 
 #[derive(JsonSchema, Deserialize)]
@@ -59,8 +63,9 @@ pub struct Input {
 }
 
 impl Execute {
-    pub fn new() -> Self {
+    pub fn new(mutation_mode: MutationMode) -> Self {
         Self {
+            mutation_mode,
             tool: Tool::new(
                 EXECUTE_TOOL_NAME,
                 "Execute a GraphQL operation. Use the `schema` tool to get the GraphQL schema. Always use the schema to create operations - do not try arbitrary operations. DO NOT try to execute introspection queries.",
@@ -76,11 +81,68 @@ impl graphql::Executable for Execute {
     }
 
     fn operation(&self, input: Value) -> Result<String, McpError> {
-        serde_json::from_value::<Input>(input)
-            .map(|input| input.query)
-            .map_err(|_| {
+        let input = serde_json::from_value::<Input>(input).map_err(|_| {
+            McpError::new(ErrorCode::INVALID_PARAMS, "Invalid input".to_string(), None)
+        })?;
+
+        let document: apollo_compiler::ast::Document = Parser::new()
+            .parse_ast(&input.query, "operation.graphql")
+            .map_err(|_e| {
                 McpError::new(ErrorCode::INVALID_PARAMS, "Invalid input".to_string(), None)
-            })
+            })?;
+
+        let mut operation_defs = document.definitions.iter().filter_map(|def| match def {
+            Definition::OperationDefinition(operation_def) => Some(operation_def),
+            Definition::FragmentDefinition(_) => None,
+            _ => {
+                tracing::error!(
+                    spec=?def,
+                    "Schema definitions were passed
+                    in, only operations and fragments are allowed"
+                );
+                None
+            }
+        });
+
+        match (operation_defs.next(), operation_defs.next()) {
+            (None, _) => {
+                return Err(McpError::new(
+                    ErrorCode::INVALID_PARAMS,
+                    "Invalid input".to_string(),
+                    Some(json!({ "error": "no operations in document" })),
+                ));
+            }
+            (_, Some(_)) => {
+                return Err(McpError::new(
+                    ErrorCode::INVALID_PARAMS,
+                    "Invalid input".to_string(),
+                    Some(
+                        json!({ "error": format!("expected 1 operations in document, found {}", 2 + operation_defs.count() ) }),
+                    ),
+                ));
+            }
+            (Some(op), None) => match op.operation_type {
+                OperationType::Subscription => {
+                    return Err(McpError::new(
+                        ErrorCode::INVALID_PARAMS,
+                        "Invalid input".to_string(),
+                        Some(json!({ "error": "Subscriptions are not allowed" })),
+                    ));
+                }
+                OperationType::Mutation => {
+                    if self.mutation_mode != MutationMode::All {
+                        return Err(McpError::new(
+                            ErrorCode::INVALID_PARAMS,
+                            "Invalid input".to_string(),
+                            Some(json!({ "error": "Mutations are not allowed" })),
+                        ));
+                    }
+                }
+                OperationType::Query => {}
+            },
+        };
+
+        Ok(input.query)
     }
 
     fn variables(&self, input: Value) -> Result<Value, McpError> {

@@ -1,10 +1,11 @@
-use apollo_compiler::Schema;
 use clap::Parser;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
 use mcp_apollo_server::custom_scalar_map::CustomScalarMap;
 use mcp_apollo_server::errors::ServerError;
+use mcp_apollo_server::operations::MutationMode;
 use mcp_apollo_server::server::Server;
+use mcp_apollo_server::tree_shake::remove_root_types;
 use rmcp::ServiceExt;
 use rmcp::transport::{SseServer, stdio};
 use std::env;
@@ -65,6 +66,10 @@ struct Args {
     /// The path to the persisted query manifest containing operations
     #[arg(long)]
     manifest: Option<PathBuf>,
+
+    // Configure when to allow mutations
+    #[clap(long, short = 'm', default_value_t, value_enum)]
+    allow_mutations: MutationMode,
 }
 
 #[tokio::main]
@@ -85,18 +90,26 @@ async fn main() -> anyhow::Result<()> {
 
     let schema_path: &Path = args.schema.as_ref();
     info!(schema_path=?schema_path, "Loading schema");
-    let schema = std::fs::read_to_string(schema_path)?;
-    let schema = Schema::parse_and_validate(schema, schema_path)
+    let schema_source_text = std::fs::read_to_string(schema_path)?;
+    let document = apollo_compiler::parser::Parser::new()
+        .parse_ast(&schema_source_text, "operation.graphql")
+        .map_err(|e| ServerError::GraphQLDocumentSchema(Box::new(e)))?;
+    let schema = document
+        .to_schema_validate()
         .map_err(|e| ServerError::GraphQLSchema(Box::new(e)))?;
+    // TODO: if introspection is off, this shouldn't be required
+    let introspection_schema = remove_root_types(&schema, document.clone(), &args.allow_mutations)?;
 
     let server = Server::builder()
         .schema(schema)
+        .introspection_schema(introspection_schema)
         .endpoint(args.endpoint)
         .operations(args.operations)
         .headers(args.headers)
         .introspection(args.introspection)
         .uplink(args.uplink)
         .manifests(args.manifest.into_iter().collect())
+        .mutation_mode(args.allow_mutations)
         .and_custom_scalar_map(
             args.custom_scalars_config
                 .map(|custom_scalars_config| CustomScalarMap::try_from(&custom_scalars_config))
