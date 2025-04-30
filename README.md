@@ -97,7 +97,7 @@ To use the stdio transport, add the following to the MCP configuration file for 
 
 To use the HTTP+SSE transport, first start the MCP server as described above for MCP Inspector.
 
-For Claude Desktop, you can use `mcp-remote` to give Claude access to the MCP Server over SSE:
+For Claude Desktop, you can use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote/v/latest?activeTab=readme) to give Claude access to the MCP Server over SSE:
 
 ```json
 {
@@ -106,7 +106,9 @@ For Claude Desktop, you can use `mcp-remote` to give Claude access to the MCP Se
         "command": "npx",
         "args": [
             "mcp-remote",
-            "http://127.0.0.1:5000/sse"
+            "http://127.0.0.1:5000/sse",
+            "--transport",
+            "sse-first"
         ]
     }
   }
