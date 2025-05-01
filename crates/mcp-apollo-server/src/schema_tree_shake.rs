@@ -24,34 +24,6 @@ struct VisitedNode {
     retain: bool,
 }
 
-fn visit(
-    is_directive: bool,
-    type_name: &str,
-    visited_named_types: &mut HashMap<String, VisitedNode>,
-    visited_directives: &mut HashMap<String, VisitedNode>,
-) {
-    if let Some((type_names, directive_names)) = if let Some(visited_node) = if is_directive {
-        visited_directives.get_mut(type_name)
-    } else {
-        visited_named_types.get_mut(type_name)
-    } {
-        visited_node.retain = true;
-        Some((
-            visited_node.referenced_type_names.clone(),
-            visited_node.referected_directive_names.clone(),
-        ))
-    } else {
-        None
-    } {
-        type_names
-            .iter()
-            .for_each(|t| visit(false, t, visited_named_types, visited_directives));
-        directive_names
-            .iter()
-            .for_each(|t| visit(true, t, visited_named_types, visited_directives));
-    }
-}
-
 impl<'document> SchemaTreeShaker<'document> {
     pub fn new(document: &'document Document) -> Self {
         let mut schema_defs = Vec::default();
@@ -284,22 +256,41 @@ impl<'document> SchemaTreeShaker<'document> {
     }
 
     pub fn retain_operation_type(&mut self, operation_type: OperationType) {
-        self.operation_types.push(operation_type);
-        let operation_type_name =
+        let operation_type_name = {
+            self.operation_types.push(operation_type);
+
             self.operation_type_names
                 .entry(operation_type)
                 .or_insert(match operation_type {
                     OperationType::Query => "Query".to_string(),
                     OperationType::Mutation => "Mutation".to_string(),
                     OperationType::Subscription => "Subscription".to_string(),
-                });
+                })
+                .clone()
+        };
 
-        visit(
-            false,
-            operation_type_name,
-            &mut self.visited_named_types,
-            &mut self.visted_directives,
-        );
+        self.retain_type(false, &operation_type_name);
+    }
+
+    fn retain_type(&mut self, is_directive: bool, type_name: &str) {
+        if let Some((type_names, directive_names)) = if let Some(visited_node) = if is_directive {
+            self.visted_directives.get_mut(type_name)
+        } else {
+            self.visited_named_types.get_mut(type_name)
+        } {
+            visited_node.retain = true;
+            Some((
+                visited_node.referenced_type_names.clone(),
+                visited_node.referected_directive_names.clone(),
+            ))
+        } else {
+            None
+        } {
+            type_names.iter().for_each(|t| self.retain_type(false, t));
+            directive_names
+                .iter()
+                .for_each(|t| self.retain_type(true, t));
+        }
     }
 
     /// Return the set of types retained after tree shaking.
