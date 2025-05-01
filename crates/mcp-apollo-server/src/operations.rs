@@ -1,7 +1,7 @@
 use crate::errors::{McpError, OperationError};
 use crate::graphql;
 use crate::tree_shake::TreeShaker;
-use apollo_compiler::ast::{FragmentDefinition, OperationType, Selection};
+use apollo_compiler::ast::{Document, FragmentDefinition, OperationType, Selection};
 use apollo_compiler::{
     Name, Node, Schema as GraphqlSchema,
     ast::{Definition, OperationDefinition, Type},
@@ -51,20 +51,14 @@ impl From<Operation> for Tool {
     }
 }
 
-impl Operation {
-    pub fn from_document(
-        source_text: &str,
-        graphql_schema: &GraphqlSchema,
-        persisted_query_id: Option<String>,
-        custom_scalar_map: Option<&CustomScalarMap>,
-        mutation_mode: &MutationMode,
-    ) -> Result<Self, OperationError> {
-        let document = Parser::new()
-            .parse_ast(source_text, "operation.graphql")
-            .map_err(|e| OperationError::GraphQLDocument(Box::new(e)))?;
-
-        let mut last_offset: Option<usize> = Some(0);
-        let mut operation_defs = document.definitions.iter().filter_map(|def| {
+pub fn operation_defs(
+    source_text: &str,
+) -> Result<(Document, Node<OperationDefinition>, Option<String>), OperationError> {
+    let document = Parser::new()
+        .parse_ast(source_text, "operation.graphql")
+        .map_err(|e| OperationError::GraphQLDocument(Box::new(e)))?;
+    let mut last_offset: Option<usize> = Some(0);
+    let mut operation_defs = document.definitions.clone().into_iter().filter_map(|def| {
             let description = match def.location() {
                 Some(source_span) => {
                     let description = last_offset
@@ -90,6 +84,28 @@ impl Operation {
             }
         });
 
+    let (operation, comments) = match (operation_defs.next(), operation_defs.next()) {
+        (None, _) => return Err(OperationError::NoOperations),
+        (_, Some(_)) => {
+            return Err(OperationError::TooManyOperations(
+                2 + operation_defs.count(),
+            ));
+        }
+        (Some(op), None) => op,
+    };
+    Ok((document, operation, comments.map(|c| c.to_string())))
+}
+
+impl Operation {
+    pub fn from_document(
+        source_text: &str,
+        graphql_schema: &GraphqlSchema,
+        persisted_query_id: Option<String>,
+        custom_scalar_map: Option<&CustomScalarMap>,
+        mutation_mode: &MutationMode,
+    ) -> Result<Self, OperationError> {
+        let (document, operation, comments) = operation_defs(source_text)?;
+
         let fragment_defs: Vec<&Node<FragmentDefinition>> = document
             .definitions
             .iter()
@@ -98,16 +114,6 @@ impl Operation {
                 _ => None,
             })
             .collect();
-
-        let (operation, comments) = match (operation_defs.next(), operation_defs.next()) {
-            (None, _) => return Err(OperationError::NoOperations),
-            (_, Some(_)) => {
-                return Err(OperationError::TooManyOperations(
-                    2 + operation_defs.count(),
-                ));
-            }
-            (Some(op), None) => op,
-        };
 
         let operation_name = operation
             .name
@@ -130,10 +136,10 @@ impl Operation {
         }
 
         let description =
-            Self::tool_description(comments, graphql_schema, operation, &fragment_defs);
+            Self::tool_description(comments, graphql_schema, &operation, &fragment_defs);
 
         let object = serde_json::to_value(get_json_schema(
-            operation,
+            &operation,
             graphql_schema,
             custom_scalar_map,
         ))?;
@@ -152,13 +158,15 @@ impl Operation {
 
     /// Generate a description for an operation based on documentation in the schema
     fn tool_description(
-        comments: Option<&str>,
+        comments: Option<String>,
         graphql_schema: &GraphqlSchema,
         operation_def: &Node<OperationDefinition>,
         fragment_defs: &[&Node<FragmentDefinition>],
     ) -> String {
         let comment_description = comments.and_then(|comments| {
-            let content = Regex::new(r"(\n|^)\s*#").ok()?.replace_all(comments, "$1");
+            let content = Regex::new(r"(\n|^)\s*#")
+                .ok()?
+                .replace_all(comments.as_str(), "$1");
             let trimmed = content.trim();
 
             if trimmed.is_empty() {

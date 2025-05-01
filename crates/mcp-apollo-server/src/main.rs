@@ -5,7 +5,6 @@ use mcp_apollo_server::custom_scalar_map::CustomScalarMap;
 use mcp_apollo_server::errors::ServerError;
 use mcp_apollo_server::operations::MutationMode;
 use mcp_apollo_server::server::Server;
-use mcp_apollo_server::tree_shake::remove_root_types;
 use rmcp::ServiceExt;
 use rmcp::transport::{SseServer, stdio};
 use std::env;
@@ -97,12 +96,10 @@ async fn main() -> anyhow::Result<()> {
     let schema = document
         .to_schema_validate()
         .map_err(|e| ServerError::GraphQLSchema(Box::new(e)))?;
-    // TODO: if introspection is off, this shouldn't be required
-    let introspection_schema = remove_root_types(&schema, document.clone(), &args.allow_mutations)?;
 
     let server = Server::builder()
         .schema(schema)
-        .introspection_schema(introspection_schema)
+        .document(document)
         .endpoint(args.endpoint)
         .operations(args.operations)
         .headers(args.headers)

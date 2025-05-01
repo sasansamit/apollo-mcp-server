@@ -4,5 +4,6 @@ mod graphql;
 mod introspection;
 pub mod operations;
 pub mod sanitize;
+pub mod schema_tree_shake;
 pub mod server;
 pub mod tree_shake;

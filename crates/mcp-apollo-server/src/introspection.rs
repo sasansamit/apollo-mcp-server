@@ -2,10 +2,9 @@
 
 use crate::errors::McpError;
 use crate::graphql;
-use crate::operations::MutationMode;
+use crate::operations::{MutationMode, operation_defs};
 use apollo_compiler::Schema;
-use apollo_compiler::ast::{Definition, OperationType};
-use apollo_compiler::parser::Parser;
+use apollo_compiler::ast::OperationType;
 use apollo_compiler::validation::Valid;
 use rmcp::model::{ErrorCode, Tool};
 use rmcp::schemars::JsonSchema;
@@ -85,61 +84,27 @@ impl graphql::Executable for Execute {
             McpError::new(ErrorCode::INVALID_PARAMS, "Invalid input".to_string(), None)
         })?;
 
-        let document: apollo_compiler::ast::Document = Parser::new()
-            .parse_ast(&input.query, "operation.graphql")
-            .map_err(|_e| {
-                McpError::new(ErrorCode::INVALID_PARAMS, "Invalid input".to_string(), None)
-            })?;
+        let (_document, operation, _comment) = operation_defs(&input.query)
+            .map_err(|e| McpError::new(ErrorCode::INVALID_PARAMS, e.to_string(), None))?;
 
-        let mut operation_defs = document.definitions.iter().filter_map(|def| match def {
-            Definition::OperationDefinition(operation_def) => Some(operation_def),
-            Definition::FragmentDefinition(_) => None,
-            _ => {
-                tracing::error!(
-                    spec=?def,
-                    "Schema definitions were passed
-                    in, only operations and fragments are allowed"
-                );
-                None
-            }
-        });
-
-        match (operation_defs.next(), operation_defs.next()) {
-            (None, _) => {
+        match operation.operation_type {
+            OperationType::Subscription => {
                 return Err(McpError::new(
                     ErrorCode::INVALID_PARAMS,
                     "Invalid input".to_string(),
-                    Some(json!({ "error": "no operations in document" })),
+                    Some(json!({ "error": "Subscriptions are not allowed" })),
                 ));
             }
-            (_, Some(_)) => {
-                return Err(McpError::new(
-                    ErrorCode::INVALID_PARAMS,
-                    "Invalid input".to_string(),
-                    Some(
-                        json!({ "error": format!("expected 1 operations in document, found {}", 2 + operation_defs.count() ) }),
-                    ),
-                ));
-            }
-            (Some(op), None) => match op.operation_type {
-                OperationType::Subscription => {
+            OperationType::Mutation => {
+                if self.mutation_mode != MutationMode::All {
                     return Err(McpError::new(
                         ErrorCode::INVALID_PARAMS,
                         "Invalid input".to_string(),
-                        Some(json!({ "error": "Subscriptions are not allowed" })),
+                        Some(json!({ "error": "Mutations are not allowed" })),
                     ));
                 }
-                OperationType::Mutation => {
-                    if self.mutation_mode != MutationMode::All {
-                        return Err(McpError::new(
-                            ErrorCode::INVALID_PARAMS,
-                            "Invalid input".to_string(),
-                            Some(json!({ "error": "Mutations are not allowed" })),
-                        ));
-                    }
-                }
-                OperationType::Query => {}
-            },
+            }
+            OperationType::Query => {}
         };
 
         Ok(input.query)

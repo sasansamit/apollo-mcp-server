@@ -4,6 +4,8 @@ use crate::graphql;
 use crate::graphql::Executable;
 use crate::introspection::{EXECUTE_TOOL_NAME, Execute, GET_SCHEMA_TOOL_NAME, GetSchema};
 use crate::operations::{MutationMode, Operation};
+use crate::schema_tree_shake::SchemaTreeShaker;
+use apollo_compiler::ast::{Document, OperationType};
 use buildstructor::buildstructor;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use rmcp::model::{
@@ -50,7 +52,7 @@ impl Server {
     #[builder]
     pub async fn new<P: 'static + AsRef<Path> + Sync + Send + Clone>(
         schema: Valid<Schema>,
-        introspection_schema: Valid<Schema>,
+        document: Document,
         operations: Vec<P>,
         endpoint: String,
         headers: Vec<String>,
@@ -135,8 +137,20 @@ impl Server {
             }
         }
 
-        let execute_tool = introspection.then(|| Execute::new(mutation_mode.clone()));
-        let get_schema_tool = introspection.then(|| GetSchema::new(introspection_schema));
+        let (execute_tool, get_schema_tool) = if introspection {
+            let mut shaker = SchemaTreeShaker::new(&document);
+            shaker.retain_operation_type(OperationType::Query);
+            if mutation_mode == MutationMode::All {
+                shaker.retain_operation_type(OperationType::Mutation);
+            }
+
+            (
+                Some(Execute::new(mutation_mode.clone())),
+                Some(GetSchema::new(shaker.shaken()?)),
+            )
+        } else {
+            (None, None)
+        };
 
         let peers = Arc::new(RwLock::new(vec![]));
 
