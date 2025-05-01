@@ -11,14 +11,14 @@ use std::collections::HashMap;
 /// Tree shaker for GraphQL schemas
 pub struct SchemaTreeShaker<'document> {
     document: &'document Document,
-    visited_named_types: HashMap<String, VisitedNode>,
-    visted_directives: HashMap<String, VisitedNode>,
+    named_type_nodes: HashMap<String, TreeNode>,
+    directive_nodes: HashMap<String, TreeNode>,
     operation_types: Vec<OperationType>,
     operation_type_names: HashMap<OperationType, String>,
 }
 
 #[derive(Clone, Default)]
-struct VisitedNode {
+struct TreeNode {
     referenced_type_names: Vec<String>,
     referected_directive_names: Vec<String>,
     retain: bool,
@@ -28,22 +28,22 @@ impl<'document> SchemaTreeShaker<'document> {
     pub fn new(document: &'document Document) -> Self {
         let mut schema_defs = Vec::default();
         let mut schema_exts = Vec::default();
-        let mut visited_named_types: HashMap<String, VisitedNode> = HashMap::default();
-        let mut visted_directives: HashMap<String, VisitedNode> = HashMap::default();
+        let mut named_type_nodes: HashMap<String, TreeNode> = HashMap::default();
+        let mut directive_nodes: HashMap<String, TreeNode> = HashMap::default();
 
         document.definitions.iter().for_each(|def| match def {
             Definition::ObjectTypeDefinition(object_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(object_def.name.to_string())
                     .or_default();
 
                 object_def.fields.iter().for_each(|field| {
-                    visited_node
+                    tree_node
                         .referenced_type_names
                         .push(field.ty.inner_named_type().to_string());
                 });
                 object_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
@@ -51,22 +51,20 @@ impl<'document> SchemaTreeShaker<'document> {
                     .implements_interfaces
                     .iter()
                     .for_each(|interface| {
-                        visited_node
-                            .referenced_type_names
-                            .push(interface.to_string());
+                        tree_node.referenced_type_names.push(interface.to_string());
                     });
             }
             Definition::ObjectTypeExtension(object_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(object_def.name.to_string())
                     .or_default();
                 object_def.fields.iter().for_each(|field| {
-                    visited_node
+                    tree_node
                         .referenced_type_names
                         .push(field.ty.inner_named_type().to_string());
                 });
                 object_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
@@ -74,128 +72,126 @@ impl<'document> SchemaTreeShaker<'document> {
                     .implements_interfaces
                     .iter()
                     .for_each(|interface| {
-                        visited_node
-                            .referenced_type_names
-                            .push(interface.to_string());
+                        tree_node.referenced_type_names.push(interface.to_string());
                     });
             }
             Definition::DirectiveDefinition(directive_def) => {
-                let visited_node = visted_directives
+                let tree_node = directive_nodes
                     .entry(directive_def.name.to_string())
                     .or_default();
                 directive_def.arguments.iter().for_each(|arg| {
-                    visited_node
+                    tree_node
                         .referenced_type_names
                         .push(arg.ty.inner_named_type().to_string());
                 });
             }
             Definition::InputObjectTypeDefinition(input_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(input_def.name.to_string())
                     .or_default();
                 input_def.fields.iter().for_each(|field| {
-                    visited_node
+                    tree_node
                         .referenced_type_names
                         .push(field.ty.inner_named_type().to_string());
                 });
                 input_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
             }
             Definition::InputObjectTypeExtension(input_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(input_def.name.to_string())
                     .or_default();
                 input_def.fields.iter().for_each(|field| {
-                    visited_node
+                    tree_node
                         .referenced_type_names
                         .push(field.ty.inner_named_type().to_string());
                 });
                 input_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
             }
             Definition::EnumTypeDefinition(enum_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(enum_def.name.to_string())
                     .or_default();
                 enum_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
             }
             Definition::EnumTypeExtension(enum_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(enum_def.name.to_string())
                     .or_default();
                 enum_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
             }
             Definition::ScalarTypeDefinition(scalar_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(scalar_def.name.to_string())
                     .or_default();
                 scalar_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
             }
             Definition::ScalarTypeExtension(scalar_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(scalar_def.name.to_string())
                     .or_default();
                 scalar_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
             }
             Definition::UnionTypeDefinition(union_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(union_def.name.to_string())
                     .or_default();
                 union_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
                 union_def.members.iter().for_each(|member| {
-                    visited_node.referenced_type_names.push(member.to_string());
+                    tree_node.referenced_type_names.push(member.to_string());
                 });
             }
             Definition::UnionTypeExtension(union_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(union_def.name.to_string())
                     .or_default();
                 union_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
                 union_def.members.iter().for_each(|member| {
-                    visited_node.referenced_type_names.push(member.to_string());
+                    tree_node.referenced_type_names.push(member.to_string());
                 });
             }
             Definition::InterfaceTypeDefinition(interface_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(interface_def.name.to_string())
                     .or_default();
                 interface_def.fields.iter().for_each(|field| {
-                    visited_node
+                    tree_node
                         .referenced_type_names
                         .push(field.ty.inner_named_type().to_string());
                 });
                 interface_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
@@ -203,22 +199,20 @@ impl<'document> SchemaTreeShaker<'document> {
                     .implements_interfaces
                     .iter()
                     .for_each(|interface| {
-                        visited_node
-                            .referenced_type_names
-                            .push(interface.to_string());
+                        tree_node.referenced_type_names.push(interface.to_string());
                     });
             }
             Definition::InterfaceTypeExtension(interface_def) => {
-                let visited_node = visited_named_types
+                let tree_node = named_type_nodes
                     .entry(interface_def.name.to_string())
                     .or_default();
                 interface_def.fields.iter().for_each(|field| {
-                    visited_node
+                    tree_node
                         .referenced_type_names
                         .push(field.ty.inner_named_type().to_string());
                 });
                 interface_def.directives.iter().for_each(|directive| {
-                    visited_node
+                    tree_node
                         .referected_directive_names
                         .push(directive.name.to_string())
                 });
@@ -226,9 +220,7 @@ impl<'document> SchemaTreeShaker<'document> {
                     .implements_interfaces
                     .iter()
                     .for_each(|interface| {
-                        visited_node
-                            .referenced_type_names
-                            .push(interface.to_string());
+                        tree_node.referenced_type_names.push(interface.to_string());
                     });
             }
             Definition::SchemaDefinition(schema_def) => schema_defs.push(schema_def),
@@ -239,8 +231,8 @@ impl<'document> SchemaTreeShaker<'document> {
 
         Self {
             document,
-            visited_named_types,
-            visted_directives,
+            named_type_nodes,
+            directive_nodes,
             operation_types: Vec::default(),
             operation_type_names: schema_defs
                 .iter()
@@ -273,15 +265,15 @@ impl<'document> SchemaTreeShaker<'document> {
     }
 
     fn retain_type(&mut self, is_directive: bool, type_name: &str) {
-        if let Some((type_names, directive_names)) = if let Some(visited_node) = if is_directive {
-            self.visted_directives.get_mut(type_name)
+        if let Some((type_names, directive_names)) = if let Some(tree_node) = if is_directive {
+            self.directive_nodes.get_mut(type_name)
         } else {
-            self.visited_named_types.get_mut(type_name)
+            self.named_type_nodes.get_mut(type_name)
         } {
-            visited_node.retain = true;
+            tree_node.retain = true;
             Some((
-                visited_node.referenced_type_names.clone(),
-                visited_node.referected_directive_names.clone(),
+                tree_node.referenced_type_names.clone(),
+                tree_node.referected_directive_names.clone(),
             ))
         } else {
             None
@@ -302,57 +294,57 @@ impl<'document> SchemaTreeShaker<'document> {
             .into_iter()
             .filter_map(|def| match def.clone() {
                 Definition::ObjectTypeDefinition(object_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(object_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::ObjectTypeExtension(object_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(object_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::DirectiveDefinition(directive_def) => self
-                    .visted_directives
+                    .directive_nodes
                     .get(directive_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::InputObjectTypeDefinition(input_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(input_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::InputObjectTypeExtension(input_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(input_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::EnumTypeDefinition(enum_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(enum_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::EnumTypeExtension(enum_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(enum_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::ScalarTypeDefinition(scalar_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(scalar_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::ScalarTypeExtension(scalar_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(scalar_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::UnionTypeDefinition(union_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(union_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::UnionTypeExtension(union_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(union_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::InterfaceTypeDefinition(interface_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(interface_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::InterfaceTypeExtension(interface_def) => self
-                    .visited_named_types
+                    .named_type_nodes
                     .get(interface_def.name.as_str())
-                    .and_then(|visited| visited.retain.then_some(def)),
+                    .and_then(|n| n.retain.then_some(def)),
                 Definition::SchemaDefinition(schema_def) => {
                     let filtered_root_operations = schema_def
                         .root_operations
