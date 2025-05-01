@@ -293,57 +293,9 @@ impl<'document> SchemaTreeShaker<'document> {
             .clone()
             .into_iter()
             .filter_map(|def| match def.clone() {
-                Definition::ObjectTypeDefinition(object_def) => self
-                    .named_type_nodes
-                    .get(object_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
-                Definition::ObjectTypeExtension(object_def) => self
-                    .named_type_nodes
-                    .get(object_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
                 Definition::DirectiveDefinition(directive_def) => self
                     .directive_nodes
                     .get(directive_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
-                Definition::InputObjectTypeDefinition(input_def) => self
-                    .named_type_nodes
-                    .get(input_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
-                Definition::InputObjectTypeExtension(input_def) => self
-                    .named_type_nodes
-                    .get(input_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
-                Definition::EnumTypeDefinition(enum_def) => self
-                    .named_type_nodes
-                    .get(enum_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
-                Definition::EnumTypeExtension(enum_def) => self
-                    .named_type_nodes
-                    .get(enum_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
-                Definition::ScalarTypeDefinition(scalar_def) => self
-                    .named_type_nodes
-                    .get(scalar_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
-                Definition::ScalarTypeExtension(scalar_def) => self
-                    .named_type_nodes
-                    .get(scalar_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
-                Definition::UnionTypeDefinition(union_def) => self
-                    .named_type_nodes
-                    .get(union_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
-                Definition::UnionTypeExtension(union_def) => self
-                    .named_type_nodes
-                    .get(union_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
-                Definition::InterfaceTypeDefinition(interface_def) => self
-                    .named_type_nodes
-                    .get(interface_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def)),
-                Definition::InterfaceTypeExtension(interface_def) => self
-                    .named_type_nodes
-                    .get(interface_def.name.as_str())
                     .and_then(|n| n.retain.then_some(def)),
                 Definition::SchemaDefinition(schema_def) => {
                     let filtered_root_operations = schema_def
@@ -380,6 +332,14 @@ impl<'document> SchemaTreeShaker<'document> {
                 }
                 Definition::OperationDefinition(_) => None,
                 Definition::FragmentDefinition(_) => None,
+                _ => def
+                    .name()
+                    .map(|name| {
+                        self.named_type_nodes
+                            .get(name.as_str())
+                            .is_some_and(|n| n.retain)
+                    })
+                    .and_then(|retained| retained.then_some(def)),
             })
             .collect();
 
