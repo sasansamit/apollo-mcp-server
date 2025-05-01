@@ -1,4 +1,8 @@
-use apollo_compiler::{Schema, ast::Document, validation::WithErrors};
+use apollo_compiler::{
+    Node, Schema,
+    ast::{Document, OperationDefinition},
+    validation::WithErrors,
+};
 use reqwest::header::{InvalidHeaderName, InvalidHeaderValue};
 use rmcp::serde_json;
 
@@ -27,10 +31,10 @@ pub enum OperationError {
     File(#[from] std::io::Error),
 
     #[error("Mutations are not allowed: {0}")]
-    MutationNotAllowed(String),
+    MutationNotAllowed(Node<OperationDefinition>),
 
     #[error("Subscriptions are not allowed: {0}")]
-    SubscriptionNotAllowed(String),
+    SubscriptionNotAllowed(Node<OperationDefinition>),
 }
 
 /// An error in server initialization

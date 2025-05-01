@@ -53,6 +53,7 @@ impl From<Operation> for Tool {
 
 pub fn operation_defs(
     source_text: &str,
+    allow_mutations: bool,
 ) -> Result<(Document, Node<OperationDefinition>, Option<String>), OperationError> {
     let document = Parser::new()
         .parse_ast(source_text, "operation.graphql")
@@ -93,6 +94,19 @@ pub fn operation_defs(
         }
         (Some(op), None) => op,
     };
+
+    match operation.operation_type {
+        OperationType::Subscription => {
+            return Err(OperationError::SubscriptionNotAllowed(operation));
+        }
+        OperationType::Mutation => {
+            if !allow_mutations {
+                return Err(OperationError::MutationNotAllowed(operation));
+            }
+        }
+        OperationType::Query => {}
+    }
+
     Ok((document, operation, comments.map(|c| c.to_string())))
 }
 
@@ -104,7 +118,8 @@ impl Operation {
         custom_scalar_map: Option<&CustomScalarMap>,
         mutation_mode: &MutationMode,
     ) -> Result<Self, OperationError> {
-        let (document, operation, comments) = operation_defs(source_text)?;
+        let (document, operation, comments) =
+            operation_defs(source_text, *mutation_mode != MutationMode::None)?;
 
         let fragment_defs: Vec<&Node<FragmentDefinition>> = document
             .definitions
@@ -122,18 +137,6 @@ impl Operation {
                 OperationError::MissingName(operation.serialize().no_indent().to_string())
             })?
             .to_string();
-
-        match operation.operation_type {
-            OperationType::Subscription => {
-                return Err(OperationError::SubscriptionNotAllowed(operation_name));
-            }
-            OperationType::Mutation => {
-                if *mutation_mode == MutationMode::None {
-                    return Err(OperationError::MutationNotAllowed(operation_name));
-                }
-            }
-            OperationType::Query => {}
-        }
 
         let description =
             Self::tool_description(comments, graphql_schema, &operation, &fragment_defs);

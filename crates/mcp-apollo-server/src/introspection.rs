@@ -4,11 +4,10 @@ use crate::errors::McpError;
 use crate::graphql;
 use crate::operations::{MutationMode, operation_defs};
 use apollo_compiler::Schema;
-use apollo_compiler::ast::OperationType;
 use apollo_compiler::validation::Valid;
 use rmcp::model::{ErrorCode, Tool};
 use rmcp::schemars::JsonSchema;
-use rmcp::serde_json::{Value, json};
+use rmcp::serde_json::Value;
 use rmcp::{schemars, serde_json};
 use serde::Deserialize;
 
@@ -84,28 +83,9 @@ impl graphql::Executable for Execute {
             McpError::new(ErrorCode::INVALID_PARAMS, "Invalid input".to_string(), None)
         })?;
 
-        let (_document, operation, _comment) = operation_defs(&input.query)
+        // validate the operation
+        operation_defs(&input.query, self.mutation_mode == MutationMode::All)
             .map_err(|e| McpError::new(ErrorCode::INVALID_PARAMS, e.to_string(), None))?;
-
-        match operation.operation_type {
-            OperationType::Subscription => {
-                return Err(McpError::new(
-                    ErrorCode::INVALID_PARAMS,
-                    "Invalid input".to_string(),
-                    Some(json!({ "error": "Subscriptions are not allowed" })),
-                ));
-            }
-            OperationType::Mutation => {
-                if self.mutation_mode != MutationMode::All {
-                    return Err(McpError::new(
-                        ErrorCode::INVALID_PARAMS,
-                        "Invalid input".to_string(),
-                        Some(json!({ "error": "Mutations are not allowed" })),
-                    ));
-                }
-            }
-            OperationType::Query => {}
-        };
 
         Ok(input.query)
     }
