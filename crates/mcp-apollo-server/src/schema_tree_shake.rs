@@ -24,53 +24,31 @@ struct VisitedNode {
     retain: bool,
 }
 
-fn visit_type(
-    type_name: String,
+fn visit(
+    is_directive: bool,
+    type_name: &str,
     visited_named_types: &mut HashMap<String, VisitedNode>,
     visited_directives: &mut HashMap<String, VisitedNode>,
 ) {
-    if let Some((type_names, directive_names)) =
-        if let Some(visited_node) = visited_named_types.get_mut(&type_name) {
-            visited_node.retain = true;
-            Some((
-                visited_node.referenced_type_names.clone(),
-                visited_node.referected_directive_names.clone(),
-            ))
-        } else {
-            None
-        }
-    {
+    if let Some((type_names, directive_names)) = if let Some(visited_node) = if is_directive {
+        visited_directives.get_mut(type_name)
+    } else {
+        visited_named_types.get_mut(type_name)
+    } {
+        visited_node.retain = true;
+        Some((
+            visited_node.referenced_type_names.clone(),
+            visited_node.referected_directive_names.clone(),
+        ))
+    } else {
+        None
+    } {
         type_names
             .iter()
-            .for_each(|t| visit_type(t.clone(), visited_named_types, visited_directives));
+            .for_each(|t| visit(false, t, visited_named_types, visited_directives));
         directive_names
             .iter()
-            .for_each(|t| visit_directive(t.clone(), visited_named_types, visited_directives));
-    }
-}
-
-fn visit_directive(
-    directive_name: String,
-    visited_named_types: &mut HashMap<String, VisitedNode>,
-    visited_directives: &mut HashMap<String, VisitedNode>,
-) {
-    if let Some((type_names, directive_names)) =
-        if let Some(visited_node) = visited_directives.get_mut(&directive_name) {
-            visited_node.retain = true;
-            Some((
-                visited_node.referenced_type_names.clone(),
-                visited_node.referected_directive_names.clone(),
-            ))
-        } else {
-            None
-        }
-    {
-        type_names
-            .iter()
-            .for_each(|t| visit_type(t.clone(), visited_named_types, visited_directives));
-        directive_names
-            .iter()
-            .for_each(|t| visit_directive(t.clone(), visited_named_types, visited_directives));
+            .for_each(|t| visit(true, t, visited_named_types, visited_directives));
     }
 }
 
@@ -316,8 +294,9 @@ impl<'document> SchemaTreeShaker<'document> {
                     OperationType::Subscription => "Subscription".to_string(),
                 });
 
-        visit_type(
-            operation_type_name.to_string(),
+        visit(
+            false,
+            operation_type_name,
             &mut self.visited_named_types,
             &mut self.visted_directives,
         );
