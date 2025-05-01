@@ -528,6 +528,7 @@ mod tests {
 
     use crate::{
         custom_scalar_map::CustomScalarMap,
+        errors::OperationError,
         operations::{MutationMode, Operation},
     };
 
@@ -588,11 +589,10 @@ mod tests {
         .err()
         .unwrap();
 
-        insta::assert_debug_snapshot!(error, @r###"
-            SubscriptionNotAllowed(
-                "SubscriptionName",
-            )
-        "###);
+        if let OperationError::SubscriptionNotAllowed(_) = error {
+        } else {
+            unreachable!()
+        }
     }
 
     #[test]
@@ -607,11 +607,10 @@ mod tests {
         .err()
         .unwrap();
 
-        insta::assert_debug_snapshot!(error, @r###"
-            MutationNotAllowed(
-                "MutationName",
-            )
-        "###);
+        if let OperationError::MutationNotAllowed(_) = error {
+        } else {
+            unreachable!()
+        }
     }
 
     #[test]
@@ -635,7 +634,7 @@ mod tests {
                     },
                 },
                 source_text: "mutation MutationName { id }",
-                character_count: 86,
+                persisted_query_id: None,
             }
         "###);
     }
@@ -661,7 +660,7 @@ mod tests {
                     },
                 },
                 source_text: "mutation MutationName { id }",
-                character_count: 86,
+                persisted_query_id: None,
             }
         "###);
     }
