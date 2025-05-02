@@ -3,6 +3,7 @@
 use crate::errors::McpError;
 use crate::graphql;
 use crate::operations::{MutationMode, operation_defs};
+use crate::schema_from_type;
 use apollo_compiler::Schema;
 use apollo_compiler::validation::Valid;
 use rmcp::model::{ErrorCode, Tool};
@@ -13,15 +14,6 @@ use serde::Deserialize;
 
 pub(crate) const GET_SCHEMA_TOOL_NAME: &str = "schema";
 pub(crate) const EXECUTE_TOOL_NAME: &str = "execute";
-
-macro_rules! schema_from_type {
-    ($type:ty) => {{
-        match serde_json::to_value(schemars::schema_for!($type)) {
-            Ok(Value::Object(schema)) => schema,
-            _ => panic!("Failed to generate schema for {}", stringify!($type)),
-        }
-    }};
-}
 
 #[derive(Clone)]
 pub struct GetSchema {
