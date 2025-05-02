@@ -82,7 +82,7 @@ To use the stdio transport, add the following to the MCP configuration file for 
             "--directory",
             "<absolute path to repo>",
             "--schema",
-            "graphql/weather/weather.graphql",
+            "graphql/weather/api.graphql",
             "--operations",
             "graphql/weather/operations/forecast.graphql",
             "graphql/weather/operations/alerts.graphql",
