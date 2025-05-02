@@ -20,7 +20,6 @@ use serde::Serialize;
 
 use crate::custom_scalar_map::CustomScalarMap;
 
-// #[derive(Display, PartialEq, Eq)]
 #[derive(clap::ValueEnum, Clone, Default, Debug, Serialize, PartialEq)]
 pub enum MutationMode {
     /// Don't allow any mutations
@@ -54,6 +53,7 @@ impl From<Operation> for Tool {
 pub fn operation_defs(
     source_text: &str,
     allow_mutations: bool,
+    mutation_mode: &MutationMode,
 ) -> Result<(Document, Node<OperationDefinition>, Option<String>), OperationError> {
     let document = Parser::new()
         .parse_ast(source_text, "operation.graphql")
@@ -101,7 +101,10 @@ pub fn operation_defs(
         }
         OperationType::Mutation => {
             if !allow_mutations {
-                return Err(OperationError::MutationNotAllowed(operation));
+                return Err(OperationError::MutationNotAllowed(
+                    operation,
+                    mutation_mode.clone(),
+                ));
             }
         }
         OperationType::Query => {}
@@ -118,8 +121,11 @@ impl Operation {
         custom_scalar_map: Option<&CustomScalarMap>,
         mutation_mode: &MutationMode,
     ) -> Result<Self, OperationError> {
-        let (document, operation, comments) =
-            operation_defs(source_text, *mutation_mode != MutationMode::None)?;
+        let (document, operation, comments) = operation_defs(
+            source_text,
+            *mutation_mode != MutationMode::None,
+            mutation_mode,
+        )?;
 
         let fragment_defs: Vec<&Node<FragmentDefinition>> = document
             .definitions
@@ -607,7 +613,7 @@ mod tests {
         .err()
         .unwrap();
 
-        if let OperationError::MutationNotAllowed(_) = error {
+        if let OperationError::MutationNotAllowed(_, _) = error {
         } else {
             unreachable!()
         }

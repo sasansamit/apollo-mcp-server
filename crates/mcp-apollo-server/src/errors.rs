@@ -6,6 +6,8 @@ use apollo_compiler::{
 use reqwest::header::{InvalidHeaderName, InvalidHeaderValue};
 use rmcp::serde_json;
 
+use crate::operations::MutationMode;
+
 /// An error in operation parsing
 #[derive(Debug, thiserror::Error)]
 pub enum OperationError {
@@ -30,8 +32,8 @@ pub enum OperationError {
     #[error(transparent)]
     File(#[from] std::io::Error),
 
-    #[error("Mutations are not allowed: {0}")]
-    MutationNotAllowed(Node<OperationDefinition>),
+    #[error("Mutation {0} not allowew while with --allow-mutations {1:?}")]
+    MutationNotAllowed(Node<OperationDefinition>, MutationMode),
 
     #[error("Subscriptions are not allowed: {0}")]
     SubscriptionNotAllowed(Node<OperationDefinition>),
