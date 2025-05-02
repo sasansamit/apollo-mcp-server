@@ -1,4 +1,4 @@
-//! Tree shaking for GraphQL schema types
+//! Tree shaking for GraphQL schemas
 
 use crate::errors::ServerError;
 use apollo_compiler::Schema;
