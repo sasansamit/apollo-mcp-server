@@ -1,3 +1,4 @@
+use apollo_compiler::Schema;
 use clap::Parser;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
@@ -93,12 +94,8 @@ async fn main() -> anyhow::Result<()> {
 
     let schema_path: &Path = args.schema.as_ref();
     info!(schema_path=?schema_path, "Loading schema");
-    let schema_source_text = std::fs::read_to_string(schema_path)?;
-    let document = apollo_compiler::parser::Parser::new()
-        .parse_ast(&schema_source_text, "operation.graphql")
-        .map_err(|e| ServerError::GraphQLDocumentSchema(Box::new(e)))?;
-    let schema = document
-        .to_schema_validate()
+    let schema = std::fs::read_to_string(schema_path)?;
+    let schema = Schema::parse_and_validate(schema, schema_path)
         .map_err(|e| ServerError::GraphQLSchema(Box::new(e)))?;
 
     let server = Server::builder()
