@@ -38,6 +38,7 @@ use tokio::sync::{RwLock, mpsc};
 #[derive(Clone)]
 pub struct Server {
     schema: Valid<Schema>,
+    document: Document,
     operations: Vec<Operation>,
     endpoint: String,
     default_headers: HeaderMap,
@@ -73,10 +74,11 @@ impl Server {
                 let operation = std::fs::read_to_string(operation)?;
                 Operation::from_document(
                     &operation,
+                    &document,
                     &schema,
                     None,
                     custom_scalar_map.as_ref(),
-                    &mutation_mode,
+                    mutation_mode,
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -140,14 +142,14 @@ impl Server {
         }
 
         let (execute_tool, get_schema_tool) = if introspection {
-            let mut shaker = SchemaTreeShaker::new(&document);
-            shaker.retain_operation_type(OperationType::Query);
+            let mut shaker = SchemaTreeShaker::new(&document, &schema);
+            shaker.retain_operation_type(OperationType::Query, None);
             if mutation_mode == MutationMode::All {
-                shaker.retain_operation_type(OperationType::Mutation);
+                shaker.retain_operation_type(OperationType::Mutation, None);
             }
 
             (
-                Some(Execute::new(mutation_mode.clone())),
+                Some(Execute::new(mutation_mode)),
                 Some(GetSchema::new(shaker.shaken()?)),
             )
         } else {
@@ -166,6 +168,7 @@ impl Server {
 
         Ok(Self {
             schema,
+            document,
             operations,
             endpoint,
             default_headers,
@@ -218,10 +221,7 @@ impl Server {
     }
 
     /// Get the current set of operations from the manifest, if any
-    fn manifest_operations(
-        &self,
-        mutation_mode: &MutationMode,
-    ) -> Result<Vec<Operation>, McpError> {
+    fn manifest_operations(&self, mutation_mode: MutationMode) -> Result<Vec<Operation>, McpError> {
         if let Some(manifest_poller) = self.manifest_poller.as_ref() {
             manifest_poller
                 .get_all_operations()
@@ -229,6 +229,7 @@ impl Server {
                 .map(|(pq_id, operation)| {
                     Operation::from_document(
                         &operation,
+                        &self.document,
                         &self.schema,
                         Some(pq_id),
                         None,
@@ -279,7 +280,7 @@ impl ServerHandler for Server {
             } else {
                 self.operations
                     .iter()
-                    .chain(self.manifest_operations(&self.mutation_mode)?.iter())
+                    .chain(self.manifest_operations(self.mutation_mode)?.iter())
                     .find(|op| op.as_ref().name == request.name)
                     .ok_or(tool_not_found(&request.name))?
                     .execute(graphql_request)
@@ -298,7 +299,7 @@ impl ServerHandler for Server {
             tools: self
                 .operations
                 .iter()
-                .chain(self.manifest_operations(&self.mutation_mode)?.iter())
+                .chain(self.manifest_operations(self.mutation_mode)?.iter())
                 .map(|op| op.as_ref().clone())
                 .chain(
                     self.execute_tool

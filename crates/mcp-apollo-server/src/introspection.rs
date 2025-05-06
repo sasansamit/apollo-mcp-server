@@ -79,7 +79,7 @@ impl graphql::Executable for Execute {
         operation_defs(
             &input.query,
             self.mutation_mode == MutationMode::All,
-            &self.mutation_mode,
+            self.mutation_mode,
         )
         .map_err(|e| McpError::new(ErrorCode::INVALID_PARAMS, e.to_string(), None))?;
 

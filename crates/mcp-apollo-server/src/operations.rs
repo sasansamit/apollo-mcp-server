@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use crate::errors::{McpError, OperationError};
 use crate::graphql;
-use crate::tree_shake::TreeShaker;
+use crate::schema_tree_shake::SchemaTreeShaker;
 use apollo_compiler::ast::{Document, FragmentDefinition, OperationType, Selection};
+use apollo_compiler::schema::ExtendedType;
 use apollo_compiler::{
     Name, Node, Schema as GraphqlSchema,
     ast::{Definition, OperationDefinition, Type},
@@ -20,7 +23,7 @@ use serde::Serialize;
 
 use crate::custom_scalar_map::CustomScalarMap;
 
-#[derive(clap::ValueEnum, Clone, Default, Debug, Serialize, PartialEq)]
+#[derive(clap::ValueEnum, Clone, Default, Debug, Serialize, PartialEq, Copy)]
 pub enum MutationMode {
     /// Don't allow any mutations
     #[default]
@@ -53,7 +56,7 @@ impl From<Operation> for Tool {
 pub fn operation_defs(
     source_text: &str,
     allow_mutations: bool,
-    mutation_mode: &MutationMode,
+    mutation_mode: MutationMode,
 ) -> Result<(Document, Node<OperationDefinition>, Option<String>), OperationError> {
     let document = Parser::new()
         .parse_ast(source_text, "operation.graphql")
@@ -101,10 +104,7 @@ pub fn operation_defs(
         }
         OperationType::Mutation => {
             if !allow_mutations {
-                return Err(OperationError::MutationNotAllowed(
-                    operation,
-                    mutation_mode.clone(),
-                ));
+                return Err(OperationError::MutationNotAllowed(operation, mutation_mode));
             }
         }
         OperationType::Query => {}
@@ -116,25 +116,17 @@ pub fn operation_defs(
 impl Operation {
     pub fn from_document(
         source_text: &str,
+        schema_document: &Document,
         graphql_schema: &GraphqlSchema,
         persisted_query_id: Option<String>,
         custom_scalar_map: Option<&CustomScalarMap>,
-        mutation_mode: &MutationMode,
+        mutation_mode: MutationMode,
     ) -> Result<Self, OperationError> {
         let (document, operation, comments) = operation_defs(
             source_text,
-            *mutation_mode != MutationMode::None,
+            mutation_mode != MutationMode::None,
             mutation_mode,
         )?;
-
-        let fragment_defs: Vec<&Node<FragmentDefinition>> = document
-            .definitions
-            .iter()
-            .filter_map(|def| match def {
-                Definition::FragmentDefinition(fragment_def) => Some(fragment_def),
-                _ => None,
-            })
-            .collect();
 
         let operation_name = operation
             .name
@@ -144,8 +136,13 @@ impl Operation {
             })?
             .to_string();
 
-        let description =
-            Self::tool_description(comments, graphql_schema, &operation, &fragment_defs);
+        let description = Self::tool_description(
+            comments,
+            &document,
+            schema_document,
+            graphql_schema,
+            &operation,
+        );
 
         let object = serde_json::to_value(get_json_schema(
             &operation,
@@ -168,9 +165,10 @@ impl Operation {
     /// Generate a description for an operation based on documentation in the schema
     fn tool_description(
         comments: Option<String>,
+        document: &Document,
+        schema_document: &Document,
         graphql_schema: &GraphqlSchema,
         operation_def: &Node<OperationDefinition>,
-        fragment_defs: &[&Node<FragmentDefinition>],
     ) -> String {
         let comment_description = comments.and_then(|comments| {
             let content = Regex::new(r"(\n|^)\s*#")
@@ -188,7 +186,6 @@ impl Operation {
         match comment_description {
             Some(description) => description,
             None => {
-                let mut tree_shaker = TreeShaker::new(graphql_schema, fragment_defs);
                 let descriptions = operation_def
                     .selection_set
                     .iter()
@@ -221,20 +218,6 @@ impl Operation {
                                     let ty = field_definition.map(|field| field.ty.clone());
                                     let type_description = ty.as_ref().map(Self::type_description);
 
-                                    // Retain the return type in the tree shaker
-                                    if let Some(ty) = ty {
-                                        let type_name = ty.inner_named_type();
-                                        if let Some(extended_type) =
-                                            graphql_schema.types.get(type_name.as_str())
-                                        {
-                                            tree_shaker.retain(
-                                                type_name.clone(),
-                                                extended_type,
-                                                &field.selection_set,
-                                            )
-                                        }
-                                    }
-
                                     Some(
                                         vec![field_description, type_description]
                                             .into_iter()
@@ -256,12 +239,51 @@ impl Operation {
                 let mut lines = vec![];
                 lines.push(descriptions);
 
-                let mut shaken = tree_shaker.shaken().peekable();
-                if shaken.peek().is_some() {
-                    lines.push(String::from("---"));
-                }
-                for ty in shaken {
-                    lines.push(ty.serialize().to_string());
+                let fragment_defs: HashMap<String, Node<FragmentDefinition>> = document
+                    .definitions
+                    .clone()
+                    .into_iter()
+                    .filter_map(|def| match def {
+                        Definition::FragmentDefinition(fragment_def) => {
+                            Some((fragment_def.name.to_string(), fragment_def))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+
+                let mut tree_shaker = SchemaTreeShaker::new(schema_document, graphql_schema);
+                tree_shaker.retain_operation(operation_def, fragment_defs.clone());
+                if let Ok(shaken) = tree_shaker.shaken() {
+                    let mut types = shaken
+                        .types
+                        .iter()
+                        .filter(|(_name, extended_type)| {
+                            !extended_type.is_built_in()
+                                && matches!(
+                                    extended_type,
+                                    ExtendedType::Object(_)
+                                        | ExtendedType::Scalar(_)
+                                        | ExtendedType::Enum(_)
+                                        | ExtendedType::Interface(_)
+                                        | ExtendedType::Union(_)
+                                )
+                                && graphql_schema
+                                    .root_operation(operation_def.operation_type)
+                                    .is_none_or(|op_name| extended_type.name() != op_name)
+                                && graphql_schema
+                                    .root_operation(OperationType::Query)
+                                    .is_none_or(|op_name| extended_type.name() != op_name)
+                        })
+                        .peekable();
+                    if types.peek().is_some() {
+                        lines.push(String::from("---"));
+                    }
+
+                    for ty in types {
+                        lines.push(ty.1.serialize().to_string());
+                    }
+                } else {
+                    tracing::error!("failed to shake schema");
                 }
 
                 lines.join("\n")
@@ -529,7 +551,7 @@ impl graphql::Executable for Operation {
 mod tests {
     use std::{str::FromStr, sync::LazyLock};
 
-    use apollo_compiler::{Schema, parser::Parser, validation::Valid};
+    use apollo_compiler::{Schema, ast::Document, parser::Parser, validation::Valid};
     use rmcp::{model::Tool, serde_json};
 
     use crate::{
@@ -539,9 +561,10 @@ mod tests {
     };
 
     // Example schema for tests
-    static SCHEMA: LazyLock<Valid<Schema>> = LazyLock::new(|| {
-        Schema::parse(
-            r#"
+    static DOCUMENT: LazyLock<Document> = LazyLock::new(|| {
+        Parser::new()
+            .parse_ast(
+                r#"
                 type Query { id: String }
                 type Mutation { id: String }
 
@@ -576,21 +599,26 @@ mod tests {
                     ENUM_VALUE_2
                 }
             "#,
-            "operation.graphql",
-        )
-        .expect("schema should parse")
-        .validate()
-        .expect("schema should be valid")
+                "operation.graphql",
+            )
+            .expect("schema should parse")
+    });
+
+    static SCHEMA: LazyLock<Valid<Schema>> = LazyLock::new(|| {
+        DOCUMENT
+            .to_schema_validate()
+            .expect("schema should be valid")
     });
 
     #[test]
     fn subscriptions() {
         let error = Operation::from_document(
             "subscription SubscriptionName { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .err()
         .unwrap();
@@ -605,10 +633,11 @@ mod tests {
     fn mutation_mode_none() {
         let error = Operation::from_document(
             "mutation MutationName { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .err()
         .unwrap();
@@ -623,10 +652,11 @@ mod tests {
     fn mutation_mode_explicit() {
         let operation = Operation::from_document(
             "mutation MutationName { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::Explicit,
+            MutationMode::Explicit,
         )
         .unwrap();
 
@@ -649,10 +679,11 @@ mod tests {
     fn mutation_mode_all() {
         let operation = Operation::from_document(
             "mutation MutationName { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::All,
+            MutationMode::All,
         )
         .unwrap();
 
@@ -675,10 +706,11 @@ mod tests {
     fn no_variables() {
         let operation = Operation::from_document(
             "query QueryName { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -703,10 +735,11 @@ mod tests {
     fn nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: ID) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -741,10 +774,11 @@ mod tests {
     fn non_nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: ID!) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -785,10 +819,11 @@ mod tests {
     fn non_nullable_list_of_nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: [ID]!) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -845,10 +880,11 @@ mod tests {
     fn non_nullable_list_of_non_nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: [ID!]!) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -895,10 +931,11 @@ mod tests {
     fn nullable_list_of_nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: [ID]) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -949,10 +986,11 @@ mod tests {
     fn nullable_list_of_non_nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: [ID!]) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -993,10 +1031,11 @@ mod tests {
     fn nullable_list_of_nullable_lists_of_nullable_named_types() {
         let operation = Operation::from_document(
             "query QueryName($id: [[ID]]) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1063,10 +1102,11 @@ mod tests {
     fn nullable_input_object() {
         let operation = Operation::from_document(
             "query QueryName($id: RealInputObject) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1127,10 +1167,11 @@ mod tests {
     fn non_nullable_enum() {
         let operation = Operation::from_document(
             "query QueryName($id: RealEnum!) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1181,10 +1222,11 @@ mod tests {
     fn multiple_operations_should_error() {
         let operation = Operation::from_document(
             "query QueryName { id } query QueryName { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         );
         insta::assert_debug_snapshot!(operation, @r###"
         Err(
@@ -1197,8 +1239,14 @@ mod tests {
 
     #[test]
     fn unnamed_operations_should_error() {
-        let operation =
-            Operation::from_document("query { id }", &SCHEMA, None, None, &MutationMode::None);
+        let operation = Operation::from_document(
+            "query { id }",
+            &DOCUMENT,
+            &SCHEMA,
+            None,
+            None,
+            MutationMode::None,
+        );
         insta::assert_debug_snapshot!(operation, @r###"
         Err(
             MissingName(
@@ -1212,10 +1260,11 @@ mod tests {
     fn no_operations_should_error() {
         let operation = Operation::from_document(
             "fragment Test on Query { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         );
         insta::assert_debug_snapshot!(operation, @r###"
         Err(
@@ -1228,10 +1277,11 @@ mod tests {
     fn schema_should_error() {
         let operation = Operation::from_document(
             "type Query { id: String }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         );
         insta::assert_debug_snapshot!(operation, @r###"
         Err(
@@ -1245,10 +1295,11 @@ mod tests {
         // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
             "query QueryName($id: FakeType) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1272,10 +1323,11 @@ mod tests {
         // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1299,10 +1351,11 @@ mod tests {
         // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             Some(&CustomScalarMap::from_str("{}").unwrap()),
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1330,10 +1383,11 @@ mod tests {
 
         let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",
+            &DOCUMENT,
             &SCHEMA,
             None,
             custom_scalar_map.ok().as_ref(),
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
         let tool = Tool::from(operation);
@@ -1459,11 +1513,8 @@ mod tests {
         }
         "#;
 
-        let schema = Parser::new()
-            .parse_ast(SCHEMA, "schema.graphql")
-            .unwrap()
-            .to_schema()
-            .unwrap();
+        let document = Parser::new().parse_ast(SCHEMA, "schema.graphql").unwrap();
+        let schema = document.to_schema().unwrap();
 
         let operation = Operation::from_document(
             r###"
@@ -1499,10 +1550,11 @@ mod tests {
               zzz
             }
             "###,
+            &document,
             &schema,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
 
@@ -1523,6 +1575,12 @@ mod tests {
           d: D
         }
 
+        """B"""
+        type B {
+          d: D
+          u: U
+        }
+
         """D"""
         type D {
           e: E
@@ -1537,20 +1595,17 @@ mod tests {
           TWO
         }
 
-        """B"""
-        type B {
-          d: D
-          u: U
+        """U"""
+        union U = M | W
+
+        """M"""
+        type M {
+          m: Int
         }
 
         """W"""
         type W {
           w: Int
-        }
-
-        """M"""
-        type M {
-          m: Int
         }
 
         """Z"""
@@ -1574,10 +1629,11 @@ mod tests {
               }
             }
             "###,
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
 
@@ -1598,10 +1654,11 @@ mod tests {
               id
             }
             "###,
+            &DOCUMENT,
             &SCHEMA,
             None,
             None,
-            &MutationMode::None,
+            MutationMode::None,
         )
         .unwrap();
 
