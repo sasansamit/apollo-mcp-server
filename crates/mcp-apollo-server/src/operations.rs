@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use crate::errors::{McpError, OperationError};
 use crate::graphql;
 use crate::schema_tree_shake::SchemaTreeShaker;
-use apollo_compiler::ast::{Document, FragmentDefinition, OperationType, Selection};
+use apollo_compiler::ast::{Document, OperationType, Selection};
 use apollo_compiler::schema::ExtendedType;
 use apollo_compiler::{
     Name, Node, Schema as GraphqlSchema,
@@ -239,20 +237,8 @@ impl Operation {
                 let mut lines = vec![];
                 lines.push(descriptions);
 
-                let fragment_defs: HashMap<String, Node<FragmentDefinition>> = document
-                    .definitions
-                    .clone()
-                    .into_iter()
-                    .filter_map(|def| match def {
-                        Definition::FragmentDefinition(fragment_def) => {
-                            Some((fragment_def.name.to_string(), fragment_def))
-                        }
-                        _ => None,
-                    })
-                    .collect();
-
                 let mut tree_shaker = SchemaTreeShaker::new(schema_document, graphql_schema);
-                tree_shaker.retain_operation(operation_def, fragment_defs.clone());
+                tree_shaker.retain_operation(operation_def, document);
                 if let Ok(shaken) = tree_shaker.shaken() {
                     let mut types = shaken
                         .types

@@ -280,11 +280,11 @@ impl<'document> SchemaTreeShaker<'document> {
         operation_type: OperationType,
         selection_set: Option<&Vec<Selection>>,
     ) {
-        let operation_type_name = {
-            self.operation_types.push(operation_type);
-            self.operation_type_names
-                .name_for_operation_type(operation_type)
-        };
+        self.operation_types.push(operation_type);
+        let operation_type_name = self
+            .operation_type_names
+            .name_for_operation_type(operation_type);
+
         if let Some(operation_type_extended_type) = self.schema.types.get(operation_type_name) {
             retain_type(
                 operation_type_extended_type,
@@ -295,81 +295,95 @@ impl<'document> SchemaTreeShaker<'document> {
                 self.schema,
             );
         } else {
-            tracing::error!("operation type {} not found", operation_type_name);
+            tracing::error!("root operation type {} not found in schema", operation_type);
         }
     }
 
-    pub fn retain_operation(
-        &mut self,
-        operation: &OperationDefinition,
-        named_fragments: HashMap<String, Node<FragmentDefinition>>,
-    ) {
-        self.named_fragments = named_fragments;
+    pub fn retain_operation(&mut self, operation: &OperationDefinition, document: &Document) {
+        self.named_fragments = document
+            .definitions
+            .iter()
+            .filter_map(|def| match def {
+                Definition::FragmentDefinition(fragment_def) => {
+                    Some((fragment_def.name.to_string(), fragment_def.clone()))
+                }
+                _ => None,
+            })
+            .collect();
         self.retain_operation_type(operation.operation_type, Some(&operation.selection_set))
     }
 
     /// Return the set of types retained after tree shaking.
     pub fn shaken(&mut self) -> Result<Valid<Schema>, ServerError> {
-        let filtered_definitions =
-            self.document
-                .definitions
-                .clone()
-                .into_iter()
-                .filter_map(|def| match def.clone() {
-                    Definition::DirectiveDefinition(directive_def) => self
-                        .directive_nodes
-                        .get(directive_def.name.as_str())
-                        .and_then(|n| n.retain.then_some(def)),
-                    Definition::SchemaDefinition(schema_def) => {
-                        let filtered_root_operations = schema_def
-                            .root_operations
-                            .clone()
-                            .into_iter()
-                            .filter(|root_operation| {
-                                root_operation.0 == OperationType::Query
-                                    || self.operation_types.contains(&root_operation.0)
-                            })
-                            .collect();
+        let mut document = Document::new();
+        document.definitions = self
+            .document
+            .definitions
+            .iter()
+            .filter_map(|def| match def {
+                Definition::DirectiveDefinition(directive_def) => self
+                    .directive_nodes
+                    .get(directive_def.name.as_str())
+                    .and_then(|n| n.retain.then_some(def.clone())),
+                Definition::SchemaDefinition(schema_def) => {
+                    let filtered_root_operations = schema_def
+                        .root_operations
+                        .clone()
+                        .into_iter()
+                        .filter(|root_operation| {
+                            root_operation.0 == OperationType::Query
+                                || self.operation_types.contains(&root_operation.0)
+                        })
+                        .collect();
 
-                        let new_schema_def = SchemaDefinition {
+                    Some(Definition::SchemaDefinition(apollo_compiler::Node::new(
+                        SchemaDefinition {
                             root_operations: filtered_root_operations,
                             description: schema_def.description.clone(),
                             directives: schema_def.directives.clone(),
-                        };
-                        Some(Definition::SchemaDefinition(apollo_compiler::Node::new(
-                            new_schema_def,
-                        )))
-                    }
-                    Definition::SchemaExtension(schema_ext) => {
-                        let filtered_root_operations = schema_ext
-                            .root_operations
-                            .clone()
-                            .into_iter()
-                            .filter(|root_operation| {
-                                root_operation.0 == OperationType::Query
-                                    || self.operation_types.contains(&root_operation.0)
-                            })
-                            .collect();
+                        },
+                    )))
+                }
+                Definition::SchemaExtension(schema_ext) => {
+                    let filtered_root_operations = schema_ext
+                        .root_operations
+                        .clone()
+                        .into_iter()
+                        .filter(|root_operation| {
+                            root_operation.0 == OperationType::Query
+                                || self.operation_types.contains(&root_operation.0)
+                        })
+                        .collect();
 
-                        let new_schema_def = SchemaExtension {
+                    Some(Definition::SchemaExtension(apollo_compiler::Node::new(
+                        SchemaExtension {
                             root_operations: filtered_root_operations,
                             directives: schema_ext.directives.clone(),
-                        };
-                        Some(Definition::SchemaExtension(apollo_compiler::Node::new(
-                            new_schema_def,
-                        )))
-                    }
-                    Definition::OperationDefinition(_) => None,
-                    Definition::FragmentDefinition(_) => None,
-                    Definition::ObjectTypeDefinition(object_def) => def
-                        .name()
-                        .and_then(|name| self.named_type_nodes.get(name.as_str()))
+                        },
+                    )))
+                }
+                Definition::OperationDefinition(_) => {
+                    tracing::warn!("operation definition found in schema");
+                    None
+                }
+                Definition::FragmentDefinition(_) => {
+                    tracing::warn!("fragment definition found in schema");
+                    None
+                }
+                // TODO: extensions, interfaces
+                Definition::ObjectTypeDefinition(object_def) => {
+                    self.named_type_nodes
+                        .get(object_def.name.as_str())
                         .and_then(|tree_node| {
-                            if let Some(fitlered_fields) = tree_node.filtered_field.clone() {
+                            if let Some(fitlered_fields) = &tree_node.filtered_field {
                                 tree_node.retain.then_some(Definition::ObjectTypeDefinition(
                                     Node::new(ObjectTypeDefinition {
                                         description: object_def.description.clone(),
                                         directives: object_def.directives.clone(),
+                                        name: object_def.name.clone(),
+                                        implements_interfaces: object_def
+                                            .implements_interfaces
+                                            .clone(),
                                         fields: object_def
                                             .fields
                                             .clone()
@@ -378,18 +392,15 @@ impl<'document> SchemaTreeShaker<'document> {
                                                 fitlered_fields.contains(&field.name.to_string())
                                             })
                                             .collect(),
-                                        implements_interfaces: object_def
-                                            .implements_interfaces
-                                            .clone(),
-                                        name: object_def.name.clone(),
                                     }),
                                 ))
                             } else if tree_node.retain {
-                                Some(def)
+                                Some(def.clone())
                             } else if let Some(root_op_name) =
                                 self.schema.root_operation(OperationType::Query)
                             {
                                 if *root_op_name == object_def.name {
+                                    // All schemas need a query root operation to be valid, so we add a stub one here if it's not retained
                                     Some(Definition::ObjectTypeDefinition(Node::new(
                                         ObjectTypeDefinition {
                                             description: None,
@@ -401,54 +412,59 @@ impl<'document> SchemaTreeShaker<'document> {
                                                 name: Name::new_unchecked("stub"),
                                                 ty: Type::Named(NamedType::new_unchecked("String")),
                                             })],
-                                            implements_interfaces: object_def
-                                                .implements_interfaces
-                                                .clone(),
+                                            implements_interfaces: Vec::default(),
                                             name: object_def.name.clone(),
                                         },
                                     )))
                                 } else {
-                                    tracing::error!("object type {} not found", object_def.name);
                                     None
                                 }
                             } else {
+                                tracing::error!("object type {} not found", object_def.name);
                                 None
                             }
-                        }),
-                    Definition::UnionTypeDefinition(union_def) => self
-                        .named_type_nodes
-                        .get(union_def.name.as_str())
-                        .is_some_and(|n| n.retain)
-                        .then(|| {
-                            Definition::UnionTypeDefinition(Node::new(UnionTypeDefinition {
-                                description: union_def.description.clone(),
-                                directives: union_def.directives.clone(),
-                                name: union_def.name.clone(),
-                                members: union_def
-                                    .members
-                                    .clone()
-                                    .into_iter()
-                                    .filter(|member| {
-                                        self.named_type_nodes
-                                            .get(member.as_str())
-                                            .is_some_and(|tree_node| tree_node.retain)
-                                    })
-                                    .collect(),
-                            }))
-                        }),
-                    _ => def
-                        .name()
-                        .map(|name| {
-                            self.named_type_nodes
-                                .get(name.as_str())
-                                .is_some_and(|n| n.retain)
                         })
-                        .and_then(|retained| retained.then_some(def)),
-                })
-                .collect();
+                }
+                Definition::UnionTypeDefinition(union_def) => self
+                    .named_type_nodes
+                    .get(union_def.name.as_str())
+                    .is_some_and(|n| n.retain)
+                    .then(|| {
+                        Definition::UnionTypeDefinition(Node::new(UnionTypeDefinition {
+                            description: union_def.description.clone(),
+                            directives: union_def.directives.clone(),
+                            name: union_def.name.clone(),
+                            members: union_def
+                                .members
+                                .clone()
+                                .into_iter()
+                                .filter(|member| {
+                                    if let Some(member_tree_node) =
+                                        self.named_type_nodes.get(member.as_str())
+                                    {
+                                        member_tree_node.retain
+                                    } else {
+                                        tracing::error!("union member {} not found", member);
+                                        false
+                                    }
+                                })
+                                .collect(),
+                        }))
+                    }),
+                _ => def
+                    .name()
+                    .map(|name| {
+                        if let Some(tree_node) = self.named_type_nodes.get(name.as_str()) {
+                            tree_node.retain
+                        } else {
+                            tracing::error!("node {} not found", name);
+                            false
+                        }
+                    })
+                    .and_then(|retained| retained.then_some(def.clone())),
+            })
+            .collect();
 
-        let mut document = Document::new();
-        document.definitions = filtered_definitions;
         document
             .to_schema_validate()
             .map_err(|e| ServerError::GraphQLSchema(Box::new(e)))
@@ -686,13 +702,8 @@ fn retain_directive(
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
 
-    use apollo_compiler::{
-        Node,
-        ast::{Definition, FragmentDefinition, OperationType},
-        parser::Parser,
-    };
+    use apollo_compiler::{ast::OperationType, parser::Parser};
 
     use crate::{
         operations::{MutationMode, operation_defs},
@@ -828,19 +839,7 @@ mod test {
         let mut shaker = SchemaTreeShaker::new(&document, &schema);
         let (operation_document, operation_def, _comments) =
             operation_defs("query TestQuery { id }", false, MutationMode::None).unwrap();
-
-        let fragment_defs = operation_document
-            .definitions
-            .into_iter()
-            .filter_map(|def| match def {
-                Definition::FragmentDefinition(fragment_def) => {
-                    Some((fragment_def.name.to_string(), fragment_def))
-                }
-                _ => None,
-            })
-            .collect::<HashMap<String, Node<FragmentDefinition>>>();
-
-        shaker.retain_operation(&operation_def, fragment_defs);
+        shaker.retain_operation(&operation_def, &operation_document);
         assert_eq!(
             shaker.shaken().unwrap().to_string(),
             "type Query {\n  id: UsedInQuery\n}\n\nscalar UsedInQuery\n"
