@@ -503,40 +503,43 @@ fn retain_type(
     schema: &Schema,
 ) {
     let type_name = extended_type.name().as_str();
-    if let Some((referenced_type_names, referected_directive_names, selected_fields)) =
-        named_type_nodes.get_mut(type_name).map(|n| {
-            n.retain = true;
+    let selected_fields = if let Some(selection_set) = selection_set {
+        let selected_fields = selection_set
+            .iter()
+            .flat_map(|s| selection_set_to_fields(s, named_fragments))
+            .collect::<Vec<_>>();
 
-            let selected_fields = if let Some(selection_set) = selection_set {
-                let selected_fields = selection_set
-                    .iter()
-                    .flat_map(|s| selection_set_to_fields(s, named_fragments))
-                    .collect::<Vec<_>>();
+        Some(selected_fields)
+    } else {
+        None
+    };
 
+    let tree_node_data = named_type_nodes
+        .get_mut(type_name)
+        .map(|tree_node: &mut TreeNode| {
+            tree_node.retain = true;
+            if let Some(selected_fields) = selected_fields.as_ref() {
                 let additional_fields = selected_fields
                     .iter()
                     .map(|f| f.name.to_string())
                     .collect::<Vec<_>>();
 
-                n.filtered_field = Some(
+                tree_node.filtered_field = Some(
                     [
-                        n.filtered_field.clone().unwrap_or_default(),
+                        tree_node.filtered_field.clone().unwrap_or_default(),
                         additional_fields,
                     ]
                     .concat(),
                 );
-                Some(selected_fields)
-            } else {
-                None
-            };
+            }
 
             (
-                n.referenced_type_names.clone(),
-                n.referected_directive_names.clone(),
-                selected_fields,
+                tree_node.referenced_type_names.clone(),
+                tree_node.referected_directive_names.clone(),
             )
-        })
-    {
+        });
+
+    if let Some((referenced_type_names, referected_directive_names)) = tree_node_data {
         if let Some(selected_fields) = selected_fields {
             selected_fields.iter().for_each(|field| {
                 match extended_type {
