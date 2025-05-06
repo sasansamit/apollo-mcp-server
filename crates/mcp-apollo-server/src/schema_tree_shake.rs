@@ -2,9 +2,10 @@
 
 use crate::errors::ServerError;
 use apollo_compiler::ast::{
-    Definition, DirectiveList, Document, Field, FieldDefinition, FragmentDefinition, NamedType,
-    ObjectTypeDefinition, OperationDefinition, OperationType, SchemaDefinition, SchemaExtension,
-    Selection, Type, UnionTypeDefinition,
+    Definition, DirectiveList, Document, EnumTypeDefinition, Field, FieldDefinition,
+    FragmentDefinition, InputObjectTypeDefinition, InterfaceTypeDefinition, NamedType,
+    ObjectTypeDefinition, OperationDefinition, OperationType, ScalarTypeDefinition,
+    SchemaDefinition, Selection, Type, UnionTypeDefinition,
 };
 use apollo_compiler::schema::ExtendedType;
 use apollo_compiler::validation::Valid;
@@ -45,7 +46,6 @@ impl RootOperationNames {
 /// Tree shaker for GraphQL schemas
 pub struct SchemaTreeShaker<'document> {
     schema: &'document Schema,
-    document: &'document Document,
     named_type_nodes: HashMap<String, TreeNode>,
     directive_nodes: HashMap<String, TreeNode>,
     operation_types: Vec<OperationType>,
@@ -62,210 +62,120 @@ struct TreeNode {
 }
 
 impl<'document> SchemaTreeShaker<'document> {
-    pub fn new(document: &'document Document, schema: &'document Schema) -> Self {
+    pub fn new(schema: &'document Schema) -> Self {
         let mut named_type_nodes: HashMap<String, TreeNode> = HashMap::default();
         let mut directive_nodes: HashMap<String, TreeNode> = HashMap::default();
 
-        document.definitions.iter().for_each(|def| match def {
-            Definition::ObjectTypeDefinition(object_def) => {
-                let tree_node = named_type_nodes
-                    .entry(object_def.name.to_string())
-                    .or_default();
+        schema
+            .types
+            .iter()
+            .for_each(|(_name, extended_type)| match extended_type {
+                ExtendedType::Object(object_def) => {
+                    let tree_node = named_type_nodes
+                        .entry(object_def.name.to_string())
+                        .or_default();
 
-                object_def.fields.iter().for_each(|field| {
-                    tree_node
-                        .referenced_type_names
-                        .push(field.ty.inner_named_type().to_string());
-                });
-                object_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-                object_def
-                    .implements_interfaces
-                    .iter()
-                    .for_each(|interface| {
-                        tree_node.referenced_type_names.push(interface.to_string());
+                    object_def.fields.iter().for_each(|(_name, field)| {
+                        tree_node
+                            .referenced_type_names
+                            .push(field.ty.inner_named_type().to_string());
                     });
-            }
-            Definition::ObjectTypeExtension(object_def) => {
-                let tree_node = named_type_nodes
-                    .entry(object_def.name.to_string())
-                    .or_default();
-                object_def.fields.iter().for_each(|field| {
-                    tree_node
-                        .referenced_type_names
-                        .push(field.ty.inner_named_type().to_string());
-                });
-                object_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-                object_def
-                    .implements_interfaces
-                    .iter()
-                    .for_each(|interface| {
-                        tree_node.referenced_type_names.push(interface.to_string());
+                    object_def.directives.iter().for_each(|directive| {
+                        tree_node
+                            .referected_directive_names
+                            .push(directive.name.to_string())
                     });
-            }
-            Definition::DirectiveDefinition(directive_def) => {
-                let tree_node = directive_nodes
-                    .entry(directive_def.name.to_string())
-                    .or_default();
+                    object_def
+                        .implements_interfaces
+                        .iter()
+                        .for_each(|interface| {
+                            tree_node.referenced_type_names.push(interface.to_string());
+                        });
+                }
+                ExtendedType::InputObject(input_def) => {
+                    let tree_node = named_type_nodes
+                        .entry(input_def.name.to_string())
+                        .or_default();
+                    input_def.fields.iter().for_each(|(_name, field)| {
+                        tree_node
+                            .referenced_type_names
+                            .push(field.ty.inner_named_type().to_string());
+                    });
+                    input_def.directives.iter().for_each(|directive| {
+                        tree_node
+                            .referected_directive_names
+                            .push(directive.name.to_string())
+                    });
+                }
+                ExtendedType::Enum(enum_def) => {
+                    let tree_node = named_type_nodes
+                        .entry(enum_def.name.to_string())
+                        .or_default();
+                    enum_def.directives.iter().for_each(|directive| {
+                        tree_node
+                            .referected_directive_names
+                            .push(directive.name.to_string())
+                    });
+                }
+                ExtendedType::Scalar(scalar_def) => {
+                    let tree_node = named_type_nodes
+                        .entry(scalar_def.name.to_string())
+                        .or_default();
+                    scalar_def.directives.iter().for_each(|directive| {
+                        tree_node
+                            .referected_directive_names
+                            .push(directive.name.to_string())
+                    });
+                }
+                ExtendedType::Union(union_def) => {
+                    let tree_node = named_type_nodes
+                        .entry(union_def.name.to_string())
+                        .or_default();
+                    union_def.directives.iter().for_each(|directive| {
+                        tree_node
+                            .referected_directive_names
+                            .push(directive.name.to_string())
+                    });
+                    union_def.members.iter().for_each(|member| {
+                        tree_node.referenced_type_names.push(member.to_string());
+                    });
+                }
+                ExtendedType::Interface(interface_def) => {
+                    let tree_node = named_type_nodes
+                        .entry(interface_def.name.to_string())
+                        .or_default();
+                    interface_def.fields.iter().for_each(|(_name, field)| {
+                        tree_node
+                            .referenced_type_names
+                            .push(field.ty.inner_named_type().to_string());
+                    });
+                    interface_def.directives.iter().for_each(|directive| {
+                        tree_node
+                            .referected_directive_names
+                            .push(directive.name.to_string())
+                    });
+                    interface_def
+                        .implements_interfaces
+                        .iter()
+                        .for_each(|interface| {
+                            tree_node.referenced_type_names.push(interface.to_string());
+                        });
+                }
+            });
+
+        schema
+            .directive_definitions
+            .iter()
+            .for_each(|(name, directive_def)| {
+                let tree_node = directive_nodes.entry(name.to_string()).or_default();
                 directive_def.arguments.iter().for_each(|arg| {
                     tree_node
                         .referenced_type_names
                         .push(arg.ty.inner_named_type().to_string());
                 });
-            }
-            Definition::InputObjectTypeDefinition(input_def) => {
-                let tree_node = named_type_nodes
-                    .entry(input_def.name.to_string())
-                    .or_default();
-                input_def.fields.iter().for_each(|field| {
-                    tree_node
-                        .referenced_type_names
-                        .push(field.ty.inner_named_type().to_string());
-                });
-                input_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-            }
-            Definition::InputObjectTypeExtension(input_def) => {
-                let tree_node = named_type_nodes
-                    .entry(input_def.name.to_string())
-                    .or_default();
-                input_def.fields.iter().for_each(|field| {
-                    tree_node
-                        .referenced_type_names
-                        .push(field.ty.inner_named_type().to_string());
-                });
-                input_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-            }
-            Definition::EnumTypeDefinition(enum_def) => {
-                let tree_node = named_type_nodes
-                    .entry(enum_def.name.to_string())
-                    .or_default();
-                enum_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-            }
-            Definition::EnumTypeExtension(enum_def) => {
-                let tree_node = named_type_nodes
-                    .entry(enum_def.name.to_string())
-                    .or_default();
-                enum_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-            }
-            Definition::ScalarTypeDefinition(scalar_def) => {
-                let tree_node = named_type_nodes
-                    .entry(scalar_def.name.to_string())
-                    .or_default();
-                scalar_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-            }
-            Definition::ScalarTypeExtension(scalar_def) => {
-                let tree_node = named_type_nodes
-                    .entry(scalar_def.name.to_string())
-                    .or_default();
-                scalar_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-            }
-            Definition::UnionTypeDefinition(union_def) => {
-                let tree_node = named_type_nodes
-                    .entry(union_def.name.to_string())
-                    .or_default();
-                union_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-                union_def.members.iter().for_each(|member| {
-                    tree_node.referenced_type_names.push(member.to_string());
-                });
-            }
-            Definition::UnionTypeExtension(union_def) => {
-                let tree_node = named_type_nodes
-                    .entry(union_def.name.to_string())
-                    .or_default();
-                union_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-                union_def.members.iter().for_each(|member| {
-                    tree_node.referenced_type_names.push(member.to_string());
-                });
-            }
-            Definition::InterfaceTypeDefinition(interface_def) => {
-                let tree_node = named_type_nodes
-                    .entry(interface_def.name.to_string())
-                    .or_default();
-                interface_def.fields.iter().for_each(|field| {
-                    tree_node
-                        .referenced_type_names
-                        .push(field.ty.inner_named_type().to_string());
-                });
-                interface_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-                interface_def
-                    .implements_interfaces
-                    .iter()
-                    .for_each(|interface| {
-                        tree_node.referenced_type_names.push(interface.to_string());
-                    });
-            }
-            Definition::InterfaceTypeExtension(interface_def) => {
-                let tree_node = named_type_nodes
-                    .entry(interface_def.name.to_string())
-                    .or_default();
-                interface_def.fields.iter().for_each(|field| {
-                    tree_node
-                        .referenced_type_names
-                        .push(field.ty.inner_named_type().to_string());
-                });
-                interface_def.directives.iter().for_each(|directive| {
-                    tree_node
-                        .referected_directive_names
-                        .push(directive.name.to_string())
-                });
-                interface_def
-                    .implements_interfaces
-                    .iter()
-                    .for_each(|interface| {
-                        tree_node.referenced_type_names.push(interface.to_string());
-                    });
-            }
-            Definition::SchemaDefinition(_) => {}
-            Definition::SchemaExtension(_) => {}
-            Definition::OperationDefinition(_) => {} // Error?
-            Definition::FragmentDefinition(_) => {}  // Error?
-        });
+            });
 
         Self {
-            document,
             schema,
             named_type_nodes,
             directive_nodes,
@@ -315,155 +225,324 @@ impl<'document> SchemaTreeShaker<'document> {
 
     /// Return the set of types retained after tree shaking.
     pub fn shaken(&mut self) -> Result<Valid<Schema>, ServerError> {
-        let mut document = Document::new();
-        document.definitions = self
-            .document
-            .definitions
+        let mut filtered_root_operations = self
+            .schema
+            .schema_definition
+            .query
+            .clone()
+            .map(|query_name| vec![Node::new((OperationType::Query, query_name.name))])
+            .unwrap_or_default();
+        if self.operation_types.contains(&OperationType::Mutation) {
+            if let Some(mutation_name) = self.schema.schema_definition.mutation.clone() {
+                filtered_root_operations
+                    .push(Node::new((OperationType::Mutation, mutation_name.name)));
+            }
+        }
+        if self.operation_types.contains(&OperationType::Subscription) {
+            if let Some(subscription_name) = self.schema.schema_definition.subscription.clone() {
+                filtered_root_operations.push(Node::new((
+                    OperationType::Subscription,
+                    subscription_name.name,
+                )));
+            }
+        }
+        let schema_definition =
+            Definition::SchemaDefinition(apollo_compiler::Node::new(SchemaDefinition {
+                root_operations: filtered_root_operations,
+                description: self.schema.schema_definition.description.clone(),
+                directives: DirectiveList(
+                    self.schema
+                        .schema_definition
+                        .directives
+                        .0
+                        .iter()
+                        .map(|directive| directive.node.clone())
+                        .collect(),
+                ),
+            }));
+
+        let directive_definitions = self
+            .schema
+            .directive_definitions
             .iter()
-            .filter_map(|def| match def {
-                Definition::DirectiveDefinition(directive_def) => self
-                    .directive_nodes
-                    .get(directive_def.name.as_str())
-                    .and_then(|n| n.retain.then_some(def.clone())),
-                Definition::SchemaDefinition(schema_def) => {
-                    let filtered_root_operations = schema_def
-                        .root_operations
-                        .clone()
-                        .into_iter()
-                        .filter(|root_operation| {
-                            root_operation.0 == OperationType::Query
-                                || self.operation_types.contains(&root_operation.0)
-                        })
-                        .collect();
+            .filter_map(|(directive_name, directive_def)| {
+                self.directive_nodes
+                    .get(directive_name.as_str())
+                    .and_then(|n| {
+                        (!directive_def.is_built_in() && n.retain)
+                            .then_some(Definition::DirectiveDefinition(directive_def.clone()))
+                    })
+            })
+            .collect();
 
-                    Some(Definition::SchemaDefinition(apollo_compiler::Node::new(
-                        SchemaDefinition {
-                            root_operations: filtered_root_operations,
-                            description: schema_def.description.clone(),
-                            directives: schema_def.directives.clone(),
-                        },
-                    )))
-                }
-                Definition::SchemaExtension(schema_ext) => {
-                    let filtered_root_operations = schema_ext
-                        .root_operations
-                        .clone()
-                        .into_iter()
-                        .filter(|root_operation| {
-                            root_operation.0 == OperationType::Query
-                                || self.operation_types.contains(&root_operation.0)
-                        })
-                        .collect();
-
-                    Some(Definition::SchemaExtension(apollo_compiler::Node::new(
-                        SchemaExtension {
-                            root_operations: filtered_root_operations,
-                            directives: schema_ext.directives.clone(),
-                        },
-                    )))
-                }
-                Definition::OperationDefinition(_) => {
-                    tracing::warn!("operation definition found in schema");
+        let type_definitions = self
+            .schema
+            .types
+            .iter()
+            .filter_map(|(_type_name, extended_type)| {
+                if extended_type.is_built_in() {
                     None
-                }
-                Definition::FragmentDefinition(_) => {
-                    tracing::warn!("fragment definition found in schema");
-                    None
-                }
-                // TODO: extensions, interfaces
-                Definition::ObjectTypeDefinition(object_def) => {
-                    self.named_type_nodes
-                        .get(object_def.name.as_str())
-                        .and_then(|tree_node| {
-                            if let Some(fitlered_fields) = &tree_node.filtered_field {
-                                tree_node.retain.then_some(Definition::ObjectTypeDefinition(
-                                    Node::new(ObjectTypeDefinition {
-                                        description: object_def.description.clone(),
-                                        directives: object_def.directives.clone(),
-                                        name: object_def.name.clone(),
-                                        implements_interfaces: object_def
-                                            .implements_interfaces
-                                            .clone(),
-                                        fields: object_def
-                                            .fields
-                                            .clone()
-                                            .into_iter()
-                                            .filter(|field| {
-                                                fitlered_fields.contains(&field.name.to_string())
-                                            })
-                                            .collect(),
-                                    }),
-                                ))
-                            } else if tree_node.retain {
-                                Some(def.clone())
-                            } else if let Some(root_op_name) =
-                                self.schema.root_operation(OperationType::Query)
-                            {
-                                if *root_op_name == object_def.name {
-                                    // All schemas need a query root operation to be valid, so we add a stub one here if it's not retained
+                } else {
+                    match extended_type {
+                        ExtendedType::Object(object_def) => self
+                            .named_type_nodes
+                            .get(object_def.name.as_str())
+                            .and_then(|tree_node| {
+                                if tree_node.retain {
                                     Some(Definition::ObjectTypeDefinition(Node::new(
                                         ObjectTypeDefinition {
-                                            description: None,
-                                            directives: DirectiveList::default(),
-                                            fields: vec![Node::new(FieldDefinition {
-                                                arguments: Vec::default(),
+                                            description: object_def.description.clone(),
+                                            directives: DirectiveList(
+                                                object_def
+                                                    .directives
+                                                    .0
+                                                    .iter()
+                                                    .map(|directive| directive.node.clone())
+                                                    .collect(),
+                                            ),
+                                            name: object_def.name.clone(),
+                                            implements_interfaces: object_def
+                                                .implements_interfaces
+                                                .iter()
+                                                .map(|implemented_interface| {
+                                                    implemented_interface.name.clone()
+                                                })
+                                                .collect(),
+                                            fields: object_def
+                                                .fields
+                                                .clone()
+                                                .into_iter()
+                                                .filter_map(|(field_name, field)| {
+                                                    if let Some(fitlered_fields) =
+                                                        &tree_node.filtered_field
+                                                    {
+                                                        fitlered_fields
+                                                            .contains(&field_name.to_string())
+                                                            .then_some(field.node)
+                                                    } else {
+                                                        Some(field.node)
+                                                    }
+                                                })
+                                                .collect(),
+                                        },
+                                    )))
+                                } else if let Some(root_op_name) =
+                                    self.schema.root_operation(OperationType::Query)
+                                {
+                                    if *root_op_name == object_def.name {
+                                        // All schemas need a query root operation to be valid, so we add a stub one here if it's not retained
+                                        Some(Definition::ObjectTypeDefinition(Node::new(
+                                            ObjectTypeDefinition {
                                                 description: None,
                                                 directives: DirectiveList::default(),
-                                                name: Name::new_unchecked("stub"),
-                                                ty: Type::Named(NamedType::new_unchecked("String")),
-                                            })],
-                                            implements_interfaces: Vec::default(),
-                                            name: object_def.name.clone(),
+                                                fields: vec![Node::new(FieldDefinition {
+                                                    arguments: Vec::default(),
+                                                    description: None,
+                                                    directives: DirectiveList::default(),
+                                                    name: Name::new_unchecked("stub"),
+                                                    ty: Type::Named(NamedType::new_unchecked(
+                                                        "String",
+                                                    )),
+                                                })],
+                                                implements_interfaces: Vec::default(),
+                                                name: object_def.name.clone(),
+                                            },
+                                        )))
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    tracing::error!("object type {} not found", object_def.name);
+                                    None
+                                }
+                            }),
+                        ExtendedType::InputObject(input_def) => self
+                            .named_type_nodes
+                            .get(input_def.name.as_str())
+                            .and_then(|tree_node| {
+                                if tree_node.retain {
+                                    Some(Definition::InputObjectTypeDefinition(Node::new(
+                                        InputObjectTypeDefinition {
+                                            description: input_def.description.clone(),
+                                            directives: DirectiveList(
+                                                input_def
+                                                    .directives
+                                                    .0
+                                                    .iter()
+                                                    .map(|directive| directive.node.clone())
+                                                    .collect(),
+                                            ),
+                                            name: input_def.name.clone(),
+                                            fields: input_def
+                                                .fields
+                                                .clone()
+                                                .into_iter()
+                                                .filter_map(|(field_name, field)| {
+                                                    if let Some(fitlered_fields) =
+                                                        &tree_node.filtered_field
+                                                    {
+                                                        fitlered_fields
+                                                            .contains(&field_name.to_string())
+                                                            .then_some(field.node)
+                                                    } else {
+                                                        Some(field.node)
+                                                    }
+                                                })
+                                                .collect(),
                                         },
                                     )))
                                 } else {
                                     None
                                 }
-                            } else {
-                                tracing::error!("object type {} not found", object_def.name);
-                                None
-                            }
-                        })
+                            }),
+                        ExtendedType::Interface(interface_def) => self
+                            .named_type_nodes
+                            .get(interface_def.name.as_str())
+                            .and_then(|tree_node| {
+                                if tree_node.retain {
+                                    Some(Definition::InterfaceTypeDefinition(Node::new(
+                                        InterfaceTypeDefinition {
+                                            description: interface_def.description.clone(),
+                                            directives: DirectiveList(
+                                                interface_def
+                                                    .directives
+                                                    .0
+                                                    .iter()
+                                                    .map(|directive| directive.node.clone())
+                                                    .collect(),
+                                            ),
+                                            name: interface_def.name.clone(),
+                                            implements_interfaces: interface_def
+                                                .implements_interfaces
+                                                .iter()
+                                                .map(|implemented_interface| {
+                                                    implemented_interface.name.clone()
+                                                })
+                                                .collect(),
+                                            fields: interface_def
+                                                .fields
+                                                .clone()
+                                                .into_iter()
+                                                .filter_map(|(field_name, field)| {
+                                                    if let Some(fitlered_fields) =
+                                                        &tree_node.filtered_field
+                                                    {
+                                                        fitlered_fields
+                                                            .contains(&field_name.to_string())
+                                                            .then_some(field.node)
+                                                    } else {
+                                                        Some(field.node)
+                                                    }
+                                                })
+                                                .collect(),
+                                        },
+                                    )))
+                                } else {
+                                    None
+                                }
+                            }),
+                        ExtendedType::Union(union_def) => self
+                            .named_type_nodes
+                            .get(union_def.name.as_str())
+                            .is_some_and(|n| n.retain)
+                            .then(|| {
+                                Definition::UnionTypeDefinition(Node::new(UnionTypeDefinition {
+                                    description: union_def.description.clone(),
+                                    directives: DirectiveList(
+                                        union_def
+                                            .directives
+                                            .0
+                                            .iter()
+                                            .map(|directive| directive.node.clone())
+                                            .collect(),
+                                    ),
+                                    name: union_def.name.clone(),
+                                    members: union_def
+                                        .members
+                                        .clone()
+                                        .into_iter()
+                                        .filter_map(|member| {
+                                            if let Some(member_tree_node) =
+                                                self.named_type_nodes.get(member.as_str())
+                                            {
+                                                member_tree_node.retain.then_some(member.name)
+                                            } else {
+                                                tracing::error!(
+                                                    "union member {} not found",
+                                                    member
+                                                );
+                                                None
+                                            }
+                                        })
+                                        .collect(),
+                                }))
+                            }),
+                        ExtendedType::Enum(enum_def) => self
+                            .named_type_nodes
+                            .get(enum_def.name.as_str())
+                            .and_then(|tree_node| {
+                                if tree_node.retain {
+                                    Some(Definition::EnumTypeDefinition(Node::new(
+                                        EnumTypeDefinition {
+                                            description: enum_def.description.clone(),
+                                            directives: DirectiveList(
+                                                enum_def
+                                                    .directives
+                                                    .0
+                                                    .iter()
+                                                    .map(|directive| directive.node.clone())
+                                                    .collect(),
+                                            ),
+                                            name: enum_def.name.clone(),
+                                            values: enum_def
+                                                .values
+                                                .iter()
+                                                .map(|(_enum_value_name, enum_value)| {
+                                                    enum_value.node.clone()
+                                                })
+                                                .collect(),
+                                        },
+                                    )))
+                                } else {
+                                    None
+                                }
+                            }),
+                        ExtendedType::Scalar(scalar_def) => self
+                            .named_type_nodes
+                            .get(scalar_def.name.as_str())
+                            .and_then(|tree_node| {
+                                if tree_node.retain {
+                                    Some(Definition::ScalarTypeDefinition(Node::new(
+                                        ScalarTypeDefinition {
+                                            description: scalar_def.description.clone(),
+                                            directives: DirectiveList(
+                                                scalar_def
+                                                    .directives
+                                                    .0
+                                                    .iter()
+                                                    .map(|directive| directive.node.clone())
+                                                    .collect(),
+                                            ),
+                                            name: scalar_def.name.clone(),
+                                        },
+                                    )))
+                                } else {
+                                    None
+                                }
+                            }),
+                    }
                 }
-                Definition::UnionTypeDefinition(union_def) => self
-                    .named_type_nodes
-                    .get(union_def.name.as_str())
-                    .is_some_and(|n| n.retain)
-                    .then(|| {
-                        Definition::UnionTypeDefinition(Node::new(UnionTypeDefinition {
-                            description: union_def.description.clone(),
-                            directives: union_def.directives.clone(),
-                            name: union_def.name.clone(),
-                            members: union_def
-                                .members
-                                .clone()
-                                .into_iter()
-                                .filter(|member| {
-                                    if let Some(member_tree_node) =
-                                        self.named_type_nodes.get(member.as_str())
-                                    {
-                                        member_tree_node.retain
-                                    } else {
-                                        tracing::error!("union member {} not found", member);
-                                        false
-                                    }
-                                })
-                                .collect(),
-                        }))
-                    }),
-                _ => def
-                    .name()
-                    .map(|name| {
-                        if let Some(tree_node) = self.named_type_nodes.get(name.as_str()) {
-                            tree_node.retain
-                        } else {
-                            tracing::error!("node {} not found", name);
-                            false
-                        }
-                    })
-                    .and_then(|retained| retained.then_some(def.clone())),
             })
             .collect();
+
+        let mut document = Document::new();
+        document.definitions = [
+            // // TODO: don't push if theres no data
+            vec![schema_definition],
+            directive_definitions,
+            type_definitions,
+        ]
+        .concat();
 
         document
             .to_schema_validate()
@@ -724,7 +803,7 @@ mod test {
             .parse_ast(source_text, "schema.graphql")
             .unwrap();
         let schema = document.to_schema_validate().unwrap();
-        let mut shaker = SchemaTreeShaker::new(&document, &schema);
+        let mut shaker = SchemaTreeShaker::new(&schema);
         shaker.retain_operation_type(OperationType::Query, None);
         assert_eq!(
             shaker.shaken().unwrap().to_string(),
@@ -743,7 +822,7 @@ mod test {
             .parse_ast(source_text, "schema.graphql")
             .unwrap();
         let schema = document.to_schema_validate().unwrap();
-        let mut shaker = SchemaTreeShaker::new(&document, &schema);
+        let mut shaker = SchemaTreeShaker::new(&schema);
         shaker.retain_operation_type(OperationType::Query, None);
         shaker.retain_operation_type(OperationType::Mutation, None);
         assert_eq!(
@@ -768,7 +847,7 @@ mod test {
             .parse_ast(source_text, "schema.graphql")
             .unwrap();
         let schema = document.to_schema_validate().unwrap();
-        let mut shaker = SchemaTreeShaker::new(&document, &schema);
+        let mut shaker = SchemaTreeShaker::new(&schema);
         shaker.retain_operation_type(OperationType::Query, None);
         assert_eq!(
             shaker.shaken().unwrap().to_string(),
@@ -792,7 +871,7 @@ mod test {
             .parse_ast(source_text, "schema.graphql")
             .unwrap();
         let schema = document.to_schema_validate().unwrap();
-        let mut shaker = SchemaTreeShaker::new(&document, &schema);
+        let mut shaker = SchemaTreeShaker::new(&schema);
         shaker.retain_operation_type(OperationType::Query, None);
         shaker.retain_operation_type(OperationType::Mutation, None);
         assert_eq!(
@@ -815,7 +894,7 @@ mod test {
             .parse_ast(source_text, "schema.graphql")
             .unwrap();
         let schema = document.to_schema_validate().unwrap();
-        let mut shaker = SchemaTreeShaker::new(&document, &schema);
+        let mut shaker = SchemaTreeShaker::new(&schema);
         shaker.retain_operation_type(OperationType::Query, None);
         shaker.retain_operation_type(OperationType::Mutation, None);
         assert_eq!(
@@ -839,7 +918,7 @@ mod test {
             .parse_ast(source_text, "schema.graphql")
             .unwrap();
         let schema = document.to_schema_validate().unwrap();
-        let mut shaker = SchemaTreeShaker::new(&document, &schema);
+        let mut shaker = SchemaTreeShaker::new(&schema);
         let (operation_document, operation_def, _comments) =
             operation_defs("query TestQuery { id }", false, MutationMode::None).unwrap();
         shaker.retain_operation(&operation_def, &operation_document);

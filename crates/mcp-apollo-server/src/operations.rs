@@ -114,7 +114,6 @@ pub fn operation_defs(
 impl Operation {
     pub fn from_document(
         source_text: &str,
-        schema_document: &Document,
         graphql_schema: &GraphqlSchema,
         persisted_query_id: Option<String>,
         custom_scalar_map: Option<&CustomScalarMap>,
@@ -134,13 +133,7 @@ impl Operation {
             })?
             .to_string();
 
-        let description = Self::tool_description(
-            comments,
-            &document,
-            schema_document,
-            graphql_schema,
-            &operation,
-        );
+        let description = Self::tool_description(comments, &document, graphql_schema, &operation);
 
         let object = serde_json::to_value(get_json_schema(
             &operation,
@@ -164,7 +157,6 @@ impl Operation {
     fn tool_description(
         comments: Option<String>,
         document: &Document,
-        schema_document: &Document,
         graphql_schema: &GraphqlSchema,
         operation_def: &Node<OperationDefinition>,
     ) -> String {
@@ -237,7 +229,7 @@ impl Operation {
                 let mut lines = vec![];
                 lines.push(descriptions);
 
-                let mut tree_shaker = SchemaTreeShaker::new(schema_document, graphql_schema);
+                let mut tree_shaker = SchemaTreeShaker::new(graphql_schema);
                 tree_shaker.retain_operation(operation_def, document);
                 if let Ok(shaken) = tree_shaker.shaken() {
                     let mut types = shaken
@@ -600,7 +592,6 @@ mod tests {
     fn subscriptions() {
         let error = Operation::from_document(
             "subscription SubscriptionName { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -619,7 +610,6 @@ mod tests {
     fn mutation_mode_none() {
         let error = Operation::from_document(
             "mutation MutationName { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -638,7 +628,6 @@ mod tests {
     fn mutation_mode_explicit() {
         let operation = Operation::from_document(
             "mutation MutationName { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -665,7 +654,6 @@ mod tests {
     fn mutation_mode_all() {
         let operation = Operation::from_document(
             "mutation MutationName { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -692,7 +680,6 @@ mod tests {
     fn no_variables() {
         let operation = Operation::from_document(
             "query QueryName { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -721,7 +708,6 @@ mod tests {
     fn nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: ID) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -760,7 +746,6 @@ mod tests {
     fn non_nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: ID!) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -805,7 +790,6 @@ mod tests {
     fn non_nullable_list_of_nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: [ID]!) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -866,7 +850,6 @@ mod tests {
     fn non_nullable_list_of_non_nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: [ID!]!) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -917,7 +900,6 @@ mod tests {
     fn nullable_list_of_nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: [ID]) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -972,7 +954,6 @@ mod tests {
     fn nullable_list_of_non_nullable_named_type() {
         let operation = Operation::from_document(
             "query QueryName($id: [ID!]) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -1017,7 +998,6 @@ mod tests {
     fn nullable_list_of_nullable_lists_of_nullable_named_types() {
         let operation = Operation::from_document(
             "query QueryName($id: [[ID]]) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -1088,7 +1068,6 @@ mod tests {
     fn nullable_input_object() {
         let operation = Operation::from_document(
             "query QueryName($id: RealInputObject) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -1153,7 +1132,6 @@ mod tests {
     fn non_nullable_enum() {
         let operation = Operation::from_document(
             "query QueryName($id: RealEnum!) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -1208,7 +1186,6 @@ mod tests {
     fn multiple_operations_should_error() {
         let operation = Operation::from_document(
             "query QueryName { id } query QueryName { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -1225,14 +1202,8 @@ mod tests {
 
     #[test]
     fn unnamed_operations_should_error() {
-        let operation = Operation::from_document(
-            "query { id }",
-            &DOCUMENT,
-            &SCHEMA,
-            None,
-            None,
-            MutationMode::None,
-        );
+        let operation =
+            Operation::from_document("query { id }", &SCHEMA, None, None, MutationMode::None);
         insta::assert_debug_snapshot!(operation, @r###"
         Err(
             MissingName(
@@ -1246,7 +1217,6 @@ mod tests {
     fn no_operations_should_error() {
         let operation = Operation::from_document(
             "fragment Test on Query { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -1263,7 +1233,6 @@ mod tests {
     fn schema_should_error() {
         let operation = Operation::from_document(
             "type Query { id: String }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -1281,7 +1250,6 @@ mod tests {
         // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
             "query QueryName($id: FakeType) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -1309,7 +1277,6 @@ mod tests {
         // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -1337,7 +1304,6 @@ mod tests {
         // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             Some(&CustomScalarMap::from_str("{}").unwrap()),
@@ -1369,7 +1335,6 @@ mod tests {
 
         let operation = Operation::from_document(
             "query QueryName($id: RealCustomScalar) { id }",
-            &DOCUMENT,
             &SCHEMA,
             None,
             custom_scalar_map.ok().as_ref(),
@@ -1536,7 +1501,6 @@ mod tests {
               zzz
             }
             "###,
-            &document,
             &schema,
             None,
             None,
@@ -1615,7 +1579,6 @@ mod tests {
               }
             }
             "###,
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,
@@ -1640,7 +1603,6 @@ mod tests {
               id
             }
             "###,
-            &DOCUMENT,
             &SCHEMA,
             None,
             None,

@@ -5,7 +5,7 @@ use crate::graphql::Executable;
 use crate::introspection::{EXECUTE_TOOL_NAME, Execute, GET_SCHEMA_TOOL_NAME, GetSchema};
 use crate::operations::{MutationMode, Operation};
 use crate::schema_tree_shake::SchemaTreeShaker;
-use apollo_compiler::ast::{Document, OperationType};
+use apollo_compiler::ast::OperationType;
 use buildstructor::buildstructor;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use rmcp::model::{
@@ -38,7 +38,6 @@ use tokio::sync::{RwLock, mpsc};
 #[derive(Clone)]
 pub struct Server {
     schema: Valid<Schema>,
-    document: Document,
     operations: Vec<Operation>,
     endpoint: String,
     default_headers: HeaderMap,
@@ -55,7 +54,6 @@ impl Server {
     #[builder]
     pub async fn new<P: 'static + AsRef<Path> + Sync + Send + Clone>(
         schema: Valid<Schema>,
-        document: Document,
         operations: Vec<P>,
         endpoint: String,
         headers: Vec<String>,
@@ -74,7 +72,6 @@ impl Server {
                 let operation = std::fs::read_to_string(operation)?;
                 Operation::from_document(
                     &operation,
-                    &document,
                     &schema,
                     None,
                     custom_scalar_map.as_ref(),
@@ -142,7 +139,7 @@ impl Server {
         }
 
         let (execute_tool, get_schema_tool) = if introspection {
-            let mut shaker = SchemaTreeShaker::new(&document, &schema);
+            let mut shaker = SchemaTreeShaker::new(&schema);
             shaker.retain_operation_type(OperationType::Query, None);
             if mutation_mode == MutationMode::All {
                 shaker.retain_operation_type(OperationType::Mutation, None);
@@ -168,7 +165,6 @@ impl Server {
 
         Ok(Self {
             schema,
-            document,
             operations,
             endpoint,
             default_headers,
@@ -229,7 +225,6 @@ impl Server {
                 .map(|(pq_id, operation)| {
                     Operation::from_document(
                         &operation,
-                        &self.document,
                         &self.schema,
                         Some(pq_id),
                         None,

@@ -103,7 +103,6 @@ async fn main() -> anyhow::Result<()> {
 
     let server = Server::builder()
         .schema(schema)
-        .document(document)
         .endpoint(args.endpoint)
         .operations(args.operations)
         .headers(args.headers)
