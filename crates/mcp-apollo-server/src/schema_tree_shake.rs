@@ -495,14 +495,14 @@ fn selection_set_to_fields(
 }
 
 fn retain_type(
-    type_def: &ExtendedType,
+    extended_type: &ExtendedType,
     selection_set: Option<&Vec<Selection>>,
     named_type_nodes: &mut HashMap<String, TreeNode>,
     directive_nodes: &mut HashMap<String, TreeNode>,
     named_fragments: &HashMap<String, Node<FragmentDefinition>>,
     schema: &Schema,
 ) {
-    let type_name = type_def.name().as_str();
+    let type_name = extended_type.name().as_str();
     if let Some((referenced_type_names, referected_directive_names, selected_fields)) =
         named_type_nodes.get_mut(type_name).map(|n| {
             n.retain = true;
@@ -539,7 +539,7 @@ fn retain_type(
     {
         if let Some(selected_fields) = selected_fields {
             selected_fields.iter().for_each(|field| {
-                match type_def {
+                match extended_type {
                     ExtendedType::Union(union_def) => union_def.members.iter().for_each(|member| {
                         if let Some(member_type) = schema.types.get(member.as_str()) {
                             let memeber_selection_set = selection_set
@@ -588,7 +588,7 @@ fn retain_type(
                         }
                     }),
                     _ => {
-                        let field_type = match type_def {
+                        let field_type = match extended_type {
                             ExtendedType::Object(def) => Some(&def.fields),
                             ExtendedType::Interface(def) => Some(&def.fields),
                             _ => None,
