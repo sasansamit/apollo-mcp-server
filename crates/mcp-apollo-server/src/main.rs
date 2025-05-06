@@ -1,15 +1,20 @@
-use apollo_compiler::Schema;
+use anyhow::bail;
 use clap::Parser;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
+use mcp_apollo_registry::uplink::persisted_queries::ManifestSource;
+use mcp_apollo_registry::uplink::schema::SchemaSource;
+use mcp_apollo_registry::uplink::{SecretString, UplinkConfig};
 use mcp_apollo_server::custom_scalar_map::CustomScalarMap;
 use mcp_apollo_server::errors::ServerError;
-use mcp_apollo_server::server::Server;
-use rmcp::ServiceExt;
-use rmcp::transport::{SseServer, stdio};
+use mcp_apollo_server::operations::OperationSource;
+use mcp_apollo_server::server::{Server, Transport};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::env;
-use std::path::{Path, PathBuf};
-use tracing::{error, info};
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::time::Duration;
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 /// Clap styling
@@ -27,39 +32,39 @@ const STYLES: Styles = Styles::styled()
 )]
 struct Args {
     /// The working directory to use
-    #[clap(long, short = 'd')]
+    #[arg(long, short = 'd')]
     directory: PathBuf,
 
     /// The path to the GraphQL API schema file
-    #[clap(long, short = 's')]
-    schema: PathBuf,
+    #[arg(long, short = 's')]
+    schema: Option<PathBuf>,
 
     /// The path to the GraphQL custom_scalars_config file
-    #[clap(long, short = 'c', required = false)]
+    #[arg(long, short = 'c', required = false)]
     custom_scalars_config: Option<PathBuf>,
 
     /// The GraphQL endpoint the server will invoke
-    #[clap(long, short = 'e', default_value = "http://127.0.0.1:4000")]
+    #[arg(long, short = 'e', default_value = "http://127.0.0.1:4000")]
     endpoint: String,
 
     /// Headers to send to the endpoint
-    #[clap(long = "header", action = clap::ArgAction::Append)]
+    #[arg(long = "header", action = clap::ArgAction::Append)]
     headers: Vec<String>,
 
     /// Start the server using the SSE transport on the given port
-    #[clap(long)]
+    #[arg(long)]
     sse_port: Option<u16>,
 
     /// Expose the schema to the MCP client through `schema` and `execute` tools
-    #[clap(long, short = 'i')]
+    #[arg(long, short = 'i')]
     introspection: bool,
 
     /// Enable use of uplink to get the schema and persisted queries (requires APOLLO_KEY and APOLLO_GRAPH_REF)
-    #[clap(long, short = 'u')]
+    #[arg(long, short = 'u')]
     uplink: bool,
 
     /// Expose a tool to open queries in Apollo Explorer (requires APOLLO_KEY and APOLLO_GRAPH_REF)
-    #[clap(long, short = 'x')]
+    #[arg(long, short = 'x')]
     explorer: bool,
 
     /// Operation files to expose as MCP tools
@@ -85,45 +90,70 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let args = Args::parse();
+
+    let schema_source = if let Some(path) = args.schema {
+        SchemaSource::File { path, watch: true }
+    } else {
+        SchemaSource::Registry(uplink_config()?)
+    };
+
+    let operation_source = if let Some(manifest) = args.manifest {
+        OperationSource::Manifest(ManifestSource::LocalHotReload(vec![manifest]))
+    } else if args.uplink {
+        OperationSource::Manifest(ManifestSource::Uplink(uplink_config()?))
+    } else if !args.operations.is_empty() {
+        OperationSource::Files(args.operations)
+    } else {
+        if !args.introspection {
+            bail!(ServerError::NoOperations);
+        }
+        OperationSource::None
+    };
+
+    let mut default_headers = HeaderMap::new();
+    for header in args.headers {
+        let parts: Vec<&str> = header.split(':').map(|s| s.trim()).collect();
+        match (parts.first(), parts.get(1), parts.get(2)) {
+            (Some(key), Some(value), None) => {
+                default_headers.append(HeaderName::from_str(key)?, HeaderValue::from_str(value)?);
+            }
+            _ => bail!(ServerError::Header(header)),
+        }
+    }
+
+    let transport = args
+        .sse_port
+        .map_or(Transport::Stdio, |port| Transport::SSE { port });
+
     env::set_current_dir(args.directory)?;
-
-    let schema_path: &Path = args.schema.as_ref();
-    info!(schema_path=?schema_path, "Loading schema");
-    let schema = std::fs::read_to_string(schema_path)?;
-    let schema = Schema::parse_and_validate(schema, schema_path)
-        .map_err(|e| ServerError::GraphQLSchema(Box::new(e)))?;
-
-    let server = Server::builder()
-        .schema(schema)
+    Ok(Server::builder()
+        .transport(transport)
+        .schema_source(schema_source)
+        .operation_source(operation_source)
         .endpoint(args.endpoint)
-        .operations(args.operations)
-        .headers(args.headers)
-        .introspection(args.introspection)
-        .uplink(args.uplink)
         .explorer(args.explorer)
-        .manifests(args.manifest.into_iter().collect())
+        .headers(default_headers)
+        .introspection(args.introspection)
         .and_custom_scalar_map(
             args.custom_scalars_config
                 .map(|custom_scalars_config| CustomScalarMap::try_from(&custom_scalars_config))
                 .transpose()?,
         )
         .build()
-        .await?;
+        .start()
+        .await?)
+}
 
-    if let Some(port) = args.sse_port {
-        info!(port = ?port, "Starting MCP server in SSE mode");
-        let cancellation_token = SseServer::serve(format!("127.0.0.1:{port}").parse()?)
-            .await?
-            .with_service(move || server.clone());
-        tokio::signal::ctrl_c().await?;
-        cancellation_token.cancel();
-    } else {
-        info!("Starting MCP server in stdio mode");
-        let service = server.serve(stdio()).await.inspect_err(|e| {
-            error!("serving error: {:?}", e);
-        })?;
-        service.waiting().await?;
-    }
-
-    Ok(())
+fn uplink_config() -> Result<UplinkConfig, ServerError> {
+    Ok(UplinkConfig {
+        apollo_key: SecretString::from(
+            env::var("APOLLO_KEY")
+                .map_err(|_| ServerError::EnvironmentVariable(String::from("APOLLO_KEY")))?,
+        ),
+        apollo_graph_ref: env::var("APOLLO_GRAPH_REF")
+            .map_err(|_| ServerError::EnvironmentVariable(String::from("APOLLO_GRAPH_REF")))?,
+        poll_interval: Duration::from_secs(10),
+        timeout: Duration::from_secs(30),
+        endpoints: None, // Use the default endpoints
+    })
 }
