@@ -3,8 +3,10 @@ use apollo_compiler::{
     ast::{Document, OperationDefinition},
     validation::WithErrors,
 };
+use apollo_federation::error::FederationError;
 use reqwest::header::{InvalidHeaderName, InvalidHeaderValue};
 use rmcp::serde_json;
+use tokio::task::JoinError;
 
 use crate::operations::MutationMode;
 
@@ -51,6 +53,9 @@ pub enum ServerError {
     #[error("Could not parse GraphQL schema: {0}")]
     GraphQLDocumentSchema(Box<WithErrors<Document>>),
 
+    #[error("Federation error in GraphQL schema: {0}")]
+    Federation(FederationError),
+
     #[error("Invalid JSON: {0}")]
     Json(#[from] serde_json::Error),
 
@@ -78,8 +83,14 @@ pub enum ServerError {
     #[error("Missing environment variable: {0}")]
     EnvironmentVariable(String),
 
-    #[error("No operations defined")]
+    #[error("You must define operations or enable introspection")]
     NoOperations,
+
+    #[error("No valid schema was supplied")]
+    NoSchema,
+
+    #[error("Failed to start server")]
+    StartupError(#[from] JoinError),
 }
 
 /// An MCP tool error

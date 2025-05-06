@@ -82,7 +82,7 @@ To use the stdio transport, add the following to the MCP configuration file for 
             "--directory",
             "<absolute path to repo>",
             "--schema",
-            "graphql/weather/weather.graphql",
+            "graphql/weather/api.graphql",
             "--operations",
             "graphql/weather/operations/forecast.graphql",
             "graphql/weather/operations/alerts.graphql",
@@ -219,6 +219,28 @@ Two new tools will be exposed by the server:
 * `execute` - executes an operation on the GraphQL endpoint
 
 The MCP client can then use these tools to provide schema information to the model, and allow the model to execute GraphQL operations based on that schema.
+
+# Running in a Container
+
+The MCP server is also available as a standalone docker container. The following command
+demonstrates how to use the container. Refer to previous sections for all valid
+server arguments.
+
+By default, the container expects all schema files to be present in the
+`/data` folder within the container, so make sure to mount your files there. The
+example below uses the provided weather example for reference
+
+```sh
+docker run \
+  -it --rm \
+  --name mcp-apollo-server \
+  -p 5000:5000 \
+  -v $PWD/graphql/weather:/data \
+  ghcr.io/apollographql/mcp-apollo:latest \
+  --sse-port 5000 \
+  -s api.graphql \
+  # Other MCP server options...
+```
 
 # Licensing
 
