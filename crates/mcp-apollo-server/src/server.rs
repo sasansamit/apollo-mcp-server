@@ -237,18 +237,14 @@ struct Running {
 
 impl Running {
     /// Update a running server with a new schema.
-    async fn update_schema(
-        self,
-        schema: Valid<Schema>,
-        mutation_mode: MutationMode,
-    ) -> Result<Running, ServerError> {
+    async fn update_schema(self, schema: Valid<Schema>) -> Result<Running, ServerError> {
         info!("Schema updated:\n{}", schema);
 
         // Update the operations based on the new schema. This is necessary because the MCP tool
         // input schemas and description are derived from the schema.
         let operations = self
             .operation_poller
-            .operations(&schema, self.custom_scalar_map.as_ref(), mutation_mode)
+            .operations(&schema, self.custom_scalar_map.as_ref(), self.mutation_mode)
             .await?;
         info!(
             "Updated {} operations:\n{}",
@@ -359,10 +355,7 @@ impl StateMachine {
                     let schema = Self::sdl_to_api_schema(schema_state)?;
                     match state {
                         State::Starting(starting) => starting.run(schema).await.into(),
-                        State::Running(running) => running
-                            .update_schema(schema, server.mutation_mode)
-                            .await
-                            .into(),
+                        State::Running(running) => running.update_schema(schema).await.into(),
                         other => other,
                     }
                 }
