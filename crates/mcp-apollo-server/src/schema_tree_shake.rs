@@ -1,6 +1,5 @@
 //! Tree shaking for GraphQL schemas
 
-use crate::errors::ServerError;
 use apollo_compiler::ast::{
     Definition, DirectiveList, Document, EnumTypeDefinition, Field, FieldDefinition,
     FragmentDefinition, InputObjectTypeDefinition, InterfaceTypeDefinition, NamedType,
@@ -8,7 +7,7 @@ use apollo_compiler::ast::{
     SchemaDefinition, Selection, Type, UnionTypeDefinition,
 };
 use apollo_compiler::schema::ExtendedType;
-use apollo_compiler::validation::Valid;
+use apollo_compiler::validation::WithErrors;
 use apollo_compiler::{Name, Node, Schema};
 use std::collections::HashMap;
 
@@ -224,7 +223,7 @@ impl<'document> SchemaTreeShaker<'document> {
     }
 
     /// Return the set of types retained after tree shaking.
-    pub fn shaken(&mut self) -> Result<Valid<Schema>, ServerError> {
+    pub fn shaken(&mut self) -> Result<Schema, Box<WithErrors<Schema>>> {
         let mut filtered_root_operations = self
             .schema
             .schema_definition
@@ -544,9 +543,7 @@ impl<'document> SchemaTreeShaker<'document> {
         ]
         .concat();
 
-        document
-            .to_schema_validate()
-            .map_err(|e| ServerError::GraphQLSchema(Box::new(e)))
+        document.to_schema().map_err(Box::new)
     }
 }
 

@@ -313,37 +313,38 @@ impl Operation {
 
                 let mut tree_shaker = SchemaTreeShaker::new(graphql_schema);
                 tree_shaker.retain_operation(operation_def, document);
-                if let Ok(shaken) = tree_shaker.shaken() {
-                    let mut types = shaken
-                        .types
-                        .iter()
-                        .filter(|(_name, extended_type)| {
-                            !extended_type.is_built_in()
-                                && matches!(
-                                    extended_type,
-                                    ExtendedType::Object(_)
-                                        | ExtendedType::Scalar(_)
-                                        | ExtendedType::Enum(_)
-                                        | ExtendedType::Interface(_)
-                                        | ExtendedType::Union(_)
-                                )
-                                && graphql_schema
-                                    .root_operation(operation_def.operation_type)
-                                    .is_none_or(|op_name| extended_type.name() != op_name)
-                                && graphql_schema
-                                    .root_operation(OperationType::Query)
-                                    .is_none_or(|op_name| extended_type.name() != op_name)
-                        })
-                        .peekable();
-                    if types.peek().is_some() {
-                        lines.push(String::from("---"));
-                    }
+                let shaken_schema = match tree_shaker.shaken() {
+                    Ok(schema) => schema,
+                    Err(schema) => schema.partial,
+                };
 
-                    for ty in types {
-                        lines.push(ty.1.serialize().to_string());
-                    }
-                } else {
-                    tracing::error!("failed to shake schema");
+                let mut types = shaken_schema
+                    .types
+                    .iter()
+                    .filter(|(_name, extended_type)| {
+                        !extended_type.is_built_in()
+                            && matches!(
+                                extended_type,
+                                ExtendedType::Object(_)
+                                    | ExtendedType::Scalar(_)
+                                    | ExtendedType::Enum(_)
+                                    | ExtendedType::Interface(_)
+                                    | ExtendedType::Union(_)
+                            )
+                            && graphql_schema
+                                .root_operation(operation_def.operation_type)
+                                .is_none_or(|op_name| extended_type.name() != op_name)
+                            && graphql_schema
+                                .root_operation(OperationType::Query)
+                                .is_none_or(|op_name| extended_type.name() != op_name)
+                    })
+                    .peekable();
+                if types.peek().is_some() {
+                    lines.push(String::from("---"));
+                }
+
+                for ty in types {
+                    lines.push(ty.1.serialize().to_string());
                 }
 
                 lines.join("\n")
