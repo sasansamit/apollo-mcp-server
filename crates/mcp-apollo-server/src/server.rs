@@ -133,15 +133,12 @@ struct Starting {
     introspection: bool,
     explorer: bool,
     custom_scalar_map: Option<CustomScalarMap>,
+    mutation_mode: MutationMode,
 }
 
 impl Starting {
     /// Run the MCP server once the schema is ready
-    async fn run(
-        self,
-        schema: Valid<Schema>,
-        mutation_mode: MutationMode,
-    ) -> Result<Running, ServerError> {
+    async fn run(self, schema: Valid<Schema>) -> Result<Running, ServerError> {
         info!("Running with schema:\n{}", schema);
 
         let peers = Arc::new(RwLock::new(vec![]));
@@ -164,12 +161,12 @@ impl Starting {
             OperationSource::None => (OperationPoller::None, None),
         };
         let operations = operation_poller
-            .operations(&schema, self.custom_scalar_map.as_ref(), mutation_mode)
+            .operations(&schema, self.custom_scalar_map.as_ref(), self.mutation_mode)
             .await?;
 
         let schema = Arc::new(Mutex::new(schema));
 
-        let execute_tool = self.introspection.then(|| Execute::new(mutation_mode));
+        let execute_tool = self.introspection.then(|| Execute::new(self.mutation_mode));
         let get_schema_tool = self.introspection.then(|| GetSchema::new(schema.clone()));
         let explorer_tool = self
             .explorer
@@ -191,7 +188,7 @@ impl Starting {
             custom_scalar_map: self.custom_scalar_map,
             peers,
             cancellation_token: cancellation_token.clone(),
-            mutation_mode,
+            mutation_mode: self.mutation_mode,
         };
 
         if let Some(change_receiver) = change_receiver {
@@ -354,15 +351,14 @@ impl StateMachine {
             introspection: server.introspection,
             explorer: server.explorer,
             custom_scalar_map: server.custom_scalar_map,
+            mutation_mode: server.mutation_mode,
         });
         while let Some(event) = stream.next().await {
             state = match event {
                 Event::UpdateSchema(schema_state) => {
                     let schema = Self::sdl_to_api_schema(schema_state)?;
                     match state {
-                        State::Starting(starting) => {
-                            starting.run(schema, server.mutation_mode).await.into()
-                        }
+                        State::Starting(starting) => starting.run(schema).await.into(),
                         State::Running(running) => running
                             .update_schema(schema, server.mutation_mode)
                             .await
