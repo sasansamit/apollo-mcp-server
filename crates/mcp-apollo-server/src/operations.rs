@@ -194,7 +194,7 @@ impl Operation {
                 "Tool {} loaded with a character count of {}. Estimated tokens: {}",
                 operation_name,
                 length,
-                length / 4
+                length / 4 // We don't know the tokenization algorithm, so we just use 4 characters per token as a rough estimate. https://docs.anthropic.com/en/docs/resources/glossary#tokens
             ),
             Err(_) => tracing::info!(
                 "Tool {} loaded with an unknown character count",
