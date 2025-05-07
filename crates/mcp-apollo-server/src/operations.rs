@@ -187,8 +187,22 @@ impl Operation {
             ));
         };
 
+        let tool: Tool = Tool::new(operation_name.clone(), description, schema);
+        let character_count = tool_character_length(&tool);
+        match character_count {
+            Ok(length) => tracing::info!(
+                "Tool {} loaded with a character count of {}. Estimated tokens: {}",
+                operation_name,
+                length,
+                length / 4 // We don't know the tokenization algorithm, so we just use 4 characters per token as a rough estimate. https://docs.anthropic.com/en/docs/resources/glossary#tokens
+            ),
+            Err(_) => tracing::info!(
+                "Tool {} loaded with an unknown character count",
+                operation_name
+            ),
+        }
         Ok(Operation {
-            tool: Tool::new(operation_name, description, schema),
+            tool,
             source_text: source_text.to_string(),
             persisted_query_id,
         })
@@ -316,6 +330,11 @@ impl Operation {
 
         lines.join("\n")
     }
+}
+
+fn tool_character_length(tool: &Tool) -> Result<usize, serde_json::Error> {
+    let tool_schema_string = serde_json::to_string_pretty(&serde_json::json!(tool.input_schema))?;
+    Ok(tool.name.len() + tool.description.len() + tool_schema_string.len())
 }
 
 fn get_json_schema(
