@@ -1,9 +1,9 @@
 //! Tree shaking for GraphQL schemas
 
 use apollo_compiler::ast::{
-    Definition, DirectiveList, Document, EnumTypeDefinition, Field, FieldDefinition,
-    FragmentDefinition, InputObjectTypeDefinition, InterfaceTypeDefinition, NamedType,
-    ObjectTypeDefinition, OperationDefinition, OperationType, ScalarTypeDefinition,
+    Definition, DirectiveDefinition, DirectiveList, Document, EnumTypeDefinition, Field,
+    FieldDefinition, FragmentDefinition, InputObjectTypeDefinition, InterfaceTypeDefinition,
+    NamedType, ObjectTypeDefinition, OperationDefinition, OperationType, ScalarTypeDefinition,
     SchemaDefinition, Selection, Type, UnionTypeDefinition,
 };
 use apollo_compiler::schema::ExtendedType;
@@ -16,24 +16,26 @@ struct RootOperationNames {
     mutation: String,
     subscription: String,
 }
-
 impl RootOperationNames {
+    fn operation_name(
+        operation_type: OperationType,
+        default_name: &str,
+        schema: &Schema,
+    ) -> String {
+        schema
+            .root_operation(operation_type)
+            .map(|r| r.to_string())
+            .unwrap_or(default_name.to_string())
+    }
+
     fn new(schema: &Schema) -> Self {
         Self {
-            query: schema
-                .root_operation(OperationType::Query)
-                .map(|r| r.to_string())
-                .unwrap_or("query".to_string()),
-            mutation: schema
-                .root_operation(OperationType::Mutation)
-                .map(|r| r.to_string())
-                .unwrap_or("mutation".to_string()),
-            subscription: schema
-                .root_operation(OperationType::Subscription)
-                .map(|r| r.to_string())
-                .unwrap_or("subscription".to_string()),
+            query: Self::operation_name(OperationType::Query, "query", schema),
+            mutation: Self::operation_name(OperationType::Mutation, "mutation", schema),
+            subscription: Self::operation_name(OperationType::Subscription, "subscription", schema),
         }
     }
+
     fn name_for_operation_type(&self, operation_type: OperationType) -> &str {
         match operation_type {
             OperationType::Query => &self.query,
@@ -42,136 +44,61 @@ impl RootOperationNames {
         }
     }
 }
+
 /// Tree shaker for GraphQL schemas
-pub struct SchemaTreeShaker<'document> {
-    schema: &'document Schema,
-    named_type_nodes: HashMap<String, TreeNode>,
-    directive_nodes: HashMap<String, TreeNode>,
+pub struct SchemaTreeShaker<'schema> {
+    schema: &'schema Schema,
+    named_type_nodes: HashMap<String, TreeTypeNode>,
+    directive_nodes: HashMap<String, TreeDirectiveNode<'schema>>,
     operation_types: Vec<OperationType>,
     operation_type_names: RootOperationNames,
     named_fragments: HashMap<String, Node<FragmentDefinition>>,
 }
 
-#[derive(Clone, Default)]
-struct TreeNode {
-    referenced_type_names: Vec<String>,
-    referected_directive_names: Vec<String>,
+struct TreeTypeNode {
     retain: bool,
     filtered_field: Option<Vec<String>>,
 }
 
-impl<'document> SchemaTreeShaker<'document> {
-    pub fn new(schema: &'document Schema) -> Self {
-        let mut named_type_nodes: HashMap<String, TreeNode> = HashMap::default();
-        let mut directive_nodes: HashMap<String, TreeNode> = HashMap::default();
+struct TreeDirectiveNode<'schema> {
+    node: &'schema DirectiveDefinition,
+    retain: bool,
+}
 
-        schema
-            .types
-            .iter()
-            .for_each(|(_name, extended_type)| match extended_type {
-                ExtendedType::Object(object_def) => {
-                    let tree_node = named_type_nodes
-                        .entry(object_def.name.to_string())
-                        .or_default();
+impl<'schema> SchemaTreeShaker<'schema> {
+    pub fn new(schema: &'schema Schema) -> Self {
+        let mut named_type_nodes: HashMap<String, TreeTypeNode> = HashMap::default();
+        let mut directive_nodes: HashMap<String, TreeDirectiveNode> = HashMap::default();
 
-                    object_def.fields.iter().for_each(|(_name, field)| {
-                        tree_node
-                            .referenced_type_names
-                            .push(field.ty.inner_named_type().to_string());
-                    });
-                    object_def.directives.iter().for_each(|directive| {
-                        tree_node
-                            .referected_directive_names
-                            .push(directive.name.to_string())
-                    });
-                    object_def
-                        .implements_interfaces
-                        .iter()
-                        .for_each(|interface| {
-                            tree_node.referenced_type_names.push(interface.to_string());
-                        });
-                }
-                ExtendedType::InputObject(input_def) => {
-                    let tree_node = named_type_nodes
-                        .entry(input_def.name.to_string())
-                        .or_default();
-                    input_def.fields.iter().for_each(|(_name, field)| {
-                        tree_node
-                            .referenced_type_names
-                            .push(field.ty.inner_named_type().to_string());
-                    });
-                    input_def.directives.iter().for_each(|directive| {
-                        tree_node
-                            .referected_directive_names
-                            .push(directive.name.to_string())
-                    });
-                }
-                ExtendedType::Enum(enum_def) => {
-                    let tree_node = named_type_nodes
-                        .entry(enum_def.name.to_string())
-                        .or_default();
-                    enum_def.directives.iter().for_each(|directive| {
-                        tree_node
-                            .referected_directive_names
-                            .push(directive.name.to_string())
-                    });
-                }
-                ExtendedType::Scalar(scalar_def) => {
-                    let tree_node = named_type_nodes
-                        .entry(scalar_def.name.to_string())
-                        .or_default();
-                    scalar_def.directives.iter().for_each(|directive| {
-                        tree_node
-                            .referected_directive_names
-                            .push(directive.name.to_string())
-                    });
-                }
-                ExtendedType::Union(union_def) => {
-                    let tree_node = named_type_nodes
-                        .entry(union_def.name.to_string())
-                        .or_default();
-                    union_def.directives.iter().for_each(|directive| {
-                        tree_node
-                            .referected_directive_names
-                            .push(directive.name.to_string())
-                    });
-                    union_def.members.iter().for_each(|member| {
-                        tree_node.referenced_type_names.push(member.to_string());
-                    });
-                }
-                ExtendedType::Interface(interface_def) => {
-                    let tree_node = named_type_nodes
-                        .entry(interface_def.name.to_string())
-                        .or_default();
-                    interface_def.fields.iter().for_each(|(_name, field)| {
-                        tree_node
-                            .referenced_type_names
-                            .push(field.ty.inner_named_type().to_string());
-                    });
-                    interface_def.directives.iter().for_each(|directive| {
-                        tree_node
-                            .referected_directive_names
-                            .push(directive.name.to_string())
-                    });
-                    interface_def
-                        .implements_interfaces
-                        .iter()
-                        .for_each(|interface| {
-                            tree_node.referenced_type_names.push(interface.to_string());
-                        });
-                }
-            });
+        schema.types.iter().for_each(|(_name, extended_type)| {
+            let key = extended_type.name().as_str();
+            if named_type_nodes.contains_key(key) {
+                tracing::error!("type {} already exists", key);
+            }
+            named_type_nodes.insert(
+                key.to_string(),
+                TreeTypeNode {
+                    filtered_field: None,
+                    retain: false,
+                },
+            );
+        });
 
         schema
             .directive_definitions
             .iter()
             .for_each(|(name, directive_def)| {
-                let tree_node = directive_nodes.entry(name.to_string()).or_default();
-                directive_def.arguments.iter().for_each(|arg| {
-                    tree_node
-                        .referenced_type_names
-                        .push(arg.ty.inner_named_type().to_string());
-                });
+                let key = name.as_str();
+                if directive_nodes.contains_key(key) {
+                    tracing::error!("directive {} already exists", key);
+                }
+                directive_nodes.insert(
+                    key.to_string(),
+                    TreeDirectiveNode {
+                        node: directive_def,
+                        retain: false,
+                    },
+                );
             });
 
         Self {
@@ -573,8 +500,8 @@ fn selection_set_to_fields(
 fn retain_type(
     extended_type: &ExtendedType,
     selection_set: Option<&Vec<Selection>>,
-    named_type_nodes: &mut HashMap<String, TreeNode>,
-    directive_nodes: &mut HashMap<String, TreeNode>,
+    named_type_nodes: &mut HashMap<String, TreeTypeNode>,
+    directive_nodes: &mut HashMap<String, TreeDirectiveNode>,
     named_fragments: &HashMap<String, Node<FragmentDefinition>>,
     schema: &Schema,
 ) {
@@ -590,95 +517,73 @@ fn retain_type(
         None
     };
 
-    let tree_node_data = named_type_nodes
-        .get_mut(type_name)
-        .map(|tree_node: &mut TreeNode| {
-            tree_node.retain = true;
-            if let Some(selected_fields) = selected_fields.as_ref() {
-                let additional_fields = selected_fields
-                    .iter()
-                    .map(|f| f.name.to_string())
-                    .collect::<Vec<_>>();
+    if let Some(tree_node) = named_type_nodes.get_mut(type_name) {
+        tree_node.retain = true;
+        if let Some(selected_fields) = selected_fields.as_ref() {
+            let additional_fields = selected_fields
+                .iter()
+                .map(|f| f.name.to_string())
+                .collect::<Vec<_>>();
 
-                tree_node.filtered_field = Some(
-                    [
-                        tree_node.filtered_field.clone().unwrap_or_default(),
-                        additional_fields,
-                    ]
-                    .concat(),
-                );
-            }
+            tree_node.filtered_field = Some(
+                [
+                    tree_node.filtered_field.clone().unwrap_or_default(),
+                    additional_fields,
+                ]
+                .concat(),
+            );
+        }
+    }
 
-            (
-                tree_node.referenced_type_names.clone(),
-                tree_node.referected_directive_names.clone(),
-            )
-        });
+    extended_type.directives().iter().for_each(|t| {
+        retain_directive(
+            t.name.as_str(),
+            named_type_nodes,
+            directive_nodes,
+            named_fragments,
+            schema,
+        )
+    });
 
-    if let Some((referenced_type_names, referected_directive_names)) = tree_node_data {
-        if let Some(selected_fields) = selected_fields {
-            selected_fields.iter().for_each(|field| {
-                match extended_type {
-                    ExtendedType::Union(union_def) => union_def.members.iter().for_each(|member| {
-                        if let Some(member_type) = schema.types.get(member.as_str()) {
-                            let memeber_selection_set = selection_set
-                                .map(|selection_set| {
-                                    selection_set
-                                        .clone()
-                                        .into_iter()
-                                        .filter(|selection| match selection {
-                                            Selection::Field(_) => true,
-                                            Selection::FragmentSpread(fragment) => {
-                                                if let Some(fragment_def) = named_fragments
-                                                    .get(fragment.fragment_name.as_str())
-                                                {
-                                                    fragment_def.type_condition == member.as_str()
-                                                } else {
-                                                    tracing::error!(
-                                                        "fragment {} not found",
-                                                        fragment.fragment_name
-                                                    );
-                                                    false
-                                                }
-                                            }
-                                            Selection::InlineFragment(fragment) => fragment
-                                                .type_condition
-                                                .clone()
-                                                .is_none_or(|type_condition| {
-                                                    type_condition.as_str() == member.as_str()
-                                                }),
-                                        })
-                                        .collect::<Vec<Selection>>()
-                                })
-                                .and_then(|s| if s.is_empty() { None } else { Some(s) });
-
-                            if selection_set.is_none() || memeber_selection_set.is_some() {
-                                retain_type(
-                                    member_type,
-                                    memeber_selection_set.as_ref(),
-                                    named_type_nodes,
-                                    directive_nodes,
-                                    named_fragments,
-                                    schema,
-                                );
-                            }
-                        } else {
-                            tracing::error!("union member {} not found", member);
-                        }
-                    }),
-                    _ => {
-                        let field_type = match extended_type {
-                            ExtendedType::Object(def) => Some(&def.fields),
-                            ExtendedType::Interface(def) => Some(&def.fields),
-                            _ => None,
-                        }
-                        .and_then(|type_def_fields| type_def_fields.get(field.name.as_str()));
-                        if let Some(field_type) = field_type {
+    match extended_type {
+        ExtendedType::Object(def) => {
+            selected_fields
+                .as_ref()
+                .map(|fields| {
+                    fields
+                        .iter()
+                        .map(|field| {
+                            (
+                                field.name.as_str(),
+                                def.fields.get(field.name.as_str()),
+                                Some(&field.directives),
+                                Some(&field.selection_set),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or(
+                    def.fields
+                        .iter()
+                        .map(|(name, field_definition)| {
+                            (name.as_str(), Some(field_definition), None, None)
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .into_iter()
+                .for_each(
+                    |(
+                        field_name,
+                        field_definition,
+                        field_selection_directives,
+                        field_selection_set,
+                    )| {
+                        if let Some(field_type) = field_definition {
                             let field_type_name = field_type.ty.inner_named_type();
                             if let Some(field_type_def) = schema.types.get(field_type_name) {
                                 retain_type(
                                     field_type_def,
-                                    Some(&field.selection_set),
+                                    field_selection_set,
                                     named_type_nodes,
                                     directive_nodes,
                                     named_fragments,
@@ -707,63 +612,234 @@ fn retain_type(
                                 }
                             });
                         } else {
-                            tracing::error!("field {} not found", field.name);
+                            tracing::error!("field {} not found", field_name);
                         }
-                    }
-                }
 
-                field.directives.iter().for_each(|directive| {
-                    retain_directive(
-                        directive.name.as_str(),
+                        if let Some(field_definition_directives) =
+                            field_definition.map(|f| f.directives.clone())
+                        {
+                            field_definition_directives.iter().for_each(|directive| {
+                                retain_directive(
+                                    directive.name.as_str(),
+                                    named_type_nodes,
+                                    directive_nodes,
+                                    named_fragments,
+                                    schema,
+                                );
+                            })
+                        }
+                        if let Some(field_selection_directives) = field_selection_directives {
+                            field_selection_directives.iter().for_each(|directive| {
+                                retain_directive(
+                                    directive.name.as_str(),
+                                    named_type_nodes,
+                                    directive_nodes,
+                                    named_fragments,
+                                    schema,
+                                );
+                            })
+                        }
+                    },
+                );
+        }
+        ExtendedType::Interface(def) => {
+            selected_fields
+                .as_ref()
+                .map(|fields| {
+                    fields
+                        .iter()
+                        .map(|field| {
+                            (
+                                field.name.as_str(),
+                                def.fields.get(field.name.as_str()),
+                                Some(&field.directives),
+                                Some(&field.selection_set),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or(
+                    def.fields
+                        .iter()
+                        .map(|(name, field_definition)| {
+                            (name.as_str(), Some(field_definition), None, None)
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .into_iter()
+                .for_each(
+                    |(
+                        field_name,
+                        field_definition,
+                        field_selection_directives,
+                        field_selection_set,
+                    )| {
+                        if let Some(field_type) = field_definition {
+                            let field_type_name = field_type.ty.inner_named_type();
+                            if let Some(field_type_def) = schema.types.get(field_type_name) {
+                                retain_type(
+                                    field_type_def,
+                                    field_selection_set,
+                                    named_type_nodes,
+                                    directive_nodes,
+                                    named_fragments,
+                                    schema,
+                                );
+                            } else {
+                                tracing::error!("field type {} not found", field_type_name);
+                            }
+
+                            field_type.arguments.iter().for_each(|arg| {
+                                let arg_type_name = arg.ty.inner_named_type();
+                                if let Some(arg_type) = schema.types.get(arg_type_name) {
+                                    retain_type(
+                                        arg_type,
+                                        None,
+                                        named_type_nodes,
+                                        directive_nodes,
+                                        named_fragments,
+                                        schema,
+                                    );
+                                } else {
+                                    tracing::error!(
+                                        "field argument type {} not found",
+                                        arg_type_name
+                                    );
+                                }
+                            });
+                        } else {
+                            tracing::error!("field {} not found", field_name);
+                        }
+
+                        if let Some(field_definition_directives) =
+                            field_definition.map(|f| f.directives.clone())
+                        {
+                            field_definition_directives.iter().for_each(|directive| {
+                                retain_directive(
+                                    directive.name.as_str(),
+                                    named_type_nodes,
+                                    directive_nodes,
+                                    named_fragments,
+                                    schema,
+                                );
+                            })
+                        }
+                        if let Some(field_selection_directives) = field_selection_directives {
+                            field_selection_directives.iter().for_each(|directive| {
+                                retain_directive(
+                                    directive.name.as_str(),
+                                    named_type_nodes,
+                                    directive_nodes,
+                                    named_fragments,
+                                    schema,
+                                );
+                            })
+                        }
+                    },
+                );
+        }
+        ExtendedType::Union(union_def) => union_def.members.iter().for_each(|member| {
+            if let Some(member_type) = schema.types.get(member.as_str()) {
+                let memeber_selection_set = selection_set
+                    .map(|selection_set| {
+                        selection_set
+                            .clone()
+                            .into_iter()
+                            .filter(|selection| match selection {
+                                Selection::Field(_) => true,
+                                Selection::FragmentSpread(fragment) => {
+                                    if let Some(fragment_def) =
+                                        named_fragments.get(fragment.fragment_name.as_str())
+                                    {
+                                        fragment_def.type_condition == member.as_str()
+                                    } else {
+                                        tracing::error!(
+                                            "fragment {} not found",
+                                            fragment.fragment_name
+                                        );
+                                        false
+                                    }
+                                }
+                                Selection::InlineFragment(fragment) => fragment
+                                    .type_condition
+                                    .clone()
+                                    .is_none_or(|type_condition| {
+                                        type_condition.as_str() == member.as_str()
+                                    }),
+                            })
+                            .collect::<Vec<Selection>>()
+                    })
+                    .and_then(|s| if s.is_empty() { None } else { Some(s) });
+
+                if selection_set.is_none() || memeber_selection_set.is_some() {
+                    retain_type(
+                        member_type,
+                        memeber_selection_set.as_ref(),
                         named_type_nodes,
                         directive_nodes,
                         named_fragments,
                         schema,
                     );
-                })
-            });
-        } else {
-            referenced_type_names.iter().for_each(|t| {
-                if let Some(referenced_type_def) = schema.types.get(t.as_str()) {
-                    retain_type(
-                        referenced_type_def,
-                        None,
-                        named_type_nodes,
-                        directive_nodes,
-                        named_fragments,
-                        schema,
-                    )
-                } else {
-                    tracing::error!("referenced type {} not found", t);
                 }
-            });
-            referected_directive_names.iter().for_each(|t| {
+            } else {
+                tracing::error!("union member {} not found", member);
+            }
+        }),
+        ExtendedType::Enum(def) => def.values.iter().for_each(|(_name, value)| {
+            value.directives.iter().for_each(|directive| {
                 retain_directive(
-                    t,
+                    directive.name.as_str(),
                     named_type_nodes,
                     directive_nodes,
                     named_fragments,
                     schema,
-                )
-            });
+                );
+            })
+        }),
+        ExtendedType::Scalar(_) => {}
+        ExtendedType::InputObject(input_def) => {
+            input_def
+                .fields
+                .iter()
+                .for_each(|(_name, field_definition)| {
+                    let field_type_name = field_definition.ty.inner_named_type();
+                    if let Some(field_type_def) = schema.types.get(field_type_name) {
+                        retain_type(
+                            field_type_def,
+                            None,
+                            named_type_nodes,
+                            directive_nodes,
+                            named_fragments,
+                            schema,
+                        );
+                    } else {
+                        tracing::error!("field type {} not found", field_type_name);
+                    }
+                    field_definition.directives.iter().for_each(|directive| {
+                        retain_directive(
+                            directive.name.as_str(),
+                            named_type_nodes,
+                            directive_nodes,
+                            named_fragments,
+                            schema,
+                        )
+                    });
+                });
         }
     }
 }
 
 fn retain_directive(
     directive_name: &str,
-    named_type_nodes: &mut HashMap<String, TreeNode>,
-    directive_nodes: &mut HashMap<String, TreeNode>,
+    named_type_nodes: &mut HashMap<String, TreeTypeNode>,
+    directive_nodes: &mut HashMap<String, TreeDirectiveNode>,
     named_fragments: &HashMap<String, Node<FragmentDefinition>>,
     schema: &Schema,
 ) {
-    // let type_name = type_def.name().as_str();
-    if let Some(referenced_type_names) = directive_nodes.get_mut(directive_name).map(|n| {
-        n.retain = true;
-        n.referenced_type_names.clone()
-    }) {
-        referenced_type_names.iter().for_each(|t| {
-            if let Some(arg_type) = schema.types.get(t.as_str()) {
+    if let Some(tree_directive_node) = directive_nodes.get_mut(directive_name) {
+        tree_directive_node.retain = true;
+        tree_directive_node.node.arguments.iter().for_each(|arg| {
+            if let Some(arg_type) = schema.types.get(arg.name.as_str()) {
                 retain_type(
                     arg_type,
                     None,
@@ -773,7 +849,7 @@ fn retain_directive(
                     schema,
                 )
             } else {
-                tracing::error!("referenced type {} not found", t);
+                tracing::error!("argument type {} not found", arg.name);
             }
         });
     }
