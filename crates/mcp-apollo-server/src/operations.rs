@@ -1,11 +1,16 @@
+use crate::custom_scalar_map::CustomScalarMap;
 use crate::errors::{McpError, OperationError};
 use crate::graphql;
 use crate::tree_shake::TreeShaker;
 use apollo_compiler::ast::{FragmentDefinition, Selection};
+use apollo_compiler::validation::Valid;
 use apollo_compiler::{
     Name, Node, Schema as GraphqlSchema,
     ast::{Definition, OperationDefinition, Type},
     parser::Parser,
+};
+use mcp_apollo_registry::uplink::persisted_queries::{
+    ManifestSource, PersistedQueryManifestPoller,
 };
 use regex::Regex;
 use rmcp::{
@@ -17,8 +22,72 @@ use rmcp::{
     serde_json::{self, Value},
 };
 use serde::Serialize;
+use std::path::PathBuf;
+use tracing::{info, warn};
 
-use crate::custom_scalar_map::CustomScalarMap;
+/// The source of the operations exposed as MCP tools
+pub enum OperationSource {
+    /// Static GraphQL document files (no hot reloading)
+    Files(Vec<PathBuf>),
+
+    /// Persisted Query manifest (including sources that support hot reloading)
+    Manifest(ManifestSource),
+
+    /// No operations provided
+    None,
+}
+
+#[derive(Clone)]
+pub enum OperationPoller {
+    /// Static GraphQL document files (no hot reloading)
+    Files(Vec<PathBuf>),
+
+    /// Persisted Query manifest (including sources that support hot reloading)
+    Manifest(PersistedQueryManifestPoller),
+
+    /// No operations defined
+    None,
+}
+
+impl OperationPoller {
+    pub async fn operations(
+        &self,
+        schema: &Valid<apollo_compiler::Schema>,
+        custom_scalars: Option<&CustomScalarMap>,
+    ) -> Result<Vec<Operation>, OperationError> {
+        match self {
+            OperationPoller::Files(paths) => paths
+                .iter()
+                .map(|operation| {
+                    let operation = std::fs::read_to_string(operation)?;
+                    Operation::from_document(&operation, schema, None, custom_scalars)
+                })
+                .collect::<Result<Vec<Operation>, OperationError>>(),
+            OperationPoller::Manifest(manifest_poller) => manifest_poller
+                .get_all_operations()
+                .into_iter()
+                .map(|(pq_id, operation)| {
+                    Operation::from_document(&operation, schema, Some(pq_id), custom_scalars)
+                })
+                .collect::<Result<Vec<Operation>, OperationError>>(),
+            OperationPoller::None => Ok(Vec::default()),
+        }
+        .inspect(|operations| {
+            if operations.is_empty() {
+                if !matches!(self, OperationPoller::None) {
+                    warn!("No operations found");
+                }
+            } else {
+                info!(
+                    "Loaded {} operations:\n{}",
+                    operations.len(),
+                    serde_json::to_string_pretty(&operations)
+                        .unwrap_or(String::from("<unable to serialize>"))
+                );
+            }
+        })
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Operation {
@@ -433,11 +502,11 @@ fn type_to_schema(
                             custom_schema.metadata = Some(Box::new(meta));
                             Schema::Object(custom_schema)
                         } else {
-                            tracing::warn!(name=?named, "custom scalar missing from custom_scalar_map");
+                            warn!(name=?named, "custom scalar missing from custom_scalar_map");
                             schema_factory(description, None, None, None, None, None)
                         }
                     } else {
-                        tracing::warn!(name=?named, "custom scalars aren't currently supported without a custom_scalar_map");
+                        warn!(name=?named, "custom scalars aren't currently supported without a custom_scalar_map");
                         schema_factory(None, None, None, None, None, None)
                     }
                 } else if let Some(enum_type) = graphql_schema.get_enum(named) {
@@ -456,7 +525,7 @@ fn type_to_schema(
                         ),
                     )
                 } else {
-                    tracing::warn!(name=?named, "Type not found in schema");
+                    warn!(name=?named, "Type not found in schema");
                     schema_factory(None, None, None, None, None, None)
                 }
             }
@@ -589,23 +658,23 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
                 "properties": Object {
                     "id": Object {
                         "type": String("string"),
                     },
                 },
-                "type": String("object"),
             },
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
+          "type": "object",
           "properties": {
             "id": {
               "type": "string"
             }
-          },
-          "type": "object"
+          }
         }
         "###);
     }
@@ -622,29 +691,29 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
+                "required": Array [
+                    String("id"),
+                ],
                 "properties": Object {
                     "id": Object {
                         "type": String("string"),
                     },
                 },
-                "required": Array [
-                    String("id"),
-                ],
-                "type": String("object"),
             },
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
+          "type": "object",
+          "required": [
+            "id"
+          ],
           "properties": {
             "id": {
               "type": "string"
             }
-          },
-          "required": [
-            "id"
-          ],
-          "type": "object"
+          }
         }
         "###);
     }
@@ -661,8 +730,13 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
+                "required": Array [
+                    String("id"),
+                ],
                 "properties": Object {
                     "id": Object {
+                        "type": String("array"),
                         "oneOf": Array [
                             Object {
                                 "type": String("string"),
@@ -671,20 +745,20 @@ mod tests {
                                 "type": String("null"),
                             },
                         ],
-                        "type": String("array"),
                     },
                 },
-                "required": Array [
-                    String("id"),
-                ],
-                "type": String("object"),
             },
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
+          "type": "object",
+          "required": [
+            "id"
+          ],
           "properties": {
             "id": {
+              "type": "array",
               "oneOf": [
                 {
                   "type": "string"
@@ -692,14 +766,9 @@ mod tests {
                 {
                   "type": "null"
                 }
-              ],
-              "type": "array"
+              ]
             }
-          },
-          "required": [
-            "id"
-          ],
-          "type": "object"
+          }
         }
         "###);
     }
@@ -716,35 +785,35 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
-                "properties": Object {
-                    "id": Object {
-                        "items": Object {
-                            "type": String("string"),
-                        },
-                        "type": String("array"),
-                    },
-                },
+                "type": String("object"),
                 "required": Array [
                     String("id"),
                 ],
-                "type": String("object"),
+                "properties": Object {
+                    "id": Object {
+                        "type": String("array"),
+                        "items": Object {
+                            "type": String("string"),
+                        },
+                    },
+                },
             },
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
-          "properties": {
-            "id": {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
+          "type": "object",
           "required": [
             "id"
           ],
-          "type": "object"
+          "properties": {
+            "id": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
         }
         "###);
     }
@@ -761,8 +830,10 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
                 "properties": Object {
                     "id": Object {
+                        "type": String("array"),
                         "oneOf": Array [
                             Object {
                                 "type": String("string"),
@@ -771,17 +842,17 @@ mod tests {
                                 "type": String("null"),
                             },
                         ],
-                        "type": String("array"),
                     },
                 },
-                "type": String("object"),
             },
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
+          "type": "object",
           "properties": {
             "id": {
+              "type": "array",
               "oneOf": [
                 {
                   "type": "string"
@@ -789,11 +860,9 @@ mod tests {
                 {
                   "type": "null"
                 }
-              ],
-              "type": "array"
+              ]
             }
-          },
-          "type": "object"
+          }
         }
         "###);
     }
@@ -810,29 +879,29 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
                 "properties": Object {
                     "id": Object {
+                        "type": String("array"),
                         "items": Object {
                             "type": String("string"),
                         },
-                        "type": String("array"),
                     },
                 },
-                "type": String("object"),
             },
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
+          "type": "object",
           "properties": {
             "id": {
+              "type": "array",
               "items": {
                 "type": "string"
-              },
-              "type": "array"
+              }
             }
-          },
-          "type": "object"
+          }
         }
         "###);
     }
@@ -849,10 +918,13 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
                 "properties": Object {
                     "id": Object {
+                        "type": String("array"),
                         "oneOf": Array [
                             Object {
+                                "type": String("array"),
                                 "oneOf": Array [
                                     Object {
                                         "type": String("string"),
@@ -861,25 +933,25 @@ mod tests {
                                         "type": String("null"),
                                     },
                                 ],
-                                "type": String("array"),
                             },
                             Object {
                                 "type": String("null"),
                             },
                         ],
-                        "type": String("array"),
                     },
                 },
-                "type": String("object"),
             },
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
+          "type": "object",
           "properties": {
             "id": {
+              "type": "array",
               "oneOf": [
                 {
+                  "type": "array",
                   "oneOf": [
                     {
                       "type": "string"
@@ -887,17 +959,14 @@ mod tests {
                     {
                       "type": "null"
                     }
-                  ],
-                  "type": "array"
+                  ]
                 },
                 {
                   "type": "null"
                 }
-              ],
-              "type": "array"
+              ]
             }
-          },
-          "type": "object"
+          }
         }
         "###);
     }
@@ -918,8 +987,13 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
                 "properties": Object {
                     "id": Object {
+                        "type": String("object"),
+                        "required": Array [
+                            String("required"),
+                        ],
                         "properties": Object {
                             "optional": Object {
                                 "description": String("optional is a input field that is optional"),
@@ -930,20 +1004,20 @@ mod tests {
                                 "type": String("string"),
                             },
                         },
-                        "required": Array [
-                            String("required"),
-                        ],
-                        "type": String("object"),
                     },
                 },
-                "type": String("object"),
             },
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
+          "type": "object",
           "properties": {
             "id": {
+              "type": "object",
+              "required": [
+                "required"
+              ],
               "properties": {
                 "optional": {
                   "description": "optional is a input field that is optional",
@@ -953,14 +1027,9 @@ mod tests {
                   "description": "required is a input field that is required",
                   "type": "string"
                 }
-              },
-              "required": [
-                "required"
-              ],
-              "type": "object"
+              }
             }
-          },
-          "type": "object"
+          }
         }
         "###);
     }
@@ -981,39 +1050,39 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
+                "required": Array [
+                    String("id"),
+                ],
                 "properties": Object {
                     "id": Object {
                         "description": String("the description for the enum\n\nValues:\nENUM_VALUE_1: ENUM_VALUE_1 is a value\nENUM_VALUE_2: ENUM_VALUE_2 is a value"),
+                        "type": String("string"),
                         "enum": Array [
                             String("ENUM_VALUE_1"),
                             String("ENUM_VALUE_2"),
                         ],
-                        "type": String("string"),
                     },
                 },
-                "required": Array [
-                    String("id"),
-                ],
-                "type": String("object"),
             },
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
-          "properties": {
-            "id": {
-              "description": "the description for the enum\n\nValues:\nENUM_VALUE_1: ENUM_VALUE_1 is a value\nENUM_VALUE_2: ENUM_VALUE_2 is a value",
-              "enum": [
-                "ENUM_VALUE_1",
-                "ENUM_VALUE_2"
-              ],
-              "type": "string"
-            }
-          },
+          "type": "object",
           "required": [
             "id"
           ],
-          "type": "object"
+          "properties": {
+            "id": {
+              "description": "the description for the enum\n\nValues:\nENUM_VALUE_1: ENUM_VALUE_1 is a value\nENUM_VALUE_2: ENUM_VALUE_2 is a value",
+              "type": "string",
+              "enum": [
+                "ENUM_VALUE_1",
+                "ENUM_VALUE_2"
+              ]
+            }
+          }
         }
         "###);
     }
@@ -1081,10 +1150,10 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
                 "properties": Object {
                     "id": Object {},
                 },
-                "type": String("object"),
             },
         }
         "###);
@@ -1107,10 +1176,10 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
                 "properties": Object {
                     "id": Object {},
                 },
-                "type": String("object"),
             },
         }
         "###);
@@ -1133,12 +1202,12 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
                 "properties": Object {
                     "id": Object {
                         "description": String("RealCustomScalar exists"),
                     },
                 },
-                "type": String("object"),
             },
         }
         "###);
@@ -1163,25 +1232,25 @@ mod tests {
             name: "QueryName",
             description: "The returned value is optional and has type `String`",
             input_schema: {
+                "type": String("object"),
                 "properties": Object {
                     "id": Object {
                         "description": String("RealCustomScalar exists"),
                         "type": String("string"),
                     },
                 },
-                "type": String("object"),
             },
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
+          "type": "object",
           "properties": {
             "id": {
               "description": "RealCustomScalar exists",
               "type": "string"
             }
-          },
-          "type": "object"
+          }
         }
         "###);
     }

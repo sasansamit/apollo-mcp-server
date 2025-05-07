@@ -2,6 +2,7 @@
 
 use crate::errors::McpError;
 use crate::graphql;
+use crate::schema_from_type;
 use apollo_compiler::Schema;
 use apollo_compiler::validation::Valid;
 use rmcp::model::{ErrorCode, Tool};
@@ -9,22 +10,15 @@ use rmcp::schemars::JsonSchema;
 use rmcp::serde_json::Value;
 use rmcp::{schemars, serde_json};
 use serde::Deserialize;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub(crate) const GET_SCHEMA_TOOL_NAME: &str = "schema";
 pub(crate) const EXECUTE_TOOL_NAME: &str = "execute";
 
-macro_rules! schema_from_type {
-    ($type:ty) => {{
-        match serde_json::to_value(schemars::schema_for!($type)) {
-            Ok(Value::Object(schema)) => schema,
-            _ => panic!("Failed to generate schema for {}", stringify!($type)),
-        }
-    }};
-}
-
 #[derive(Clone)]
 pub struct GetSchema {
-    pub schema: Valid<Schema>,
+    pub schema: Arc<Mutex<Valid<Schema>>>,
     pub tool: Tool,
 }
 
@@ -32,7 +26,7 @@ pub struct GetSchema {
 pub struct GetSchemaInput {}
 
 impl GetSchema {
-    pub fn new(schema: Valid<Schema>) -> Self {
+    pub fn new(schema: Arc<Mutex<Valid<Schema>>>) -> Self {
         Self {
             schema,
             tool: Tool::new(
