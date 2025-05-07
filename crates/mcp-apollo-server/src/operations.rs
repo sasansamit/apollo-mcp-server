@@ -612,7 +612,7 @@ impl graphql::Executable for Operation {
 mod tests {
     use std::{str::FromStr, sync::LazyLock};
 
-    use apollo_compiler::{Schema, ast::Document, parser::Parser, validation::Valid};
+    use apollo_compiler::{Schema, parser::Parser, validation::Valid};
     use rmcp::{model::Tool, serde_json};
 
     use crate::{
@@ -622,10 +622,9 @@ mod tests {
     };
 
     // Example schema for tests
-    static DOCUMENT: LazyLock<Document> = LazyLock::new(|| {
-        Parser::new()
-            .parse_ast(
-                r#"
+    static SCHEMA: LazyLock<Valid<Schema>> = LazyLock::new(|| {
+        Schema::parse(
+            r#"
                 type Query { id: String }
                 type Mutation { id: String }
 
@@ -660,15 +659,11 @@ mod tests {
                     ENUM_VALUE_2
                 }
             "#,
-                "operation.graphql",
-            )
-            .expect("schema should parse")
-    });
-
-    static SCHEMA: LazyLock<Valid<Schema>> = LazyLock::new(|| {
-        DOCUMENT
-            .to_schema_validate()
-            .expect("schema should be valid")
+            "operation.graphql",
+        )
+        .expect("schema should parse")
+        .validate()
+        .expect("schema should be valid")
     });
 
     #[test]
