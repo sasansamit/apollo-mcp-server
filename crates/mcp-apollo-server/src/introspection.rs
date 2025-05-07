@@ -2,6 +2,7 @@
 
 use crate::errors::McpError;
 use crate::graphql;
+use crate::operations::{MutationMode, operation_defs};
 use crate::schema_from_type;
 use apollo_compiler::Schema;
 use apollo_compiler::validation::Valid;
@@ -41,6 +42,7 @@ impl GetSchema {
 #[derive(Clone)]
 pub struct Execute {
     pub tool: Tool,
+    mutation_mode: MutationMode,
 }
 
 #[derive(JsonSchema, Deserialize)]
@@ -53,8 +55,9 @@ pub struct Input {
 }
 
 impl Execute {
-    pub fn new() -> Self {
+    pub fn new(mutation_mode: MutationMode) -> Self {
         Self {
+            mutation_mode,
             tool: Tool::new(
                 EXECUTE_TOOL_NAME,
                 "Execute a GraphQL operation. Use the `schema` tool to get the GraphQL schema. Always use the schema to create operations - do not try arbitrary operations. DO NOT try to execute introspection queries.",
@@ -70,11 +73,19 @@ impl graphql::Executable for Execute {
     }
 
     fn operation(&self, input: Value) -> Result<String, McpError> {
-        serde_json::from_value::<Input>(input)
-            .map(|input| input.query)
-            .map_err(|_| {
-                McpError::new(ErrorCode::INVALID_PARAMS, "Invalid input".to_string(), None)
-            })
+        let input = serde_json::from_value::<Input>(input).map_err(|_| {
+            McpError::new(ErrorCode::INVALID_PARAMS, "Invalid input".to_string(), None)
+        })?;
+
+        // validate the operation
+        operation_defs(
+            &input.query,
+            self.mutation_mode == MutationMode::All,
+            self.mutation_mode,
+        )
+        .map_err(|e| McpError::new(ErrorCode::INVALID_PARAMS, e.to_string(), None))?;
+
+        Ok(input.query)
     }
 
     fn variables(&self, input: Value) -> Result<Value, McpError> {

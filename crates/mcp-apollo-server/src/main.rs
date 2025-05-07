@@ -7,8 +7,10 @@ use mcp_apollo_registry::uplink::schema::SchemaSource;
 use mcp_apollo_registry::uplink::{SecretString, UplinkConfig};
 use mcp_apollo_server::custom_scalar_map::CustomScalarMap;
 use mcp_apollo_server::errors::ServerError;
+use mcp_apollo_server::operations::MutationMode;
 use mcp_apollo_server::operations::OperationSource;
-use mcp_apollo_server::server::{Server, Transport};
+use mcp_apollo_server::server::Server;
+use mcp_apollo_server::server::Transport;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::env;
 use std::path::PathBuf;
@@ -74,6 +76,10 @@ struct Args {
     /// The path to the persisted query manifest containing operations
     #[arg(long)]
     manifest: Option<PathBuf>,
+
+    // Configure when to allow mutations
+    #[clap(long, short = 'm', default_value_t, value_enum)]
+    allow_mutations: MutationMode,
 }
 
 #[tokio::main]
@@ -134,6 +140,7 @@ async fn main() -> anyhow::Result<()> {
         .explorer(args.explorer)
         .headers(default_headers)
         .introspection(args.introspection)
+        .mutation_mode(args.allow_mutations)
         .and_custom_scalar_map(
             args.custom_scalars_config
                 .map(|custom_scalars_config| CustomScalarMap::try_from(&custom_scalars_config))

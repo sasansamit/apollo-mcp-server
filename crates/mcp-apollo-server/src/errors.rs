@@ -1,8 +1,14 @@
-use apollo_compiler::{Schema, ast::Document, validation::WithErrors};
+use apollo_compiler::{
+    Node, Schema,
+    ast::{Document, OperationDefinition},
+    validation::WithErrors,
+};
 use apollo_federation::error::FederationError;
 use reqwest::header::{InvalidHeaderName, InvalidHeaderValue};
 use rmcp::serde_json;
 use tokio::task::JoinError;
+
+use crate::operations::MutationMode;
 
 /// An error in operation parsing
 #[derive(Debug, thiserror::Error)]
@@ -27,6 +33,12 @@ pub enum OperationError {
 
     #[error(transparent)]
     File(#[from] std::io::Error),
+
+    #[error("Mutation {0} not allowed while with --allow-mutations {1:?}")]
+    MutationNotAllowed(Node<OperationDefinition>, MutationMode),
+
+    #[error("Subscriptions are not allowed: {0}")]
+    SubscriptionNotAllowed(Node<OperationDefinition>),
 }
 
 /// An error in server initialization
@@ -37,6 +49,9 @@ pub enum ServerError {
 
     #[error("Could not parse GraphQL schema: {0}")]
     GraphQLSchema(Box<WithErrors<Schema>>),
+
+    #[error("Could not parse GraphQL schema: {0}")]
+    GraphQLDocumentSchema(Box<WithErrors<Document>>),
 
     #[error("Federation error in GraphQL schema: {0}")]
     Federation(FederationError),

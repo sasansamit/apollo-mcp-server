@@ -3,7 +3,7 @@ use crate::errors::{McpError, OperationError, ServerError};
 use crate::graphql;
 use crate::graphql::Executable;
 use crate::introspection::{EXECUTE_TOOL_NAME, Execute, GET_SCHEMA_TOOL_NAME, GetSchema};
-use crate::operations::{Operation, OperationPoller, OperationSource};
+use crate::operations::{MutationMode, Operation, OperationPoller, OperationSource};
 use buildstructor::buildstructor;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use rmcp::model::{
@@ -47,6 +47,7 @@ pub struct Server {
     introspection: bool,
     explorer: bool,
     custom_scalar_map: Option<CustomScalarMap>,
+    mutation_mode: MutationMode,
 }
 
 #[derive(Clone)]
@@ -70,6 +71,7 @@ impl Server {
         introspection: bool,
         explorer: bool,
         custom_scalar_map: Option<CustomScalarMap>,
+        mutation_mode: MutationMode,
     ) -> Self {
         let headers = {
             let mut headers = headers.clone();
@@ -85,6 +87,7 @@ impl Server {
             introspection,
             explorer,
             custom_scalar_map,
+            mutation_mode,
         }
     }
 
@@ -130,6 +133,7 @@ struct Starting {
     introspection: bool,
     explorer: bool,
     custom_scalar_map: Option<CustomScalarMap>,
+    mutation_mode: MutationMode,
 }
 
 impl Starting {
@@ -157,12 +161,12 @@ impl Starting {
             OperationSource::None => (OperationPoller::None, None),
         };
         let operations = operation_poller
-            .operations(&schema, self.custom_scalar_map.as_ref())
+            .operations(&schema, self.custom_scalar_map.as_ref(), self.mutation_mode)
             .await?;
 
         let schema = Arc::new(Mutex::new(schema));
 
-        let execute_tool = self.introspection.then(Execute::new);
+        let execute_tool = self.introspection.then(|| Execute::new(self.mutation_mode));
         let get_schema_tool = self.introspection.then(|| GetSchema::new(schema.clone()));
         let explorer_tool = self
             .explorer
@@ -184,6 +188,7 @@ impl Starting {
             custom_scalar_map: self.custom_scalar_map,
             peers,
             cancellation_token: cancellation_token.clone(),
+            mutation_mode: self.mutation_mode,
         };
 
         if let Some(change_receiver) = change_receiver {
@@ -227,6 +232,7 @@ struct Running {
     custom_scalar_map: Option<CustomScalarMap>,
     peers: Arc<RwLock<Vec<Peer<RoleServer>>>>,
     cancellation_token: CancellationToken,
+    mutation_mode: MutationMode,
 }
 
 impl Running {
@@ -238,7 +244,7 @@ impl Running {
         // input schemas and description are derived from the schema.
         let operations = self
             .operation_poller
-            .operations(&schema, self.custom_scalar_map.as_ref())
+            .operations(&schema, self.custom_scalar_map.as_ref(), self.mutation_mode)
             .await?;
         info!(
             "Updated {} operations:\n{}",
@@ -295,10 +301,15 @@ impl Running {
         let operation_poller = self.operation_poller.clone();
         let custom_scalars = self.custom_scalar_map.clone();
         let schema = self.schema.clone();
+        let mutation_mode = self.mutation_mode;
         tokio::spawn(async move {
             while change_receiver.recv().await.is_some() {
                 match operation_poller
-                    .operations(&*schema.lock().await, custom_scalars.as_ref())
+                    .operations(
+                        &*schema.lock().await,
+                        custom_scalars.as_ref(),
+                        mutation_mode,
+                    )
                     .await
                 {
                     Ok(new_operations) => *operations.lock().await = new_operations,
@@ -336,6 +347,7 @@ impl StateMachine {
             introspection: server.introspection,
             explorer: server.explorer,
             custom_scalar_map: server.custom_scalar_map,
+            mutation_mode: server.mutation_mode,
         });
         while let Some(event) = stream.next().await {
             state = match event {
