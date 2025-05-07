@@ -34,7 +34,7 @@ pub enum OperationError {
     #[error(transparent)]
     File(#[from] std::io::Error),
 
-    #[error("Mutation {0} not allowew while with --allow-mutations {1:?}")]
+    #[error("Mutation {0} not allowed while with --allow-mutations {1:?}")]
     MutationNotAllowed(Node<OperationDefinition>, MutationMode),
 
     #[error("Subscriptions are not allowed: {0}")]
