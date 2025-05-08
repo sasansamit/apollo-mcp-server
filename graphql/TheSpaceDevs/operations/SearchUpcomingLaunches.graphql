@@ -1,0 +1,26 @@
+query SearchUpcomingLaunches($query: String!) {
+  upcomingLaunches(limit: 20,search: $query){
+    pageInfo {
+      count
+    }
+    results {
+      id
+      name
+      weatherConcerns
+      rocket {
+        id
+        configuration {
+          fullName
+        }
+      }
+      mission {
+        name
+        description
+      }
+      webcastLive
+      provider {
+        name
+      }
+    }
+  }
+}

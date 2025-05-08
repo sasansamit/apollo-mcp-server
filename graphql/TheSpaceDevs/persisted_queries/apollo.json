@@ -1,0 +1,12 @@
+{
+  "format": "apollo-persisted-query-manifest",
+  "version": 1,
+  "operations": [
+    {
+      "id": "824e3c8a1612c32a315450abbd5c7aedc0c402fdf6068583a54461f5b67d55be",
+      "name": "SearchUpcomingLaunches",
+      "type": "query",
+      "body": "query SearchUpcomingLaunches($query: String!) {\n  upcomingLaunches(limit: 20, search: $query) {\n    pageInfo {\n      count\n      __typename\n    }\n    results {\n      id\n      name\n      weatherConcerns\n      rocket {\n        id\n        configuration {\n          fullName\n          __typename\n        }\n        __typename\n      }\n      mission {\n        name\n        description\n        __typename\n      }\n      webcastLive\n      provider {\n        name\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}"
+    }
+  ]
+}
