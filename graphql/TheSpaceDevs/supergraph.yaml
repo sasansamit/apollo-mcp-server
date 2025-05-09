@@ -1,6 +1,6 @@
 federation_version: =2.10.0
 subgraphs:
-  weather:
-    routing_url: http://localhost # this value is ignored
+  thespacedevs:
+    routing_url: https://thespacedevs-production.up.railway.app/
     schema:
-      file: weather.graphql
+      file: api.graphql

@@ -1,15 +1,10 @@
-directive @defer(
-  label: String
-  if: Boolean! = true
-) on FRAGMENT_SPREAD | INLINE_FRAGMENT
-
 type Agency {
   id: ID!
   name: String
   abbrev: String
   type: String
   featured: Boolean
-  country: Country
+  country: [Country]
   description: String
   administrator: String
   foundingYear: Int
@@ -74,6 +69,11 @@ type Astronaut {
 type AstronautConnection {
   pageInfo: PageInfo
   results: [Astronaut]
+}
+
+input AstronautFilters {
+  search: String
+  inSpace: Boolean
 }
 
 type CelestialBody {
@@ -398,41 +398,15 @@ type Query {
   agencies(search: String, offset: Int = 0, limit: Int = 20): AgencyConnection
   apiThrottle: ApiThrottle
   astronaut(id: ID!): Astronaut
-  astronauts(
-    search: String
-    offset: Int = 0
-    limit: Int = 20
-  ): AstronautConnection
+  astronauts(filters: AstronautFilters, offset: Int = 0, limit: Int = 20): AstronautConnection
   celestialBody(id: ID!): CelestialBody
-  celestialBodies(
-    search: String
-    offset: Int = 0
-    limit: Int = 20
-  ): CelestialBodyConnection
+  celestialBodies(search: String, offset: Int = 0, limit: Int = 20): CelestialBodyConnection
   dockingEvent(id: ID!): DockingEvent
-  dockingEvents(
-    search: String
-    offset: Int = 0
-    limit: Int = 20
-  ): DockingEventConnection
+  dockingEvents(search: String, offset: Int = 0, limit: Int = 20): DockingEventConnection
   launch(id: ID!): Launch
   launches(search: String, limit: Int = 5, offset: Int = 0): LaunchConnection
-  previousLaunces(
-    search: String
-    limit: Int = 5
-    offset: Int = 0
-  ): LaunchConnection
-  upcomingLaunches(
-    """
-    Fields searched - launch_designator, launch_service_provider__name, mission__name, name, pad__location__name, pad__name, rocket__configuration__manufacturer__abbrev, rocket__configuration__manufacturer__name, rocket__configuration__name, rocket__spacecraftflight__spacecraft__name
-
-    Codes are the best search terms to use
-    Single words are the next best alternative when you cannot use a code to search
-    """
-    search: String
-    limit: Int = 5
-    offset: Int = 0
-  ): LaunchConnection
+  previousLaunces(search: String, limit: Int = 5, offset: Int = 0): LaunchConnection
+  upcomingLaunches(search: String, limit: Int = 5, offset: Int = 0): LaunchConnection
 }
 
 type Rocket {
