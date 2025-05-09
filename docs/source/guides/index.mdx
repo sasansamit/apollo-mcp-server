@@ -61,10 +61,10 @@ An example manifest is available in the [GitHub repo](https://github.com/apollog
 
 <ExpansionPanel title="Example command using --manifest">
 
-From the root of a local MCP server repo, run the `mcp-apollo-server` binary with the example persisted query manifest, `graphql/weather/persisted_queries/apollo.json`:
+From the root of a local MCP server repo, run the `apollo-mcp-server` binary with the example persisted query manifest, `graphql/weather/persisted_queries/apollo.json`:
 
 ```sh showLineNumbers=false
-mcp-apollo-server \
+apollo-mcp-server \
   --directory <absolute path to this local repo> \
   -s graphql/weather/api.graphql \
   --header "apollographql-client-name:my-web-app" \
@@ -89,7 +89,7 @@ Use a [contract variant](/graphos/platform/schema-management/delivery/contracts/
 
 
 ```sh title="Example command using GraphOS-managed persisted queries"
-mcp-apollo-server \
+apollo-mcp-server \
   --directory <absolute path to this git repo> \
   -s graphql/weather/api.graphql \
   --header "apollographql-client-name:my-web-app" \
@@ -133,7 +133,7 @@ An example `docker run` command that runs the MCP server for the weather example
 ```sh
 docker run \
   -it --rm \
-  --name mcp-apollo-server \
+  --name apollo-mcp-server \
   -p 5000:5000 \
   -v $PWD/graphql/weather:/data \
   ghcr.io/apollographql/apollo-mcp-server:latest \
@@ -158,7 +158,7 @@ You can inspect a local Apollo MCP Server by running it with MCP Inspector.
 
 ```sh
 npx @modelcontextprotocol/inspector \
-  target/debug/mcp-apollo-server \
+  target/debug/apollo-mcp-server \
   --directory <absolute path to this git repo> \
   -s graphql/weather/api.graphql \
   -o graphql/weather/operations/forecast.graphql graphql/weather/operations/alerts.graphql graphql/weather/operations/all.graphql
@@ -183,7 +183,7 @@ When running the MCP server over SSE transport, you can run MCP Inspector with t
 1. Start the MCP server in SEE mode:
 
 ```sh
-target/debug/mcp-apollo-server \
+target/debug/apollo-mcp-server \
   --directory <absolute path to this git repo> \
   --sse-port 5000 -s graphql/weather/api.graphql \
   -o graphql/weather/operations/forecast.graphql graphql/weather/operations/alerts.graphql graphql/weather/operations/all.graphql

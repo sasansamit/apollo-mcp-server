@@ -32,12 +32,12 @@ You can build an Apollo MCP Server binary from its [source repo](https://github.
     cargo build
     ```
 
-    The binary will be built as `target/debug/mcp-apollo-server`.
+    The binary will be built as `target/debug/apollo-mcp-server`.
 
 1. Run the binary to validate it: 
 
     ```sh showLineNumbers=false
-    target/debug/mcp-apollo-server --help
+    target/debug/apollo-mcp-server --help
     ```
 
 </ExpansionPanel>
@@ -78,7 +78,7 @@ TODO
 {
   "mcpServers": {
     "weather": {
-        "command": "<absolute path to repo>/target/debug/mcp-apollo-server",
+        "command": "<absolute path to repo>/target/debug/apollo-mcp-server",
         "args": [
             "--directory",
             "<absolute path to repo>",
