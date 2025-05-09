@@ -1,7 +1,7 @@
 use crate::custom_scalar_map::CustomScalarMap;
 use crate::errors::{McpError, OperationError};
 use crate::graphql;
-use crate::schema_tree_shake::SchemaTreeShaker;
+use crate::schema_tree_shake::{DepthLimit, SchemaTreeShaker};
 use apollo_compiler::ast::{Document, OperationType, Selection};
 use apollo_compiler::schema::ExtendedType;
 use apollo_compiler::validation::Valid;
@@ -231,13 +231,13 @@ impl Operation {
         let tool: Tool = Tool::new(operation_name.clone(), description, schema);
         let character_count = tool_character_length(&tool);
         match character_count {
-            Ok(length) => tracing::info!(
+            Ok(length) => info!(
                 "Tool {} loaded with a character count of {}. Estimated tokens: {}",
                 operation_name,
                 length,
                 length / 4 // We don't know the tokenization algorithm, so we just use 4 characters per token as a rough estimate. https://docs.anthropic.com/en/docs/resources/glossary#tokens
             ),
-            Err(_) => tracing::info!(
+            Err(_) => info!(
                 "Tool {} loaded with an unknown character count",
                 operation_name
             ),
@@ -326,11 +326,8 @@ impl Operation {
                 lines.push(descriptions);
 
                 let mut tree_shaker = SchemaTreeShaker::new(graphql_schema);
-                tree_shaker.retain_operation(operation_def, document);
-                let shaken_schema = match tree_shaker.shaken() {
-                    Ok(schema) => schema,
-                    Err(schema) => schema.partial,
-                };
+                tree_shaker.retain_operation(operation_def, document, DepthLimit::Unlimited);
+                let shaken_schema = tree_shaker.shaken().unwrap_or_else(|schema| schema.partial);
 
                 let mut types = shaken_schema
                     .types

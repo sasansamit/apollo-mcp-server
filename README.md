@@ -1,6 +1,7 @@
 # Apollo MCP Server
 
-The MCP Server exposes a pre-defined set of GraphQL queries as MCP tools.
+An MCP Server to expose a pre-defined set of GraphQL operations as MCP tools. Optionally provides introspection
+tools to allow an LLM to generate and execute its own ad hoc operations.
 
 # Running the Example
 
@@ -215,7 +216,7 @@ To enable this mode, add `--introspect` to the MCP server command line.
 
 Two new tools will be exposed by the server:
 
-* `schema` - returns the GraphQL schema
+* `introspect` - returns information about GraphQL schema types
 * `execute` - executes an operation on the GraphQL endpoint
 
 The MCP client can then use these tools to provide schema information to the model, and allow the model to execute GraphQL operations based on that schema.
