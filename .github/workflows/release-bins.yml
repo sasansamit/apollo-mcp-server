@@ -1,0 +1,32 @@
+name: Build Release
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+jobs:
+  linux:
+    name: Release Linux Binaries
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: ./.github/shared/release.workflow.yml
+    with:
+      bundle: linux
+      runsOn: ubuntu-24.04
+    secrets: inherit
+
+  windows:
+    name: Release Windows Binaries
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    uses: ./.github/workflows/_release.yml
+    with:
+      bundle: windows
+      runsOn: ubuntu-24.04
+    secrets: inherit

@@ -46,6 +46,20 @@
         inherit crane;
         toolchain = nativeToolchain;
       };
+      mkReleaseBundle = platform: targets: let
+        bundleToolchain = p:
+          p.rust-bin.stable.latest.minimal.override {
+            inherit targets;
+          };
+        apollo-mcp-cross = unstable-pkgs.callPackage ./nix/apollo-mcp.nix {
+          inherit crane;
+          toolchain = bundleToolchain;
+        };
+      in
+        unstable-pkgs.symlinkJoin {
+          name = "${platform}-release-bundle";
+          paths = builtins.map (target: apollo-mcp-cross.packages.builder target) targets;
+        };
 
       # Supporting tools
       mcphost = pkgs.callPackage ./nix/mcphost.nix {};
@@ -98,62 +112,22 @@
         default = apollo-mcp;
         apollo-mcp = apollo-mcp-builder.packages.apollo-mcp;
 
-        crossBinaries = let
-          crossTargets = [
-            "aarch64-apple-darwin"
-            "aarch64-unknown-linux-gnu"
-            "aarch64-unknown-linux-musl"
-            "x86_64-apple-darwin"
-            "x86_64-pc-windows-msvc"
-            "x86_64-unknown-linux-gnu"
-            "x86_64-unknown-linux-musl"
-          ];
-          crossToolchain = p:
-            p.rust-bin.stable.latest.minimal.override {
-              # Pull in the various supported targets for cross compilation
-              targets = crossTargets;
-            };
-          apollo-mcp-cross = unstable-pkgs.callPackage ./nix/apollo-mcp.nix {
-            inherit crane;
-            toolchain = crossToolchain;
-          };
-
-          # Individual builds for each supported platform
-          linux-aarch64-gnu = apollo-mcp-cross.packages.builder "aarch64-unknown-linux-gnu";
-          linux-aarch64-musl = apollo-mcp-cross.packages.builder "aarch64-unknown-linux-musl";
-          linux-x86_64-gnu = apollo-mcp-cross.packages.builder "x86_64-unknown-linux-gnu";
-          linux-x86_64-musl = apollo-mcp-cross.packages.builder "x86_64-unknown-linux-musl";
-          linux = pkgs.runCommandLocal "linux-bundle" {} ''
-            mkdir -p $out/bin
-
-            cp ${linux-aarch64-gnu}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.aarch64-unknown-linux-gnu
-            cp ${linux-aarch64-musl}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.aarch64-unknown-linux-musl
-            cp ${linux-x86_64-gnu}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.x86_64-unknown-linux-gnu
-            cp ${linux-x86_64-musl}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.x86_64-unknown-linux-musl
-          '';
-
-          macos-aarch64 = apollo-mcp-cross.packages.builder "aarch64-apple-darwin";
-          macos-x86_64 = apollo-mcp-cross.packages.builder "x86_64-apple-darwin";
-          macos = pkgs.runCommandLocal "macos-bundle" {} ''
-            mkdir -p $out/bin
-            ${unstable-pkgs.lipo-go}/bin/lipo -create \
-                -output $out/bin/apollo-mcp-server.macos \
-                -arch arm64 ${macos-aarch64}/bin/apollo-mcp-server.lipo-apple-darwin
-                # TODO: macos-x86_64 seems to cause a bad relocation error in hyper
-                # -arch x86_64 ''${macos-x86_64}/bin/apollo-mcp-server
-
-            cp ${macos-aarch64}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.aarch64-apple-darwin
-            # TODO: macos-x86_64 seems to cause a bad relocation error in hyper
-            # cp ''${macos-aarch64}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.x86_64-apple-darwin
-          '';
-        in
-          unstable-pkgs.symlinkJoin {
-            name = "apollo-mcp-cross-binaries";
-            paths = [
-              linux
-              macos
-            ];
-          };
+        # Release bundles for each supported platform
+        # TODO: x86_64-apple-darwin causes a zig issue and needs an upstream fix from aarch64 to x86_64
+        darwin-release-bundle = mkReleaseBundle "darwin" [
+          "aarch64-apple-darwin"
+          "x86_64-apple-darwin"
+        ];
+        linux-release-bundle = mkReleaseBundle "linux" [
+          "aarch64-unknown-linux-gnu"
+          "aarch64-unknown-linux-musl"
+          "x86_64-unknown-linux-gnu"
+          "x86_64-unknown-linux-musl"
+        ];
+        windows-release-bundle = mkReleaseBundle "windows" [
+          "aarch64-pc-windows-gnullvm"
+          "x86_64-pc-windows-gnullvm"
+        ];
       };
 
       # TODO: This does not work on macOS without cross compiling, so maybe

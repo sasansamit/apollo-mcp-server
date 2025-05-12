@@ -1,4 +1,5 @@
 {
+  apple-sdk,
   cargo-zigbuild,
   crane,
   fetchzip,
@@ -6,8 +7,9 @@
   perl,
   pkg-config,
   pkgs,
-  toolchain,
+  rename,
   stdenv,
+  toolchain,
   zig,
 }: let
   graphqlFilter = path: _type: builtins.match ".*graphql$" path != null;
@@ -72,25 +74,6 @@ in {
     # Builder for apollo-mcp-server. Takes the rust target triple for specifying
     # the cross-compile target. Set the target to the same as the host for native builds.
     builder = target: let
-      # Use the same apple-sdk as cargo-zigbuild
-      apple-sdk = stdenv.mkDerivation {
-        pname = "apple-sdk";
-        version = "11.3";
-
-        src = fetchzip {
-          url = "https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz";
-          hash = "sha256-BoFWhRSHaD0j3dzDOFtGJ6DiRrdzMJhkjxztxCluFKo=";
-        };
-
-        phases = ["installPhase"];
-        installPhase = ''
-          mkdir -p $out
-          cp -r "$src"/* "$out"
-        '';
-
-        passthru.sdkroot = "${apple-sdk}";
-      };
-
       # Patch cargo-zigbuild until they fix missing MacOS arguments in the linker
       cargo-zigbuild-patched = cargo-zigbuild.overrideAttrs {
         patches = [./cargo-zigbuild.patch];
@@ -105,14 +88,14 @@ in {
       # Helper for generating a command using cargo-zigbuild and other shell-expanded
       # env vars.
       mkCmd = cmd:
-        builtins.concatStringsSep " " [
-          "SDKROOT=${apple-sdk.sdkroot}"
-          "CARGO_ZIGBUILD_CACHE_DIR=$TMP/.cache/cargo-zigbuild"
-          "ZIG_LOCAL_CACHE_DIR=$TMP/.cache/zig-local"
-          "ZIG_GLOBAL_CACHE_DIR=$TMP/.cache/zig-global"
+        builtins.concatStringsSep " " ((lib.optionals stdenv.isDarwin ["SDKROOT=${apple-sdk.sdkroot}"])
+          ++ [
+            "CARGO_ZIGBUILD_CACHE_DIR=$TMP/.cache/cargo-zigbuild"
+            "ZIG_LOCAL_CACHE_DIR=$TMP/.cache/zig-local"
+            "ZIG_GLOBAL_CACHE_DIR=$TMP/.cache/zig-global"
 
-          "${cargo-zigbuild-patched}/bin/cargo-zigbuild ${cmd}"
-        ];
+            "${cargo-zigbuild-patched}/bin/cargo-zigbuild ${cmd}"
+          ]);
     in
       craneLib.buildPackage (craneCommonArgs
         // {
@@ -136,6 +119,11 @@ in {
 
           # Make sure to compile it for the specified target
           CARGO_BUILD_TARGET = target;
+
+          # Rename the binaries so that they have the architecture in the suffix
+          postInstall = ''
+            ${rename}/bin/rename 's/$/.${target}/' $out/bin/*
+          '';
         });
   };
 }
