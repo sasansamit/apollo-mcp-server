@@ -28,6 +28,7 @@ jobs:
         uses: nix-community/cache-nix-action@v6
         with:
           primary-key: build-${{ runner.os }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'flake.nix', 'flake.lock', 'rust-toolchain.toml') }}
+          restore-prefixes-first-match: build-${{ runner.os }}-
           # We don't want to affect the cache when building the container
           purge: false
           save: false
@@ -75,6 +76,7 @@ jobs:
         uses: nix-community/cache-nix-action@v6
         with:
           primary-key: build-${{ runner.os }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'flake.nix', 'flake.lock', 'rust-toolchain.toml') }}
+          restore-prefixes-first-match: build-${{ runner.os }}-
           # We don't want to affect the cache when building the container
           purge: false
           save: false
