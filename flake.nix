@@ -172,7 +172,7 @@
           mtime = commitDate;
 
           contents = [
-            packages.apollo-mcp-server
+            packages.apollo-mcp
           ];
 
           config = {
