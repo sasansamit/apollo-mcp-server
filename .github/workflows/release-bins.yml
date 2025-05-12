@@ -49,10 +49,6 @@ jobs:
       - name: Build binaries
         run: nix build .#${{ matrix.bundle }}-release-bundle
 
-      - name: Sign binaries
-        if: runner.os == 'macOS'
-        run:
-
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
