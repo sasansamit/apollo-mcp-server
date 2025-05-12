@@ -164,7 +164,7 @@
         # format, so we need to drop out to date to do so.
         commitDate = pkgs.lib.readFile "${pkgs.runCommand "git-timestamp" {env.when = self.lastModified;} "echo -n `date -d @$when --iso-8601=seconds` > $out"}";
         builder = pkgs.dockerTools.streamLayeredImage {
-          name = "apollo-mcp";
+          name = "apollo-mcp-server";
           tag = "latest";
 
           # Use the latest commit time for reproducible builds
