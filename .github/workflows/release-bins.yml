@@ -18,9 +18,9 @@ jobs:
           - os: ubuntu-24.04
             bundle: windows
 
-          # Use an x86_64 mac to cross compile since zig seems to have a bug
-          # when cross-compiling from aarch64 to x86_64
-          - os: macos-13
+          # Apple SDK does not allow us to cross compile from non-apple-branded
+          # machines, so we run that bundle on a macOS runner
+          - os: macos-latest
             bundle: darwin
     runs-on: ${{ matrix.os }}
     permissions:

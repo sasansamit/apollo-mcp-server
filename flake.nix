@@ -113,10 +113,10 @@
         apollo-mcp = apollo-mcp-builder.packages.apollo-mcp;
 
         # Release bundles for each supported platform
-        # TODO: x86_64-apple-darwin causes a zig issue and needs an upstream fix from aarch64 to x86_64
+        # TODO: x86_64-apple-darwin causes a zig issue and needs an upstream fix
         darwin-release-bundle = mkReleaseBundle "darwin" [
           "aarch64-apple-darwin"
-          "x86_64-apple-darwin"
+          # "x86_64-apple-darwin"
         ];
         linux-release-bundle = mkReleaseBundle "linux" [
           "aarch64-unknown-linux-gnu"
