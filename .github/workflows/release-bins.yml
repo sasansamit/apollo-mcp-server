@@ -52,9 +52,9 @@ jobs:
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
-          files: result/bin/*
+          files: result/*
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: "result/bin/*"
+          subject-path: "result/*"
