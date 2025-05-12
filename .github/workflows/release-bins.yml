@@ -1,4 +1,4 @@
-name: Build Release
+name: Build Release Binaries
 on:
   push:
     tags:
@@ -12,7 +12,7 @@ jobs:
       packages: write
       attestations: write
       id-token: write
-    uses: ./.github/shared/release.workflow.yml
+    uses: ./.github/workflows/_release.yml
     with:
       bundle: linux
       runsOn: ubuntu-24.04
