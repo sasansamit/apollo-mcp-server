@@ -119,11 +119,6 @@ in {
 
           # Make sure to compile it for the specified target
           CARGO_BUILD_TARGET = target;
-
-          # Rename the binaries so that they have the architecture in the suffix
-          postInstall = ''
-            ${rename}/bin/rename 's/$/.${target}/' $out/bin/*
-          '';
         });
   };
 }

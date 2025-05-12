@@ -58,7 +58,15 @@
       in
         unstable-pkgs.symlinkJoin {
           name = "${platform}-release-bundle";
-          paths = builtins.map (target: apollo-mcp-cross.packages.builder target) targets;
+          paths = builtins.map (target: let
+            bins = apollo-mcp-cross.packages.builder target;
+          in
+            pkgs.runCommandLocal "${target}-bins" {} ''
+              mkdir -p $out
+              cd ${bins}/bin
+              ${pkgs.gnutar}/bin/tar -cf - ./* | ${pkgs.gzip}/bin/gzip -9 > $out/apollo-mcp.${target}.tar.gz
+            '')
+          targets;
         };
 
       # Supporting tools
