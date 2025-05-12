@@ -5,28 +5,56 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
-  linux:
-    name: Release Linux Binaries
-    permissions:
-      contents: read
-      packages: write
-      attestations: write
-      id-token: write
-    uses: ./.github/workflows/_release.yml
-    with:
-      bundle: linux
-      runsOn: ubuntu-24.04
-    secrets: inherit
+  build:
+    name: Release binaries
+    strategy:
+      matrix:
+        include:
+          # Linux compiles itself
+          - os: ubuntu-24.04
+            bundle: linux
 
-  windows:
-    name: Release Windows Binaries
+          # We can compile the windows target from linux
+          - os: ubuntu-24.04
+            bundle: windows
+
+          # Use an x86_64 mac to cross compile since zig seems to have a bug
+          # when cross-compiling from aarch64 to x86_64
+          - os: macos-13
+            bundle: darwin
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
       packages: write
       attestations: write
       id-token: write
-    uses: ./.github/workflows/_release.yml
-    with:
-      bundle: windows
-      runsOn: ubuntu-24.04
-    secrets: inherit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nixbuild/nix-quick-install-action@v30
+        with:
+          nix_conf: ${{ env.nix_conf }}
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: release-${{ runner.os }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'flake.nix', 'flake.lock', 'rust-toolchain.toml') }}
+          restore-prefixes-first-match: |
+            release-${{ runner.os }}-
+            build-${{ runner.os }}-
+          purge: true
+          purge-prefixes: release-${{ runner.os }}-
+          purge-created: 0
+          purge-primary-key: never
+          gc-max-store-size: 5G
+
+      - name: Build binaries
+        run: nix build .#${{ matrix.bundle }}-release-bundle
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: result/bin/*
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "result/bin/*"
