@@ -9,8 +9,45 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  release:
-    name: Release
+  # Cross compile binaries for all supported platforms
+  # TODO: x86_64-apple-darwin currently needs a fix in zig or hyper
+  binaries:
+    name: Release Binaries
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nixbuild/nix-quick-install-action@v30
+        with:
+          nix_conf: ${{ env.nix_conf }}
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          primary-key: build-${{ runner.os }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'flake.nix', 'flake.lock', 'rust-toolchain.toml') }}
+          # We don't want to affect the cache when building the container
+          purge: false
+          save: false
+
+      - name: Build the Binaries
+        run: nix build .#crossBinaries
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: result/bin/*
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "result/bin/*"
+
+  # Build a container for x86_64 and aarch64 linux
+  container:
+    name: Release Container
     strategy:
       matrix:
         os: ["ubuntu-24.04", "ubuntu-24.04-arm"]

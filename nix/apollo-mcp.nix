@@ -40,6 +40,11 @@ in {
   nativeDependencies = craneCommonArgs.nativeBuildInputs;
   dependencies = craneCommonArgs.buildInputs;
 
+  # Expose derivations that should be cached in CI
+  cache = [
+    cargoArtifacts
+  ];
+
   # Expose checks for the project used by the root nix flake
   checks = {
     clippy = craneLib.cargoClippy (craneCommonArgs

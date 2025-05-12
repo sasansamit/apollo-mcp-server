@@ -32,7 +32,7 @@
     nixpkgs,
     rust-overlay,
     unstable,
-  }:
+  } @ inputs:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = nixpkgs.legacyPackages.${system};
       unstable-pkgs = import unstable {
@@ -50,14 +50,20 @@
       # Supporting tools
       mcphost = pkgs.callPackage ./nix/mcphost.nix {};
       mcp-server-tools = pkgs.callPackage ./nix/mcp-server-tools {};
+
+      # CI options
+      garbageCollector = import "${inputs.cache-nix-action}/saveFromGC.nix" {
+        inherit pkgs inputs;
+        derivations = [mcphost] ++ apollo-mcp-builder.cache ++ mcp-server-tools;
+      };
     in rec {
       devShells.default = pkgs.mkShell {
         nativeBuildInputs = apollo-mcp-builder.nativeDependencies;
         buildInputs =
           [
             mcphost
-            (nativeToolchain unstable-pkgs)
           ]
+          ++ (nativeToolchain unstable-pkgs)
           ++ apollo-mcp-builder.dependencies
           ++ mcp-server-tools
           ++ (with pkgs; [
@@ -87,6 +93,8 @@
         // apollo-mcp-builder.checks;
 
       packages = rec {
+        inherit (garbageCollector) saveFromGC;
+
         default = apollo-mcp;
         apollo-mcp = apollo-mcp-builder.packages.apollo-mcp;
 
@@ -118,10 +126,10 @@
           linux = pkgs.runCommandLocal "linux-bundle" {} ''
             mkdir -p $out/bin
 
-            cp ${linux-aarch64-musl}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.linux-aarch64-musl
-            cp ${linux-aarch64-gnu}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.linux-aarch64-gnu
-            cp ${linux-x86_64-musl}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.linux-x86_64-musl
-            cp ${linux-x86_64-gnu}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.linux-x86_64-gnu
+            cp ${linux-aarch64-gnu}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.aarch64-unknown-linux-gnu
+            cp ${linux-aarch64-musl}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.aarch64-unknown-linux-musl
+            cp ${linux-x86_64-gnu}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.x86_64-unknown-linux-gnu
+            cp ${linux-x86_64-musl}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.x86_64-unknown-linux-musl
           '';
 
           macos-aarch64 = apollo-mcp-cross.packages.builder "aarch64-apple-darwin";
@@ -130,13 +138,13 @@
             mkdir -p $out/bin
             ${unstable-pkgs.lipo-go}/bin/lipo -create \
                 -output $out/bin/apollo-mcp-server.macos \
-                -arch arm64 ${macos-aarch64}/bin/apollo-mcp-server
+                -arch arm64 ${macos-aarch64}/bin/apollo-mcp-server.lipo-apple-darwin
                 # TODO: macos-x86_64 seems to cause a bad relocation error in hyper
                 # -arch x86_64 ''${macos-x86_64}/bin/apollo-mcp-server
 
-            cp ${macos-aarch64}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.macos-aarch64
+            cp ${macos-aarch64}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.aarch64-apple-darwin
             # TODO: macos-x86_64 seems to cause a bad relocation error in hyper
-            # cp ''${macos-aarch64}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.macos-x86_64
+            # cp ''${macos-aarch64}/bin/apollo-mcp-server $out/bin/apollo-mcp-server.x86_64-apple-darwin
           '';
         in
           unstable-pkgs.symlinkJoin {
