@@ -1,6 +1,6 @@
 # The Space Devs MCP Server
 
-This folder contains an example usage of the Apollo MCP server for [The Space Devs](https://thespacedevs.com/) APIs. We have a [hosted GraphQL endpoint](https://thespacedevs-production.up.railway.app/) that exposes The Space Devs Launch Library v2 REST APIs using Apollo Connectors. 
+This folder contains an example usage of the Apollo MCP server for [The Space Devs](https://thespacedevs.com/) APIs, a set of APIs that exposes spaceflight information. We have a [hosted GraphQL endpoint](https://thespacedevs-production.up.railway.app/) that exposes The Space Devs Launch Library v2 REST APIs using Apollo Connectors. 
 
 ## Setup
 
