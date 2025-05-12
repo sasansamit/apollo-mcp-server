@@ -62,8 +62,8 @@
         buildInputs =
           [
             mcphost
+            (nativeToolchain unstable-pkgs)
           ]
-          ++ (nativeToolchain unstable-pkgs)
           ++ apollo-mcp-builder.dependencies
           ++ mcp-server-tools
           ++ (with pkgs; [
