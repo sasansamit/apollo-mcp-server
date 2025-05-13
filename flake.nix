@@ -64,7 +64,7 @@
             pkgs.runCommandLocal "${target}-bins" {} ''
               mkdir -p $out
               cd ${bins}/bin
-              ${pkgs.gnutar}/bin/tar -cf - ./* | ${pkgs.gzip}/bin/gzip -9 > $out/apollo-mcp.${target}.tar.gz
+              ${pkgs.gnutar}/bin/tar -cf - ./* | ${pkgs.gzip}/bin/gzip -9 > $out/apollo-mcp-v${bins.version}-${target}.tar.gz
             '')
           targets;
         };
