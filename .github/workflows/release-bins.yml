@@ -36,12 +36,12 @@ jobs:
       - name: Restore and save Nix store
         uses: nix-community/cache-nix-action@v6
         with:
-          primary-key: release-${{ runner.os }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'flake.nix', 'flake.lock', 'rust-toolchain.toml') }}
+          primary-key: release-${{ matrix.bundle }}-${{ hashFiles('Cargo.lock', '**/Cargo.toml', 'flake.nix', 'flake.lock', 'rust-toolchain.toml') }}
           restore-prefixes-first-match: |
-            release-${{ runner.os }}-
+            release-${{ matrix.bundle }}-
             build-${{ runner.os }}-
           purge: true
-          purge-prefixes: release-${{ runner.os }}-
+          purge-prefixes: release-${{ matrix.bundle }}-
           purge-created: 0
           purge-primary-key: never
           gc-max-store-size: 5G
