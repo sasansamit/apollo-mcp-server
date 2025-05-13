@@ -22,11 +22,9 @@ jobs:
 
           # Apple SDK does not allow us to cross compile from non-apple-branded
           # machines, so we run that bundle on a macOS runner
-          # Note: We use macos-13 here since it is the latest version that runs
-          # on an x86_64-apple-darwin machine
-          - os: macos-13
+          - os: macos-latest
             bundle: darwin
-            targets: cross-aarch64-apple-darwin default
+            targets: cross-aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -57,12 +55,7 @@ jobs:
         run: |
           mkdir release
           for BUILD_TARGET in ${{ matrix.targets }}; do
-            # Hack for x86_64-apple-darwin since it doesn't yet work with cross compilation
-            if [ "$BUILD_TARGET" == "default" ]; then
-              TARGET="x86_64-apple-darwin"
-            else
-              TARGET=${BUILD_TARGET#"cross-"}
-            fi
+            TARGET=${BUILD_TARGET#"cross-"}
 
             echo "Scaffolding release for $TARGET..."
             mkdir -p "release/$TARGET/dist"
