@@ -23,6 +23,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
 
       # Extract needed info for use with the other steps
       - id: repo-meta
