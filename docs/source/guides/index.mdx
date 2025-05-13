@@ -128,18 +128,16 @@ If you register a persisted query with a specific client name instead of `null`,
 Use the `--header` option when running the MCP server to pass the header to the router. The default name of the header expected by the router is `apollographql-client-name`. To use a different header name, configure `telemetry.apollo.client_name_header` in router YAML configuration. 
 
 
-### From introspection
+### From schema introspection
 
-You can optionally enable support for allowing an AI model to introspect the schema and formulate its own queries. 
+For use cases where not all operations can be pre-defined, Apollo MCP Server supports tool creation based on graph introspection. This allows AI agents to explore a graph and execute operations dynamically.  
 
-To enable this introspection mode, run the MCP server with the `--introspect` option.
-
-Two new tools will be exposed by the server:
+To enable these schema aware tools, run the MCP server with the `--introspection` option, which exposes two new tools:
 
 * `schema` - returns the GraphQL schema
 * `execute` - executes an operation on the GraphQL endpoint
 
-The MCP client can then use these tools to provide schema information to the model, and allow the model to execute GraphQL operations based on that schema.
+The MCP client can use these tools to provide schema information to the model and its context window, and allow the model to execute GraphQL operations based on that schema.
 
 <Tip>
 
@@ -147,7 +145,7 @@ Use a [contract variant](/graphos/platform/schema-management/delivery/contracts/
 
 </Tip>
 
-### Adding context to tools
+### Documenting tools
 
 TODO
 
@@ -199,7 +197,6 @@ Starting MCP inspector...
 </ExpansionPanel>
 
 1. In a browser, go to the URL returned by Inspector, then click **Connect** and **List Tools**. You should see the tools for the operations you provided.
-
 
 ### Debug over SSE transport
 

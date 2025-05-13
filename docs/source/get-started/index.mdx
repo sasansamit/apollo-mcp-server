@@ -7,32 +7,45 @@ subtitle: Run Apollo MCP Server
 
 Let's run Apollo MCP Server for the first time. You will:
 - Understand an MCP server example.
-- Run an MCP server locally, using the example and Apollo Rover CLI.
-- Connect an MCP client and inspect and/or run the tools.
+- Run an MCP server for the example.
+- Connect MCP Inspector and inspect the tools.
+- Connect an MCP client and run the tools.
 
 ## Prerequisites
 
-- Install [Apollo Rover CLI](/rover/getting-started) v0.30 or later. 
 - Clone the [Apollo MCP Server repo](https://github.com/apollographql/apollo-mcp-server).
 
 ## Understand MCP server example
 
-This guide uses an MCP example from the Apollo MCP Server repo. The example uses APIs from [The Space Devs](https://thespacedevs.com/), and it defines a federated graph and the GraphQL operations of the graph to expose as MCP tools. It also has files for configuring MCP tools from reading persisted queries registered with the graph.
+This guide uses an MCP example from the Apollo MCP Server repo. The example uses APIs from [The Space Devs](https://thespacedevs.com/), and it defines a federated graph and the GraphQL operations of the graph to expose as MCP tools.
 
-Let's walk through the example files, located in the repo in `graphql/TheSpaceDevs`:
+Let's walk through the example files. They're located in the repo in `graphql/TheSpaceDevs/`:
 - `supergraph.yaml` is a [supergraph configuration file](/rover/commands/supergraphs#yaml-configuration-file) for the Rover CLI.
 - The `operations/` directory has `*.graphql`operations schema files. Each file defines a GraphQL operation on the graph, and Apollo MCP Server creates an MCP tool from each operation file it's given.
-- The `persisted_queries/` directory has a persisted queries manifest (PQM) file. It defines the operations that've been registered with the graph and that can be read by the MCP server to create corresponding tools.
+- The `persisted_queries/` directory has a persisted query manifest (PQM) file. It defines the operations that've been registered with the graph as persisted queries and that can be read and turned into tools by the MCP server.
 
 ## Run MCP server example
 
-You can run the Apollo MCP Server together with a graph in a local development environment with a single `rover dev` command.
+Choose one of the options for running an MCP example:
 
+- Running `rover dev` to start an MCP server using the SSE transport
+- Running a local binary of the MCP server using the stdio transport
+
+Both use [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) to connect to and inspect the running server.
+<br/>
+
+<Tabs>
+
+<Tab label="rover dev + SSE">
+
+You can run the Apollo MCP Server together with a graph in a local development environment with a single `rover dev` command. Rover starts an MCP Server that communicates via SSE transport.
+
+1. Install [Apollo Rover CLI](/rover/getting-started) v0.31 or later. 
 1. From the root directory of your local repo, run `rover dev` to start a local graph, using `--mcp*` options to start and configure an Apollo MCP Server.
 
     ```sh showLineNumbers=false
       rover dev --supergraph-config ./graphql/TheSpaceDevs/supergraph.yaml \
-      --mcp --mcp-port 5555 \
+      --mcp --mcp-port 5000 \
       --mcp-operations ./graphql/TheSpaceDevs/operations/ExploreCelestialBodies.graphql ./graphql/TheSpaceDevs/operations/GetAstronautDetails.graphql ./graphql/TheSpaceDevs/operations/GetAstronautsCurrentlyInSpace.graphql ./graphql/TheSpaceDevs/operations/SearchUpcomingLaunches.graphql
     ``` 
 
@@ -40,22 +53,17 @@ You can run the Apollo MCP Server together with a graph in a local development e
     - `--mcp-port` sets the port of the server's SSE transport 
     - `--mcp-operations` sets the list of operations
 
-## Inspect MCP server
+1. Start MCP Inspector, then open a browser and go to [`http://127.0.0.1:6274`](http://127.0.0.1:6274):
 
-The [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) is a tool for testing and debugging MCP servers. Let's use it to validate our running server.
-
-1. Install `npm`, if unavailable.
-1. Run the Inspector from a new terminal, then go to its returned URL (for example, [`http://127.0.0.1:6274`](http://127.0.0.1:6274)).
-
-    ```bash showLineNumbers=false
+    ```sh
     npx @modelcontextprotocol/inspector
     ```
 
-1. Fill in the details:
+1. Fill in the details in Inspector:
     - **Transport Type**: Select `SSE`
     - **URL**: Enter `http://localhost:5000/sse` (its port must match the `--mcp-port` of the server)
 
-1. Click **Connect**, then click **List Tool**. Your operations should now be listed.
+1. Click **Connect**, then click **List Tool**. Inspector should show the tools from your server.
 
     <img
       src="../images/mcp-getstarted-inspector.jpg"
@@ -64,18 +72,73 @@ The [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) is a t
       width="600"
     />
 
+</Tab>
+
+<Tab label="Local binary + stdio">
+
+You can run an Apollo MCP Server locally to communicate over stdio.
+
+1. Download the binary of the latest version of Apollo MCP Server. Add it to your path.
+1. Use MCP Inspector to run the Apollo MCP Server binary:
+
+    ```sh showLineNumbers=false
+    npx @modelcontextprotocol/inspector apollo-mcp-server \
+    --directory <absolute-path-to-MCP-example-dir>
+    --schema api.graphql \
+    --operations operations/ExploreCelestialBodies.graphql operations/GetAstronautDetails.graphql operations/GetAstronautsCurrentlyInSpace.graphql operations/SearchUpcomingLaunches.graphql \
+    --endpoint https://thespacedevs-production.up.railway.app/ 
+    ```
+1. Open a browser and go to the Inspector URL at [`http://127.0.0.1:6274`](http://127.0.0.1:6274).
+1. Fill in the details in Inspector:
+    - **Transport Type**: Select `STDIO`
+    - **Command**: Should be prepopulated with the command to run the MCP server
+
+1. Click **Connect**, then click **List Tool**. Inspector should show the tools from your server.
+
+    <img
+      src="../images/mcp-getstarted-inspector.jpg"
+      alt="MCP Inspector connected to running Apollo MCP Server"
+      class="screenshot"
+      width="600"
+    />
+
+</Tab>
+</Tabs>
 
 ## Connect an MCP client
 
-Connect an MCP client to your server and run its tools.
+### Claude for Desktop
 
-<Tabs>
+You can configure Claude Desktop to use the tools from your MCP server.
 
-<Tab label="Claude for Desktop">
+1. Open Claude's JSON config file, and add a configuration to connect to the MCP server. You can connect via stdio or SSE transport:
 
-1. Open Claude's JSON config file, and add a configuration to connect to the MCP server via SSE transport:
+    <CodeColumns cols={2}>
 
-    ```json 
+    ```json title="stdio"
+    {
+      "mcpServers": {
+        "thespacedevs": {
+          "command": "<absolute-path-to-MCP-server-binary>",
+          "args": [
+            "--directory",
+            "<absolute-path-to-MCP-example-directory>",
+            "--schema",
+            "api.graphql",
+            "--operations",
+            "operations/ExploreCelestialBodies.graphql",
+            "operations/GetAstronautDetails.graphql",
+            "operations/GetAstronautsCurrentlyInSpace.graphql",
+            "operations/SearchUpcomingLaunches.graphql",
+            "--endpoint",
+            "https://thespacedevs-production.up.railway.app/"
+          ]
+        }
+      }
+    }
+    ```
+
+    ```json title="SSE"
     {
       "mcpServers": {
         "thespacedevs": {
@@ -90,9 +153,13 @@ Connect an MCP client to your server and run its tools.
       }
     }
     ```
+
+    </CodeColumns>
+
 1. Restart Claude, then check that your server's tools are available from the input box.
 1. Ask a question that exercises the tools. 
 
-</Tab>
 
-</Tabs>
+## Next steps
+
+- Try creating tools from operations in persisted queries, via [persisted query manifests](/apollo-mcp-server/guides/#from-persisted-query-manifests) or [GraphOS](/apollo-mcp-server/guides/#from-graphos-managed-persisted-queries).
