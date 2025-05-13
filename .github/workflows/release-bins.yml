@@ -98,7 +98,7 @@ jobs:
           echo "|||||||||||||||||||||||||||||||||||||||||||||"
 
           # Create a temporary keychain
-          EPHEMERAL_KEYCHAIN=`mktemp`
+          EPHEMERAL_KEYCHAIN=`mktemp -d`
 
           echo "Creating keychain..."
           security create-keychain -p "${MACOS_KEYCHAIN_PASSWORD}" $KEYCHAIN_NAME
@@ -148,7 +148,7 @@ jobs:
             codesign -vvv --deep --strict "$BINARY_PATH"
 
             echo "> Zipping dist..."
-            TMP_DIST=`mktemp`
+            TMP_DIST=`mktemp -d`
             mkdir $TMP_DIST/dist
             cp "$BINARY_PATH" "$TMP_DIST/dist/"
             zip -r "$TMP_DIST/apollo-mcp-server-$VERSION.zip" "$TMP_DIST/dist"
