@@ -13,18 +13,12 @@ jobs:
           # Linux compiles itself
           - os: ubuntu-24.04
             bundle: linux
-            targets: |
-              cross-aarch64-unknown-linux-gnu
-              cross-aarch64-unknown-linux-musl
-              cross-x86_64-unknown-linux-gnu
-              cross-x86_64-unknown-linux-musl
+            targets: cross-aarch64-unknown-linux-gnu cross-aarch64-unknown-linux-musl cross-x86_64-unknown-linux-gnu cross-x86_64-unknown-linux-musl
 
           # We can compile the windows target from linux
           - os: ubuntu-24.04
             bundle: windows
-            targets: |
-              cross-aarch64-pc-windows-gnullvm
-              cross-x86_64-pc-windows-gnullvm
+            targets: cross-aarch64-pc-windows-gnullvm cross-x86_64-pc-windows-gnullvm
 
           # Apple SDK does not allow us to cross compile from non-apple-branded
           # machines, so we run that bundle on a macOS runner
@@ -32,9 +26,7 @@ jobs:
           # on an x86_64-apple-darwin machine
           - os: macos-13
             bundle: darwin
-            targets: |
-              cross-aarch64-apple-darwin
-              default
+            targets: cross-aarch64-apple-darwin default
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -64,7 +56,6 @@ jobs:
           mkdir release
           for BUILD_TARGET in "${{ matrix.targets }}"; do
             # Hack for x86_64-apple-darwin since it doesn't yet work with cross compilation
-            IFS=$'\n'
             if [ "$BUILD_TARGET" == "default" ]; then
               TARGET="x86_64-apple-darwin"
             else
