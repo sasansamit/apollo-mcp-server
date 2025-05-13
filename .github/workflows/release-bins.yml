@@ -64,6 +64,7 @@ jobs:
           mkdir release
           for BUILD_TARGET in "${{ matrix.targets }}"; do
             # Hack for x86_64-apple-darwin since it doesn't yet work with cross compilation
+            IFS=$'\n'
             if [ "$BUILD_TARGET" == "default" ]; then
               TARGET="x86_64-apple-darwin"
             else
