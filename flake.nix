@@ -46,28 +46,6 @@
         inherit crane;
         toolchain = nativeToolchain;
       };
-      mkReleaseBundle = platform: targets: let
-        bundleToolchain = p:
-          p.rust-bin.stable.latest.minimal.override {
-            inherit targets;
-          };
-        apollo-mcp-cross = unstable-pkgs.callPackage ./nix/apollo-mcp.nix {
-          inherit crane;
-          toolchain = bundleToolchain;
-        };
-      in
-        unstable-pkgs.symlinkJoin {
-          name = "${platform}-release-bundle";
-          paths = builtins.map (target: let
-            bins = apollo-mcp-cross.packages.builder target;
-          in
-            pkgs.runCommandLocal "${target}-bins" {} ''
-              mkdir -p $out
-              cd ${bins}/bin
-              ${pkgs.gnutar}/bin/tar -cf - ./* | ${pkgs.gzip}/bin/gzip -9 > $out/apollo-mcp-v${bins.version}-${target}.tar.gz
-            '')
-          targets;
-        };
 
       # Supporting tools
       mcphost = pkgs.callPackage ./nix/mcphost.nix {};
@@ -114,29 +92,45 @@
         }
         // apollo-mcp-builder.checks;
 
-      packages = rec {
-        inherit (garbageCollector) saveFromGC;
+      packages = let
+        # Cross targets for supported architectures
+        cross = let
+          # Note: x86_64-apple-darwin doesn't yet work with zig due to an upstream bug
+          supportedTargets = [
+            "aarch64-apple-darwin"
+            "aarch64-pc-windows-gnullvm"
+            "aarch64-unknown-linux-gnu"
+            "aarch64-unknown-linux-musl"
+            "x86_64-pc-windows-gnullvm"
+            "x86_64-unknown-linux-gnu"
+            "x86_64-unknown-linux-musl"
+          ];
 
-        default = apollo-mcp;
-        apollo-mcp = apollo-mcp-builder.packages.apollo-mcp;
+          crossBuild = target: let
+            crossToolchain = p:
+              p.rust-bin.stable.latest.minimal.override {
+                targets = [target];
+              };
+            apollo-mcp-cross = unstable-pkgs.callPackage ./nix/apollo-mcp.nix {
+              inherit crane;
+              toolchain = crossToolchain;
+            };
+          in
+            apollo-mcp-cross.packages.builder target;
+        in
+          builtins.listToAttrs (builtins.map (target: {
+              name = "cross-${target}";
+              value = crossBuild target;
+            })
+            supportedTargets);
+      in
+        rec {
+          inherit (garbageCollector) saveFromGC;
 
-        # Release bundles for each supported platform
-        # TODO: x86_64-apple-darwin causes a zig issue and needs an upstream fix
-        darwin-release-bundle = mkReleaseBundle "darwin" [
-          "aarch64-apple-darwin"
-          # "x86_64-apple-darwin"
-        ];
-        linux-release-bundle = mkReleaseBundle "linux" [
-          "aarch64-unknown-linux-gnu"
-          "aarch64-unknown-linux-musl"
-          "x86_64-unknown-linux-gnu"
-          "x86_64-unknown-linux-musl"
-        ];
-        windows-release-bundle = mkReleaseBundle "windows" [
-          "aarch64-pc-windows-gnullvm"
-          "x86_64-pc-windows-gnullvm"
-        ];
-      };
+          default = apollo-mcp;
+          apollo-mcp = apollo-mcp-builder.packages.apollo-mcp;
+        }
+        // cross;
 
       # TODO: This does not work on macOS without cross compiling, so maybe
       # we need to disable flake-utils and manually specify the supported
