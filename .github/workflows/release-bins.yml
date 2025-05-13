@@ -84,7 +84,7 @@ jobs:
 
           KEYCHAIN_NAME: "apollo-mcp-server-keychain"
           ENTITLEMENTS_PATH: "macos-entitlements.plist"
-          VERSION: ${{ github.ref }}
+          VERSION: ${{ github.ref_name }}
         run: |
           echo "Pre-check: Valid Codesigning Identify"
           security find-identity -v -p codesigning
@@ -168,7 +168,7 @@ jobs:
 
       - name: Create release bundles
         env:
-          VERSION: ${{ github.ref }}
+          VERSION: ${{ github.ref_name }}
         run: |
           mkdir artifacts
           for RELEASE in release/*/; do
