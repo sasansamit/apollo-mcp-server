@@ -9,10 +9,10 @@ This feature is [experimental](/graphos/resources/feature-launch-stages#experime
 </ExperimentalFeature>
 
 A typical workflow for developing with Apollo MCP Server:
-1. Download (or build) an MCP server binary or container.
-1. Set up the graph that the MCP server sits in front of.
+1. Download (or build) an MCP Server binary.
+1. Set up the graph that the MCP Server sits in front of.
 1. Define the GraphQL operations to expose as MCP tools.
-1. Configure and run your MCP server.
+1. Configure and run your MCP Server.
 1. Connect an MCP client and run the tools.
 
 ## How to get Apollo MCP Server
@@ -84,19 +84,19 @@ query GetAllWeatherData($coordinate: InputCoordinate!, $state: String!) {
 
 </CodeColumns>
 
-The `--operation` option of the MCP server provides it with a list of operation files. For each operation file you provide, the MCP server creates an MCP tool that calls the corresponding GraphQL operation. 
+The `--operation` option of the MCP Server provides it with a list of operation files. For each operation file you provide, the MCP Server creates an MCP tool that calls the corresponding GraphQL operation. 
 
 ### From persisted query manifests
 
 Apollo MCP Server supports reading GraphQL operations from Apollo-formatted [persisted query manifest](/graphos/platform/security/persisted-queries#manifest-format) files.
 
-You can set the persisted query manifest file for the MCP server by using the `--manifest` option. The MCP server supports hot reloading of persisted query manifests, so changes to manifests are applied without restarting.
+You can set the persisted query manifest file for the MCP Server by using the `--manifest` option. The MCP Server supports hot reloading of persisted query manifests, so changes to manifests are applied without restarting.
 
 An example manifest is available in the [GitHub repo](https://github.com/apollographql/apollo-mcp-server/tree/main/graphql/weather/persisted_queries).
 
 <ExpansionPanel title="Example command using --manifest">
 
-From the root of a local MCP server repo, run the `apollo-mcp-server` binary with the example persisted query manifest, `graphql/weather/persisted_queries/apollo.json`:
+From the root of a local MCP Server repo, run the `apollo-mcp-server` binary with the example persisted query manifest, `graphql/weather/persisted_queries/apollo.json`:
 
 ```sh showLineNumbers=false
 apollo-mcp-server \
@@ -110,7 +110,7 @@ apollo-mcp-server \
 
 ### From GraphOS-managed persisted queries
 
-For graphs managed by GraphOS, Apollo MCP Server can get operations by reading persisted queries from GraphOS. The MCP server uses Apollo Uplink to access the persisted queries.
+For graphs managed by GraphOS, Apollo MCP Server can get operations by reading persisted queries from GraphOS. The MCP Server uses Apollo Uplink to access the persisted queries.
 
 To use GraphOS persisted queries, you must:
 - Set `APOLLO_GRAPH_REF` and `APOLLO_KEY` environment variables for a GraphOS graph
@@ -131,18 +131,18 @@ apollo-mcp-server \
   --uplink
 ```
 
-The MCP server supports hot reloading of GraphOS-managed persisted queries, so it can automatically pick up changes from GraphOS without restarting.
+The MCP Server supports hot reloading of GraphOS-managed persisted queries, so it can automatically pick up changes from GraphOS without restarting.
 
-If you register a persisted query with a specific client name instead of `null`, you must configure the MCP server to send the necessary header indicating the client name to the router. 
+If you register a persisted query with a specific client name instead of `null`, you must configure the MCP Server to send the necessary header indicating the client name to the router. 
 
-Use the `--header` option when running the MCP server to pass the header to the router. The default name of the header expected by the router is `apollographql-client-name`. To use a different header name, configure `telemetry.apollo.client_name_header` in router YAML configuration. 
+Use the `--header` option when running the MCP Server to pass the header to the router. The default name of the header expected by the router is `apollographql-client-name`. To use a different header name, configure `telemetry.apollo.client_name_header` in router YAML configuration. 
 
 
 ### From schema introspection
 
 For use cases where not all operations can be pre-defined, Apollo MCP Server supports tool creation based on introspection of the graph schema. This allows AI agents to explore a graph and execute operations dynamically.  
 
-To enable these schema-aware tools, run the MCP server with the `--introspection` option, which exposes two new tools:
+To enable these schema-aware tools, run the MCP Server with the `--introspection` option, which exposes two new tools:
 
 * `schema` - returns the GraphQL schema
 * `execute` - executes an operation on the GraphQL endpoint
@@ -165,7 +165,7 @@ Apollo MCP Server is available as a standalone docker container. Container image
 
 By default, the container expects all schema and operation files to be present in the `/data` folder within the container.
 
-An example `docker run` command that runs the MCP server for the weather example:
+An example `docker run` command that runs the MCP Server for the weather example:
 
 ```sh
 docker run \
@@ -187,7 +187,7 @@ docker run \
 
 You can inspect a local Apollo MCP Server by running it with MCP Inspector. 
 
-1. Run the MCP server with Inspector:
+1. Run the MCP Server with Inspector:
 
 ```sh
 npx @modelcontextprotocol/inspector \
@@ -210,9 +210,9 @@ Starting MCP inspector...
 
 ### Debug over SSE transport
 
-When running the MCP server over SSE transport, you can run MCP Inspector with the SSE transport.
+When running the MCP Server over SSE transport, you can run MCP Inspector with the SSE transport.
 
-1. Start the MCP server in SEE mode:
+1. Start the MCP Server in SSE mode:
 
 ```sh
 target/debug/apollo-mcp-server \

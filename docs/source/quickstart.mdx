@@ -10,8 +10,8 @@ This feature is [experimental](/graphos/resources/feature-launch-stages#experime
 </ExperimentalFeature>
 
 Let's run Apollo MCP Server for the first time. You will:
-- Understand an MCP server example.
-- Run an MCP server for the example.
+- Understand an MCP Server example.
+- Run an MCP Server for the example.
 - Connect an MCP client and run the tools.
 
 <OdysseyCallout>
@@ -24,21 +24,21 @@ If you learn best with videos and exercises, this [interactive course](https://w
 
 - Clone the [Apollo MCP Server repo](https://github.com/apollographql/apollo-mcp-server).
 
-## Step 1: Understand MCP server example
+## Step 1: Understand MCP Server example
 
 This guide uses an MCP example from the Apollo MCP Server repo. The example uses APIs from [The Space Devs](https://thespacedevs.com/), and it defines a federated graph and the GraphQL operations of the graph to expose as MCP tools.
 
 Let's walk through the example files. They're located in the repo in `graphql/TheSpaceDevs/`:
 - `supergraph.yaml` is a [supergraph configuration file](/rover/commands/supergraphs#yaml-configuration-file) for the Rover CLI.
 - The `operations/` directory has `*.graphql`operations schema files. Each file defines a GraphQL operation on the graph, and Apollo MCP Server creates an MCP tool from each operation file it's given.
-- The `persisted_queries/` directory has a persisted query manifest (PQM) file. It defines the operations that've been registered with the graph as persisted queries and that can be read and turned into tools by the MCP server.
+- The `persisted_queries/` directory has a persisted query manifest (PQM) file. It defines the operations that've been registered with the graph as persisted queries and that can be read and turned into tools by the MCP Server.
 
-## Step 2: Run MCP server example
+## Step 2: Run MCP Server example
 
 Choose one of the options for running an MCP example:
 
-- Running `rover dev` to start an MCP server using the SSE transport
-- Running a local binary of the MCP server using the stdio transport
+- Running `rover dev` to start an MCP Server using the SSE transport
+- Running a local binary of the MCP Server using the stdio transport
 
 Both use [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) to connect to and inspect the running server.
 <br/>
@@ -58,7 +58,7 @@ You can run the Apollo MCP Server together with a graph in a local development e
       --mcp-operations ./graphql/TheSpaceDevs/operations/ExploreCelestialBodies.graphql ./graphql/TheSpaceDevs/operations/GetAstronautDetails.graphql ./graphql/TheSpaceDevs/operations/GetAstronautsCurrentlyInSpace.graphql ./graphql/TheSpaceDevs/operations/SearchUpcomingLaunches.graphql
     ``` 
 
-    - `--mcp` starts an Apollo MCP server
+    - `--mcp` starts an Apollo MCP Server
     - `--mcp-port` sets the port of the server's SSE transport 
     - `--mcp-operations` sets the list of operations
 
@@ -100,7 +100,7 @@ You can run an Apollo MCP Server locally to communicate over stdio.
 1. Open a browser and go to the Inspector URL at [`http://127.0.0.1:6274`](http://127.0.0.1:6274).
 1. Fill in the details in Inspector:
     - **Transport Type**: Select `STDIO`
-    - **Command**: Should be prepopulated with the command to run the MCP server
+    - **Command**: Should be prepopulated with the command to run the MCP Server
 
 1. Click **Connect**, then click **List Tool**. Inspector should show the tools from your server.
 
@@ -116,9 +116,9 @@ You can run an Apollo MCP Server locally to communicate over stdio.
 
 ## Step 3: Connect an MCP client
 
-This quickstart using Claude Desktop as the MCP client. Configure Claude Desktop to use the tools from your MCP server with these steps:
+This quickstart using Claude Desktop as the MCP client. Configure Claude Desktop to use the tools from your MCP Server with these steps:
 
-1. Open Claude's JSON config file, and add a configuration to connect to the MCP server. You can connect via stdio or SSE transport:
+1. Open Claude's JSON config file, and add a configuration to connect to the MCP Server. You can connect via stdio or SSE transport:
 
     <CodeColumns cols={2}>
 
