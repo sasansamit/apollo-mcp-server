@@ -47,7 +47,7 @@ The `--schema` option provides the [API schema](/graphos/schema-design/federated
 
 ## Define GraphQL operations for tools
 
-You can manually define the GraphQL operations that are exposed by Apollo MCP Server as MCP tools. These operations can be defined by:
+You can manually define the GraphQL operations that are exposed by Apollo MCP Server as MCP tools. You can define these operations using:
 
 - Operation files
 - Persisted query manifests
@@ -88,7 +88,7 @@ The `--operation` option of the MCP server provides it with a list of operation 
 
 ### From persisted query manifests
 
-Apollo MCP Server supports reading GraphQL operations from Apollo-formatted [persisted query manifest](https://www.apollographql.com/docs/graphos/platform/security/persisted-queries#manifest-format) files.
+Apollo MCP Server supports reading GraphQL operations from Apollo-formatted [persisted query manifest](/graphos/platform/security/persisted-queries#manifest-format) files.
 
 You can set the persisted query manifest file for the MCP server by using the `--manifest` option. The MCP server supports hot reloading of persisted query manifests, so changes to manifests are applied without restarting.
 
@@ -118,7 +118,7 @@ To use GraphOS persisted queries, you must:
 
 <Tip>
 
-Use a [contract variant](/graphos/platform/schema-management/delivery/contracts/overview) with a persisted query list associated with that variant, so you can control what AI can consume from your graph. [Learn more](/apollo-mcp-server/best-practices#use-contract-variants-to-control-ai-access-to-graphs)
+Use a [contract variant](/graphos/platform/schema-management/delivery/contracts/overview) with a persisted query list associated with that variant, so you can control what AI can consume from your graph. [Learn more](/apollo-mcp-server/best-practices#use-contract-variants-to-control-ai-access-to-graphs).
 
 </Tip>
 
@@ -154,10 +154,10 @@ The MCP client can use these tools to provide schema information to the model an
 Use a [contract variant](/graphos/platform/schema-management/delivery/contracts/overview) so you can control the parts of your graph that AI can introspect. [Learn more](/apollo-mcp-server/best-practices#use-contract-variants-to-control-ai-access-to-graphs)
 
 </Tip>
+{/* 
+### Documenting tools
 
-{/* ### Documenting tools
-
-TODO */}
+TODO
 
 ## Deploying a container
 
@@ -177,7 +177,7 @@ docker run \
   --sse-port 5000 \
   -s api.graphql \
   -o operations/forecast.graphql operations/alerts.graphql operations/all.graphql
-```
+``` */}
 
 ## Debugging with MCP Inspector
 

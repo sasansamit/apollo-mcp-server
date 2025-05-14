@@ -12,7 +12,6 @@ This feature is [experimental](/graphos/resources/feature-launch-stages#experime
 Let's run Apollo MCP Server for the first time. You will:
 - Understand an MCP server example.
 - Run an MCP server for the example.
-- Connect MCP Inspector and inspect the tools.
 - Connect an MCP client and run the tools.
 
 <OdysseyCallout>
@@ -25,7 +24,7 @@ If you learn best with videos and exercises, this [interactive course](https://w
 
 - Clone the [Apollo MCP Server repo](https://github.com/apollographql/apollo-mcp-server).
 
-## Understand MCP server example
+## Step 1: Understand MCP server example
 
 This guide uses an MCP example from the Apollo MCP Server repo. The example uses APIs from [The Space Devs](https://thespacedevs.com/), and it defines a federated graph and the GraphQL operations of the graph to expose as MCP tools.
 
@@ -34,7 +33,7 @@ Let's walk through the example files. They're located in the repo in `graphql/Th
 - The `operations/` directory has `*.graphql`operations schema files. Each file defines a GraphQL operation on the graph, and Apollo MCP Server creates an MCP tool from each operation file it's given.
 - The `persisted_queries/` directory has a persisted query manifest (PQM) file. It defines the operations that've been registered with the graph as persisted queries and that can be read and turned into tools by the MCP server.
 
-## Run MCP server example
+## Step 2: Run MCP server example
 
 Choose one of the options for running an MCP example:
 
@@ -115,11 +114,9 @@ You can run an Apollo MCP Server locally to communicate over stdio.
 </Tab>
 </Tabs>
 
-## Connect an MCP client
+## Step 3: Connect an MCP client
 
-### Claude for Desktop
-
-You can configure Claude Desktop to use the tools from your MCP server.
+This quickstart using Claude Desktop as the MCP client. Configure Claude Desktop to use the tools from your MCP server with these steps:
 
 1. Open Claude's JSON config file, and add a configuration to connect to the MCP server. You can connect via stdio or SSE transport:
 
@@ -168,13 +165,9 @@ You can configure Claude Desktop to use the tools from your MCP server.
 
 1. Restart Claude, then check that your server's tools are available from the input box.
 
+That's it! You've hooked up the Apollo MCP Server to Claude and can now use the MCP Server's tools in Claude.
+
 
 ## Next steps
 
-<OdysseyCallout>
-
-Get more practice with using AI and Apollo with our [interactive tutorials](https://www.apollographql.com/tutorials/browse/?categories=AI).
-
-</OdysseyCallout>
-
-- Try creating tools from operations in persisted queries, via [persisted query manifests](/apollo-mcp-server/guides/#from-persisted-query-manifests) or [GraphOS](/apollo-mcp-server/guides/#from-graphos-managed-persisted-queries).
+See the [user guide](/apollo-mcp-server/guides) to learn how to create tools from persisted queries with [persisted query manifests](/apollo-mcp-server/guides/#from-persisted-query-manifests) or [GraphOS](/apollo-mcp-server/guides/#from-graphos-managed-persisted-queries).
