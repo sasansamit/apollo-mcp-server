@@ -175,7 +175,7 @@ jobs:
             RENAMED=${RENAMED/aarch64-pc-windows-gnullvm/aarch64-pc-windows-msvc}
 
             echo "Creating an artifact for $RELEASE"
-            tar -C release/$RELEASE -cf - dist/ | gzip -9 > artifacts/apollo-mcp-server-$VERSION-RENAMED.tar.gz
+            tar -C release/$RELEASE -cf - dist/ | gzip -9 > artifacts/apollo-mcp-server-$VERSION-$RENAMED.tar.gz
           done
 
       - name: Upload release artifacts
