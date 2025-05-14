@@ -10,6 +10,46 @@ This feature is [experimental](/graphos/resources/feature-launch-stages#experime
 
 </ExperimentalFeature>
 
+## Installation
+
+### Linux / MacOS installer
+
+To install or upgrade to the **latest release** of Apollo MCP Server:
+
+```sh showLineNumbers=false
+curl -sSL https://mcp.apollo.dev/download/nix/latest | sh
+```
+
+To install or upgrade to a **specific version** of Apollo MCP Server (recommended for CI environments to ensure predictable behavior):
+
+```bash
+# Note the `v` prefixing the version number
+curl -sSL https://mcp.apollo.dev/download/nix/v0.1.0 | sh
+```
+
+If your machine doesn't have the `curl` command, you can get the latest version from the [`curl` downloads page](https://curl.se/download.html).
+
+<Note>
+
+These installation methods don't support Intel Macs. Support is on the roadmap.
+
+</Note>
+
+### Windows PowerShell installer
+
+To install or upgrade to the **latest release** of Apollo MCP Server:
+
+```bash
+iwr 'https://mcp.apollo.dev/win/latest' | iex
+```
+
+To install or upgrade to a **specific version** of Apollo MCP Server (recommended for CI environments to ensure predictable behavior):
+
+```bash
+# Note the `v` prefixing the version number
+iwr 'https://mcp.apollo.dev/win/v0.1.0' | iex
+```
+
 ## Usage
 
 ```sh showLineNumbers=false
@@ -51,5 +91,4 @@ The mapping of `rover dev` options to MCP server options:
 | `--mcp-operations [<OPERATIONS>...]` |  `-o, --operations [<OPERATIONS>...]` |
 | `--mcp-header <HEADERS>` | `--header <HEADERS>`   |
 | `--mcp-manifest <MANIFEST>` |  `--manifest <MANIFEST>`  |
-
 
