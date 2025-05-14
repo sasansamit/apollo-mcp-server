@@ -4,13 +4,14 @@ title: Apollo MCP Server User Guide
 
 <ExperimentalFeature />
 
-A typical workflow for Apollo MCP Server:
-1. Download or build Apollo MCP Server.
+A typical workflow for developing with Apollo MCP Server:
+1. Download (or build) an MCP server binary or container.
+1. Set up the graph that the MCP server sits in front of.
 1. Define the GraphQL operations to expose as MCP tools.
-1. Configure and deploy your MCP server.
-1. Connect your MCP client and use the tools.
+1. Configure and run your MCP server.
+1. Connect an MCP client and run the tools.
 
-## Get server
+## How to get Apollo MCP Server
 
 ### Download binary
 
@@ -34,6 +35,11 @@ You can build an Apollo MCP Server binary from its [source repo](https://github.
 
 TODO
 
+## Set up graph
+
+An Apollo MCP Server must know the GraphQL API of the graph it supports. Thus, you must provide the `--schema` option when running the server. 
+
+The `--schema` option provides the [API schema](/graphos/schema-design/federated-schemas/schema-types#api-schema) of the graph to the server.
 
 ## Define GraphQL operations for tools
 
@@ -130,9 +136,9 @@ Use the `--header` option when running the MCP server to pass the header to the 
 
 ### From schema introspection
 
-For use cases where not all operations can be pre-defined, Apollo MCP Server supports tool creation based on graph introspection. This allows AI agents to explore a graph and execute operations dynamically.  
+For use cases where not all operations can be pre-defined, Apollo MCP Server supports tool creation based on introspection of the graph schema. This allows AI agents to explore a graph and execute operations dynamically.  
 
-To enable these schema aware tools, run the MCP server with the `--introspection` option, which exposes two new tools:
+To enable these schema-aware tools, run the MCP server with the `--introspection` option, which exposes two new tools:
 
 * `schema` - returns the GraphQL schema
 * `execute` - executes an operation on the GraphQL endpoint
