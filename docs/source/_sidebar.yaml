@@ -7,8 +7,8 @@ switcher:
 items:
   - label: "Welcome"
     href: "."
-  - label: "Get Started"
-    href: "./get-started"
+  - label: "Quickstart"
+    href: "./quickstart"
   - label: "User Guide"
     href: ./guides
   - label: "Command Reference"
