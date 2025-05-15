@@ -17,23 +17,43 @@ A typical workflow for developing with Apollo MCP Server:
 
 ## How to get Apollo MCP Server
 
-### Download binary
+### Linux / MacOS installer
 
-Download the binary of the [latest Apollo MCP Server release from GitHub](https://github.com/apollographql/apollo-mcp-server/releases/latest).
+To install or upgrade to the **latest release** of Apollo MCP Server:
 
-### Build binary from source
+```sh showLineNumbers=false
+curl -sSL https://mcp.apollo.dev/download/nix/latest | sh
+```
 
-You can build an Apollo MCP Server binary from its [source repo](https://github.com/apollographql/apollo-mcp-server).
+To install or upgrade to a **specific version** of Apollo MCP Server (recommended for CI environments to ensure predictable behavior):
 
-1. First install [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html#install-rust-and-cargo).
+```bash
+# Note the `v` prefixing the version number
+curl -sSL https://mcp.apollo.dev/download/nix/v0.1.0 | sh
+```
 
-1. In the root directory of your repo, run the build command:
+If your machine doesn't have the `curl` command, you can get the latest version from the [`curl` downloads page](https://curl.se/download.html).
 
-    ```sh showLineNumbers=false
-    cargo build
-    ```
+<Note>
 
-    The binary will be built in `target/debug/apollo-mcp-server`.
+These installation methods don't support Intel Macs. Support is on the roadmap.
+
+</Note>
+
+### Windows PowerShell installer
+
+To install or upgrade to the **latest release** of Apollo MCP Server:
+
+```bash
+iwr 'https://mcp.apollo.dev/download/win/latest' | iex
+```
+
+To install or upgrade to a **specific version** of Apollo MCP Server (recommended for CI environments to ensure predictable behavior):
+
+```bash
+# Note the `v` prefixing the version number
+iwr 'https://mcp.apollo.dev/download/win/v0.1.0' | iex
+```
 
 {/* ### Download container image
 
