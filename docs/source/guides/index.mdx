@@ -144,7 +144,7 @@ For use cases where not all operations can be pre-defined, Apollo MCP Server sup
 
 To enable these schema-aware tools, run the MCP Server with the `--introspection` option, which exposes two new tools:
 
-* `schema` - returns the GraphQL schema
+* `introspect` - returns information about schema types
 * `execute` - executes an operation on the GraphQL endpoint
 
 The MCP client can use these tools to provide schema information to the model and its context window, and allow the model to execute GraphQL operations based on that schema.

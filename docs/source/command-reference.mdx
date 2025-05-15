@@ -40,20 +40,20 @@ These installation methods don't support Intel Macs. Support is on the roadmap.
 To install or upgrade to the **latest release** of Apollo MCP Server:
 
 ```bash
-iwr 'https://mcp.apollo.dev/win/latest' | iex
+iwr 'https://mcp.apollo.dev/download/win/latest' | iex
 ```
 
 To install or upgrade to a **specific version** of Apollo MCP Server (recommended for CI environments to ensure predictable behavior):
 
 ```bash
 # Note the `v` prefixing the version number
-iwr 'https://mcp.apollo.dev/win/v0.1.0' | iex
+iwr 'https://mcp.apollo.dev/download/win/v0.1.0' | iex
 ```
 
 ## Usage
 
 ```sh showLineNumbers=false
-apollo-mcp-server [OPTIONS] --directory <DIRECTORY> --schema <SCHEMA>
+apollo-mcp-server [OPTIONS] --directory <DIRECTORY>
 ```
 
 ## Options
@@ -61,7 +61,7 @@ apollo-mcp-server [OPTIONS] --directory <DIRECTORY> --schema <SCHEMA>
 | Option                                     | Description                                                                                                                                                                                                                               |
 | :-------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-d, --directory <DIRECTORY>`                       | The working directory to use. **Required**                                                                                                                                                                                                            |
-| `-s, --schema <SCHEMA>`                             | The path to the GraphQL API schema file. **Required**                                                                                                                                                                                                  |
+| `-s, --schema <SCHEMA>`                             | The path to the GraphQL API schema file.                                                                                                                                                                                   |
 | `-c, --custom-scalars-config <CUSTOM_SCALARS_CONFIG>` | The path to the GraphQL custom_scalars_config file. [Learn more](/apollo-mcp-server/guides/#custom-scalars).                                                                                                                                                                                   |
 | `-e, --endpoint <ENDPOINT>`                         | The GraphQL endpoint the server will invoke.<br />[default: `http://127.0.0.1:4000`]                                                                                                                                                         |
 | `--header <HEADERS>`                                | Headers to send to the endpoint.                                                                                                                                                                                                          |
@@ -84,9 +84,8 @@ The mapping of `rover dev` options to MCP Server options:
 
 | `rover dev` option                                     | Equivalent MCP Server option                                                                                                                                                                                                                                |
 | :-------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--mcp-port <PORT>`  |  `--sse-port <PORT>` |
+| `--mcp-sse-port <PORT>`  |  `--sse-port <PORT>` |
 | `--mcp-introspection` | `-i, --introspection`  |
-| `--mcp-explorer` |  `-x, --explorer`  |
 | `--mcp-uplink` |  `-u, --uplink` |
 | `--mcp-operations [<OPERATIONS>...]` |  `-o, --operations [<OPERATIONS>...]` |
 | `--mcp-header <HEADERS>` | `--header <HEADERS>`   |
