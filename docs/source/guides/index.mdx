@@ -61,9 +61,7 @@ TODO */}
 
 ## Set up graph
 
-An Apollo MCP Server must know the GraphQL API of the graph it supports. Thus, you must provide the `--schema` option when running the server. 
-
-The `--schema` option provides the [API schema](/graphos/schema-design/federated-schemas/schema-types#api-schema) of the graph to the server.
+An Apollo MCP Server must know the schema of GraphQL API it supports. You can use either [the `--schema` or `--uplink` option](/apollo-mcp-server/command-reference#options) to provide the schema. If using `--schema` option, it can be either an API or supergraph schema.
 
 ## Define GraphQL operations for tools
 
