@@ -7,13 +7,15 @@ switcher:
 items:
   - label: "Welcome"
     href: "."
-  - label: "Get Started"
-    href: "./get-started"
-  - label: "Features"
-    href: ./features
+  - label: "Quickstart"
+    href: "./quickstart"
+  - label: "User Guide"
+    href: ./guides
   - label: "Command Reference"
     href: "./command-reference"
   - label: "Best Practices"
     href: "./best-practices"
+  - label: "Licensing"
+    href: "./licensing"
   - label: "Limitations"
     href: "./limitations"
