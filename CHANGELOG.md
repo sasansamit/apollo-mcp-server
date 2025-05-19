@@ -19,7 +19,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Add an optional `--sse-address` argument to set the bind address of the MCP server. Defaults to 127.0.0.1. (#63)
 
 ### 🐛 Fixes
-- Fixed PowerShell script #55
+- Fixed PowerShell script (#55)
+- Log to stdout, not stderr (#59)
 
 ## [0.1.0] - 2025-05-15
 
