@@ -68,13 +68,6 @@ impl DepthLimit {
             DepthLimit::Limited(depth) => DepthLimit::Limited(depth - 1),
         }
     }
-
-    pub fn is_unlimited(&self) -> bool {
-        match self {
-            DepthLimit::Unlimited => true,
-            DepthLimit::Limited(_) => false,
-        }
-    }
 }
 
 /// Tree shaker for GraphQL schemas
@@ -558,7 +551,10 @@ fn retain_type(
     if let Some(tree_node) = tree_shaker.named_type_nodes.get_mut(type_name) {
         // If we have already visited this node, early return to avoid infinite recursion.
         // depth_limit and selection_set both have inherent exit cases and may add more types with multiple passes, so never early return for them.
-        if tree_node.retain && selection_set.is_none() && depth_limit.is_unlimited() {
+        if tree_node.retain
+            && selection_set.is_none()
+            && matches!(depth_limit, DepthLimit::Unlimited)
+        {
             return;
         }
 
