@@ -102,11 +102,11 @@ query GetAllWeatherData($coordinate: InputCoordinate!, $state: String!) {
 
 </CodeColumns>
 
-The `--operation` option of the MCP Server provides it with a list of operation files. For each operation file you provide, the MCP Server creates an MCP tool that calls the corresponding GraphQL operation.
+The `--operations` option of the MCP Server provides it with a list of operation files. For each operation file you provide, the MCP Server creates an MCP tool that calls the corresponding GraphQL operation.
 
-The `--operation` option can also be used to specify a directory. All files with a `.graphql` extension in the directory will be loaded as operations.
+The `--operations` option can also be used to specify a directory. All files with a `.graphql` extension in the directory will be loaded as operations.
 
-Files and directories specified with `--operation` will be hot reloaded. When specifying a file, the MCP tool will be updated when the file contents are modified. When specifying a directory, operations exposed as MCP tools will be updated when files are added, modified, or removed from the directory.
+Files and directories specified with `--operations` will be hot reloaded. When specifying a file, the MCP tool will be updated when the file contents are modified. When specifying a directory, operations exposed as MCP tools will be updated when files are added, modified, or removed from the directory.
 
 ### From persisted query manifests
 
