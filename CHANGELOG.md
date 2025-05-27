@@ -27,7 +27,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   - When specifying multiple operation paths, all paths were reloaded when any one changed
   - Many redundant events were sent on startup, causing verbose logging about loaded operations
   - Better error handling for missing, invalid, or empty operation files
-- The `execute` tool did not handle variables correctly (#77)
+- The `execute` tool did not handle variables correctly (#77 and #93)
 - Cycles in schema type definitions would lead to stack overflow (#74)
 
 ## [0.2.0] - 2025-05-21
