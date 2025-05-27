@@ -15,12 +15,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [0.2.1] - 2025-05-27
 
-### 🚀 Features
-
-- Add a `--log` option to specify the log level used by the MCP Server (default is INFO). Reduce the level of many messages emitted by the server so INFO is less verbose. (#82)
-
 ### 🐛 Fixes
 
+- Reduce the log level of many messages emitted by the server so INFO is less verbose, and add a `--log` option to specify the log level used by the MCP Server (default is INFO) (#82)
+- Ignore mutations and subscriptions rather than erroring out (#91)
 - Silence __typename used in operations errors (#79)
 - Fix issues with the `introspect` tool. (#83)
   - The tool was not working when there were top-level subscription in the schema
