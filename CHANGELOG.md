@@ -12,12 +12,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### 🛠 Maintenance
 ### 📚 Documentation
 -->
-## [UNRELEASED]
 
-### 🐛 Fixes
-- Silence __typename used in operations errors (#79)
-
-## [Unreleased]
+## [0.2.1] - 2025-05-27
 
 ### 🚀 Features
 
@@ -25,10 +21,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### 🐛 Fixes
 
+- Silence __typename used in operations errors (#79)
 - Fix issues with the `introspect` tool. (#83)
-
-## [Unreleased]
-### 🐛 Fixes
+  - The tool was not working when there were top-level subscription in the schema
+  - Argument types were not being resolved correctly
 - Improvements to operation loading (#80)
   - When specifying multiple operation paths, all paths were reloaded when any one changed
   - Many redundant events were sent on startup, causing verbose logging about loaded operations
