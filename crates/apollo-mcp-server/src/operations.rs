@@ -251,7 +251,7 @@ pub fn operation_defs(
             return Err(OperationError::SubscriptionNotAllowed(operation));
         }
         OperationType::Mutation => {
-            if !allow_mutations {
+            if !allow_mutations && mutation_mode == MutationMode::None {
                 return Err(OperationError::MutationNotAllowed(operation, mutation_mode));
             }
         }
