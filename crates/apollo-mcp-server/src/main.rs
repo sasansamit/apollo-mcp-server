@@ -111,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
         Transport::Stdio
     };
 
-    // When using the Stdio transport, send output stderr since stdout is used for MCP messages
+    // When using the Stdio transport, send output to stderr since stdout is used for MCP messages
     match transport {
         Transport::SSE { .. } => tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env().add_directive(args.log_level.into()))
