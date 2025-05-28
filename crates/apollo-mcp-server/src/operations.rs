@@ -1604,7 +1604,14 @@ mod tests {
             input_schema: {
                 "type": String("object"),
                 "properties": Object {
-                    "id": Object {},
+                    "id": Object {
+                        "$ref": String("#/definitions/RealCustomScalar"),
+                    },
+                },
+                "definitions": Object {
+                    "RealCustomScalar": Object {
+                        "description": String("RealCustomScalar exists"),
+                    },
                 },
             },
         }
@@ -1674,22 +1681,16 @@ mod tests {
                 "type": String("object"),
                 "properties": Object {
                     "id": Object {
+                        "$ref": String("#/definitions/RealCustomScalar"),
+                    },
+                },
+                "definitions": Object {
+                    "RealCustomScalar": Object {
                         "description": String("RealCustomScalar exists"),
                         "type": String("string"),
                     },
                 },
             },
-        }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
-        {
-          "type": "object",
-          "properties": {
-            "id": {
-              "description": "RealCustomScalar exists",
-              "type": "string"
-            }
-          }
         }
         "###);
     }
