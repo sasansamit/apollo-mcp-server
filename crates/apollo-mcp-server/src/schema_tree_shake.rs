@@ -1196,7 +1196,7 @@ mod test {
         shaker.retain_operation_type(OperationType::Query, None, DepthLimit::Unlimited);
         assert_eq!(
             shaker.shaken().unwrap().to_string(),
-            "directive @CustomDirective(arg: CustomScalar) on FIELD_DEFINITION\n\ntype Query {\n  field1: String @CustomDirective(arg: \"Use 'field2' instead\")\n  field2: String\n}\n\nscalar CustomScalar\n"
+            "input Filter {\n  field: String\n  filter: Filter\n}\n\ntype Query {\n  field(filter: Filter): String\n}\n"
         );
     }
 }
