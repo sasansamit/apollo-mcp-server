@@ -16,6 +16,7 @@ use apollo_mcp_registry::uplink::persisted_queries::ManifestSource;
 use apollo_mcp_registry::uplink::persisted_queries::event::Event as ManifestEvent;
 use futures::{Stream, StreamExt};
 use regex::Regex;
+use rmcp::model::ToolAnnotations;
 use rmcp::schemars::Map;
 use rmcp::{
     model::Tool,
@@ -333,7 +334,10 @@ impl Operation {
                 ));
             };
 
-            let tool: Tool = Tool::new(operation_name.clone(), description, schema);
+            let tool: Tool = Tool::new(operation_name.clone(), description, schema).annotate(
+                ToolAnnotations::new()
+                    .read_only(operation.operation_type != OperationType::Mutation),
+            );
             let character_count = tool_character_length(&tool);
             match character_count {
                 Ok(length) => info!(
@@ -934,7 +938,17 @@ mod tests {
                 input_schema: {
                     "type": String("object"),
                 },
-                annotations: None,
+                annotations: Some(
+                    ToolAnnotations {
+                        title: None,
+                        read_only_hint: Some(
+                            false,
+                        ),
+                        destructive_hint: None,
+                        idempotent_hint: None,
+                        open_world_hint: None,
+                    },
+                ),
             },
             inner: RawOperation {
                 source_text: "mutation MutationName { id }",
@@ -968,7 +982,17 @@ mod tests {
                 input_schema: {
                     "type": String("object"),
                 },
-                annotations: None,
+                annotations: Some(
+                    ToolAnnotations {
+                        title: None,
+                        read_only_hint: Some(
+                            false,
+                        ),
+                        destructive_hint: None,
+                        idempotent_hint: None,
+                        open_world_hint: None,
+                    },
+                ),
             },
             inner: RawOperation {
                 source_text: "mutation MutationName { id }",
@@ -1002,7 +1026,17 @@ mod tests {
             input_schema: {
                 "type": String("object"),
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1041,7 +1075,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1088,7 +1132,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1146,7 +1200,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1207,7 +1271,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1265,7 +1339,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1320,7 +1404,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1383,7 +1477,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1461,7 +1565,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
@@ -1508,7 +1622,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
@@ -1617,7 +1741,17 @@ mod tests {
                     "id": Object {},
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
@@ -1657,7 +1791,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
@@ -1697,7 +1841,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
@@ -1740,7 +1894,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
@@ -2138,7 +2302,17 @@ mod tests {
                     },
                 },
             },
-            annotations: None,
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
