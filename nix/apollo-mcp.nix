@@ -27,7 +27,7 @@
   craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
   craneCommonArgs = {
     inherit src;
-    pname = "apollo-mcp";
+    pname = "apollo-mcp-server";
     strictDeps = true;
 
     nativeBuildInputs = [perl pkg-config];
@@ -69,7 +69,7 @@ in {
 
   # List of packages exposed by this project
   packages = {
-    apollo-mcp = craneLib.buildPackage craneCommonArgs;
+    apollo-mcp-server = craneLib.buildPackage craneCommonArgs;
 
     # Builder for apollo-mcp-server. Takes the rust target triple for specifying
     # the cross-compile target. Set the target to the same as the host for native builds.

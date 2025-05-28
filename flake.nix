@@ -126,8 +126,8 @@
         rec {
           inherit (garbageCollector) saveFromGC;
 
-          default = apollo-mcp;
-          apollo-mcp = apollo-mcp-builder.packages.apollo-mcp;
+          default = apollo-mcp-server;
+          apollo-mcp-server = apollo-mcp-builder.packages.apollo-mcp-server;
         }
         // cross;
 
@@ -154,7 +154,7 @@
           mtime = commitDate;
 
           contents = [
-            packages.apollo-mcp
+            packages.apollo-mcp-server
           ];
 
           config = let
