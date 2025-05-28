@@ -715,20 +715,33 @@ fn type_to_schema(
                         schema_factory(None, None, None, None, None, None)
                     }
                 } else if let Some(enum_type) = graphql_schema.get_enum(named) {
-                    schema_factory(
-                        description.or(input_object_description(named, graphql_schema)), // TODO: move to reference
-                        Some(InstanceType::String),
-                        None,
-                        None,
-                        None,
-                        Some(
-                            enum_type
-                                .values
-                                .iter()
-                                .map(|(_name, value)| serde_json::json!(value.value))
-                                .collect(),
-                        ),
-                    )
+                    if !definitions.contains_key(named.as_str()) {
+                        definitions.insert(
+                            named.to_string(),
+                            schema_factory(
+                                input_object_description(named, graphql_schema),
+                                Some(InstanceType::String),
+                                None,
+                                None,
+                                None,
+                                Some(
+                                    enum_type
+                                        .values
+                                        .iter()
+                                        .map(|(_name, value)| serde_json::json!(value.value))
+                                        .collect(),
+                                ),
+                            ),
+                        );
+                    }
+                    Schema::Object(SchemaObject {
+                        metadata: Some(Box::new(Metadata {
+                            description,
+                            ..Default::default()
+                        })),
+                        reference: Some(format!("#/definitions/{}", named)),
+                        ..Default::default()
+                    })
                 } else {
                     warn!(name=?named, "Type not found in schema");
                     schema_factory(None, None, None, None, None, None)
@@ -1422,6 +1435,11 @@ mod tests {
                 ],
                 "properties": Object {
                     "id": Object {
+                        "$ref": String("#/definitions/RealEnum"),
+                    },
+                },
+                "definitions": Object {
+                    "RealEnum": Object {
                         "description": String("the description for the enum\n\nValues:\nENUM_VALUE_1: ENUM_VALUE_1 is a value\nENUM_VALUE_2: ENUM_VALUE_2 is a value"),
                         "type": String("string"),
                         "enum": Array [
@@ -1431,24 +1449,6 @@ mod tests {
                     },
                 },
             },
-        }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
-        {
-          "type": "object",
-          "required": [
-            "id"
-          ],
-          "properties": {
-            "id": {
-              "description": "the description for the enum\n\nValues:\nENUM_VALUE_1: ENUM_VALUE_1 is a value\nENUM_VALUE_2: ENUM_VALUE_2 is a value",
-              "type": "string",
-              "enum": [
-                "ENUM_VALUE_1",
-                "ENUM_VALUE_2"
-              ]
-            }
-          }
         }
         "###);
     }
