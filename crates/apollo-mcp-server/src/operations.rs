@@ -529,7 +529,6 @@ fn get_json_schema(
     operation.variables.iter().for_each(|variable| {
         let variable_name = variable.name.to_string();
         let schema = type_to_schema(
-            // For the root description, for now we can use the type description.
             None,
             variable.ty.as_ref(),
             graphql_schema,
