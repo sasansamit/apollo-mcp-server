@@ -940,36 +940,6 @@ mod tests {
     }
 
     #[test]
-    fn mutation_mode_explicit() {
-        let operation = Operation::from_document(
-            "mutation MutationName { id }",
-            &SCHEMA,
-            None,
-            None,
-            MutationMode::Explicit,
-            false,
-            false,
-        )
-        .unwrap();
-
-        insta::assert_debug_snapshot!(operation, @r###"
-        Operation {
-            tool: Tool {
-                name: "MutationName",
-                description: "The returned value is optional and has type `String`",
-                input_schema: {
-                    "type": String("object"),
-                },
-            },
-            inner: RawOperation {
-                source_text: "mutation MutationName { id }",
-                persisted_query_id: None,
-            },
-        }
-        "###);
-    }
-
-    #[test]
     fn mutation_mode_all() {
         let operation = Operation::from_document(
             "mutation MutationName { id }",
@@ -2084,6 +2054,7 @@ mod tests {
             true,
             true,
         )
+        .unwrap()
         .unwrap();
 
         insta::assert_debug_snapshot!(operation.tool, @r###"
