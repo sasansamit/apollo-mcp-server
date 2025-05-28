@@ -53,11 +53,15 @@ struct Args {
     #[arg(long = "header", action = clap::ArgAction::Append)]
     headers: Vec<String>,
 
-    /// The IP address to bind the SSE server to (default: 127.0.0.1)
+    /// The IP address to bind the SSE server to
+    ///
+    /// [default: 127.0.0.1]
     #[arg(long)]
     sse_address: Option<IpAddr>,
 
-    /// Start the server using the SSE transport on the given port (default: 5000)
+    /// Start the server using the SSE transport on the given port
+    ///
+    /// [default: 5000]
     #[arg(long)]
     sse_port: Option<u16>,
 
@@ -96,13 +100,30 @@ struct Args {
     /// The log level for the MCP Server
     #[arg(long = "log", short = 'l', global = true, default_value_t = Level::INFO)]
     log_level: Level,
+
+    /// The IP address to bind the Streamable HTTP server to
+    ///
+    /// [default: 127.0.0.1]
+    #[arg(long, conflicts_with_all(["sse_port", "sse_address"]))]
+    http_address: Option<IpAddr>,
+
+    /// Start the server using the Streamable HTTP transport on the given port
+    ///
+    /// [default: 5000]
+    #[arg(long, conflicts_with_all(["sse_port", "sse_address"]))]
+    http_port: Option<u16>,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    let transport = if args.sse_port.is_some() || args.sse_address.is_some() {
+    let transport = if args.http_port.is_some() || args.http_address.is_some() {
+        Transport::StreamableHttp {
+            address: args.http_address.unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+            port: args.http_port.unwrap_or(5000),
+        }
+    } else if args.sse_port.is_some() || args.sse_address.is_some() {
         Transport::SSE {
             address: args.sse_address.unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST)),
             port: args.sse_port.unwrap_or(5000),
@@ -113,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
 
     // When using the Stdio transport, send output to stderr since stdout is used for MCP messages
     match transport {
-        Transport::SSE { .. } => tracing_subscriber::fmt()
+        Transport::SSE { .. } | Transport::StreamableHttp { .. } => tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env().add_directive(args.log_level.into()))
             .with_ansi(true)
             .with_target(false)
@@ -188,6 +209,7 @@ async fn main() -> anyhow::Result<()> {
         .await?)
 }
 
+#[allow(clippy::result_large_err)]
 fn uplink_config() -> Result<UplinkConfig, ServerError> {
     Ok(UplinkConfig {
         apollo_key: SecretString::from(
