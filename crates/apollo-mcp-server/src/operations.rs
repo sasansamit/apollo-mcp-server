@@ -692,28 +692,51 @@ fn type_to_schema(
                         ..Default::default()
                     })
                 } else if graphql_schema.get_scalar(named).is_some() {
-                    let default_description =
-                        description.or(input_object_description(named, graphql_schema)); // TODO: move to reference
-                    if let Some(custom_scalar_map) = custom_scalar_map {
-                        if let Some(custom_scalar_schema_object) =
-                            custom_scalar_map.get(named.as_str())
-                        {
-                            let mut custom_schema = custom_scalar_schema_object.clone();
-                            let mut meta = *custom_schema.metadata.unwrap_or_default();
-                            // If description isn't included in custom schema, inject the one from the schema
-                            if meta.description.is_none() {
-                                meta.description = default_description;
+                    if !definitions.contains_key(named.as_str()) {
+                        let default_description = input_object_description(named, graphql_schema);
+                        if let Some(custom_scalar_map) = custom_scalar_map {
+                            if let Some(custom_scalar_schema_object) =
+                                custom_scalar_map.get(named.as_str())
+                            {
+                                let mut custom_schema = custom_scalar_schema_object.clone();
+                                let mut meta = *custom_schema.metadata.unwrap_or_default();
+                                // If description isn't included in custom schema, inject the one from the schema
+                                if meta.description.is_none() {
+                                    meta.description = default_description;
+                                }
+                                custom_schema.metadata = Some(Box::new(meta));
+                                definitions
+                                    .insert(named.to_string(), Schema::Object(custom_schema));
+                            } else {
+                                warn!(name=?named, "custom scalar missing from custom_scalar_map");
+                                definitions.insert(
+                                    named.to_string(),
+                                    schema_factory(
+                                        default_description,
+                                        None,
+                                        None,
+                                        None,
+                                        None,
+                                        None,
+                                    ),
+                                );
                             }
-                            custom_schema.metadata = Some(Box::new(meta));
-                            Schema::Object(custom_schema)
                         } else {
-                            warn!(name=?named, "custom scalar missing from custom_scalar_map");
-                            schema_factory(default_description, None, None, None, None, None)
+                            warn!(name=?named, "custom scalars aren't currently supported without a custom_scalar_map");
+                            definitions.insert(
+                                named.to_string(),
+                                schema_factory(default_description, None, None, None, None, None),
+                            );
                         }
-                    } else {
-                        warn!(name=?named, "custom scalars aren't currently supported without a custom_scalar_map");
-                        schema_factory(None, None, None, None, None, None)
                     }
+                    Schema::Object(SchemaObject {
+                        metadata: Some(Box::new(Metadata {
+                            description,
+                            ..Default::default()
+                        })),
+                        reference: Some(format!("#/definitions/{}", named)),
+                        ..Default::default()
+                    })
                 } else if let Some(enum_type) = graphql_schema.get_enum(named) {
                     if !definitions.contains_key(named.as_str()) {
                         definitions.insert(
@@ -1613,6 +1636,11 @@ mod tests {
                 "type": String("object"),
                 "properties": Object {
                     "id": Object {
+                        "$ref": String("#/definitions/RealCustomScalar"),
+                    },
+                },
+                "definitions": Object {
+                    "RealCustomScalar": Object {
                         "description": String("RealCustomScalar exists"),
                     },
                 },
