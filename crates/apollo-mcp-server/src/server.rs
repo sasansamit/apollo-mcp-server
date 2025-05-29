@@ -6,11 +6,11 @@ use crate::graphql::Executable;
 use crate::introspection::{EXECUTE_TOOL_NAME, Execute, INTROSPECT_TOOL_NAME, Introspect};
 use crate::operations::{MutationMode, Operation, OperationSource, RawOperation};
 use apollo_compiler::ast::OperationType;
-use buildstructor::buildstructor;
+use bon::bon;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use rmcp::model::{
-    CallToolRequestParam, CallToolResult, ErrorCode, ListToolsResult, PaginatedRequestParam,
-    ServerCapabilities, ServerInfo,
+    CallToolRequestParam, CallToolResult, ErrorCode, InitializeRequestParam, InitializeResult,
+    ListToolsResult, PaginatedRequestParam, ServerCapabilities, ServerInfo,
 };
 use rmcp::serde_json::Value;
 use rmcp::service::RequestContext;
@@ -31,8 +31,10 @@ use apollo_mcp_registry::uplink::schema::event::Event as SchemaEvent;
 use futures::{FutureExt, Stream, StreamExt, future, stream};
 pub use rmcp::ServiceExt;
 pub use rmcp::transport::SseServer;
+use rmcp::transport::StreamableHttpServer;
 pub use rmcp::transport::sse_server::SseServerConfig;
 pub use rmcp::transport::stdio;
+use rmcp::transport::streamable_http_server::axum::StreamableHttpServerConfig;
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 
@@ -55,12 +57,10 @@ pub struct Server {
 pub enum Transport {
     Stdio,
     SSE { address: IpAddr, port: u16 },
+    StreamableHttp { address: IpAddr, port: u16 },
 }
 
-/// Types ending with Map cause incorrect assumptions by buildstructor, so use an alias
-type Headers = HeaderMap;
-
-#[buildstructor]
+#[bon]
 impl Server {
     #[builder]
     pub fn new(
@@ -68,10 +68,10 @@ impl Server {
         schema_source: SchemaSource,
         operation_source: OperationSource,
         endpoint: String,
-        headers: Headers,
+        headers: HeaderMap,
         introspection: bool,
         explorer: bool,
-        custom_scalar_map: Option<CustomScalarMap>,
+        #[builder(required)] custom_scalar_map: Option<CustomScalarMap>,
         mutation_mode: MutationMode,
         disable_type_description: bool,
         disable_schema_description: bool,
@@ -352,7 +352,10 @@ impl Starting {
                     self.disable_schema_description,
                 )
             })
-            .collect::<Result<_, OperationError>>()?;
+            .collect::<Result<Vec<Option<Operation>>, OperationError>>()?
+            .into_iter()
+            .flatten()
+            .collect();
 
         debug!(
             "Loaded {} operations:\n{}",
@@ -413,24 +416,41 @@ impl Starting {
             disable_schema_description: self.disable_schema_description,
         };
 
-        if let Transport::SSE { address, port } = self.transport {
-            info!(port = ?port, address = ?address, "Starting MCP server in SSE mode");
-            let running = running.clone();
-            let listen_address = SocketAddr::new(address, port);
-            SseServer::serve_with_config(SseServerConfig {
-                bind: listen_address,
-                sse_path: "/sse".to_string(),
-                post_path: "/message".to_string(),
-                ct: cancellation_token,
-            })
-            .await?
-            .with_service(move || running.clone());
-        } else {
-            info!("Starting MCP server in stdio mode");
-            let service = running.clone().serve(stdio()).await.inspect_err(|e| {
-                error!("serving error: {:?}", e);
-            })?;
-            service.waiting().await.map_err(ServerError::StartupError)?;
+        match self.transport {
+            Transport::StreamableHttp { address, port } => {
+                info!(port = ?port, address = ?address, "Starting MCP server in Streamable HTTP mode");
+                let running = running.clone();
+                let listen_address = SocketAddr::new(address, port);
+                StreamableHttpServer::serve_with_config(StreamableHttpServerConfig {
+                    bind: listen_address,
+                    path: "/mcp".to_string(),
+                    ct: cancellation_token,
+                    sse_keep_alive: None,
+                })
+                .await?
+                .with_service(move || running.clone());
+            }
+            Transport::SSE { address, port } => {
+                info!(port = ?port, address = ?address, "Starting MCP server in SSE mode");
+                let running = running.clone();
+                let listen_address = SocketAddr::new(address, port);
+                SseServer::serve_with_config(SseServerConfig {
+                    bind: listen_address,
+                    sse_path: "/sse".to_string(),
+                    post_path: "/message".to_string(),
+                    ct: cancellation_token,
+                    sse_keep_alive: None,
+                })
+                .await?
+                .with_service(move || running.clone());
+            }
+            Transport::Stdio => {
+                info!("Starting MCP server in stdio mode");
+                let service = running.clone().serve(stdio()).await.inspect_err(|e| {
+                    error!("serving error: {:?}", e);
+                })?;
+                service.waiting().await.map_err(ServerError::StartupError)?;
+            }
         }
 
         Ok(running)
@@ -477,7 +497,10 @@ impl Running {
                     self.disable_schema_description,
                 )
             })
-            .collect::<Result<_, OperationError>>()?;
+            .collect::<Result<Vec<Option<Operation>>, OperationError>>()?
+            .into_iter()
+            .flatten()
+            .collect();
 
         debug!(
             "Updated {} operations:\n{}",
@@ -512,7 +535,10 @@ impl Running {
                         self.disable_schema_description,
                     )
                 })
-                .collect::<Result<_, OperationError>>()?;
+                .collect::<Result<Vec<Option<Operation>>, OperationError>>()?
+                .into_iter()
+                .flatten()
+                .collect();
 
             debug!(
                 "Loaded {} operations:\n{}",
@@ -538,22 +564,16 @@ impl Running {
         }
         let mut retained_peers = Vec::new();
         for peer in peers.iter() {
-            match peer.notify_tool_list_changed().await {
-                Ok(_) => retained_peers.push(peer.clone()),
-                Err(ServiceError::Transport(e)) if e.get_ref().is_some() => {
-                    if e.to_string() == *"disconnected" {
-                        // This always gets a "disconnected" error due to a bug in the SDK, but it actually works
-                        retained_peers.push(peer.clone());
-                    } else {
-                        error!(
-                            "Failed to notify peer of tool list change: {:?} - dropping peer",
-                            e
-                        );
+            if !peer.is_transport_closed() {
+                match peer.notify_tool_list_changed().await {
+                    Ok(_) => retained_peers.push(peer.clone()),
+                    Err(ServiceError::TransportSend(_) | ServiceError::TransportClosed) => {
+                        error!("Failed to notify peer of tool list change - dropping peer",);
                     }
-                }
-                Err(e) => {
-                    error!("Failed to notify peer of tool list change {:?}", e);
-                    retained_peers.push(peer.clone());
+                    Err(e) => {
+                        error!("Failed to notify peer of tool list change {:?}", e);
+                        retained_peers.push(peer.clone());
+                    }
                 }
             }
         }
@@ -562,6 +582,17 @@ impl Running {
 }
 
 impl ServerHandler for Running {
+    async fn initialize(
+        &self,
+        _request: InitializeRequestParam,
+        context: RequestContext<RoleServer>,
+    ) -> Result<InitializeResult, McpError> {
+        // TODO: how to remove these?
+        let mut peers = self.peers.write().await;
+        peers.push(context.peer);
+        Ok(self.get_info())
+    }
+
     async fn call_tool(
         &self,
         request: CallToolRequestParam,
@@ -606,7 +637,7 @@ impl ServerHandler for Running {
 
     async fn list_tools(
         &self,
-        _request: PaginatedRequestParam,
+        _request: Option<PaginatedRequestParam>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
         Ok(ListToolsResult {
@@ -640,16 +671,6 @@ impl ServerHandler for Running {
                 )
                 .collect(),
         })
-    }
-
-    fn set_peer(&mut self, p: Peer<RoleServer>) {
-        let peers = self.peers.clone();
-        tokio::spawn(async move {
-            let mut peers = peers.write().await;
-            // TODO: we need a way to remove these! The Rust SDK seems to leek running servers
-            //  forever - it never times them out or disconnects them.
-            peers.push(p);
-        });
     }
 
     fn get_info(&self) -> ServerInfo {
@@ -767,6 +788,7 @@ impl StateMachine {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn sdl_to_api_schema(schema_state: SchemaState) -> Result<Valid<Schema>, ServerError> {
         match Supergraph::new(&schema_state.sdl) {
             Ok(supergraph) => Ok(supergraph

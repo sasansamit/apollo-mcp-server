@@ -848,7 +848,7 @@ mod test {
     use rstest::{fixture, rstest};
 
     use crate::{
-        operations::{MutationMode, operation_defs},
+        operations::operation_defs,
         schema_tree_shake::{DepthLimit, SchemaTreeShaker},
     };
 
@@ -980,7 +980,9 @@ mod test {
         let schema = document.to_schema_validate().unwrap();
         let mut shaker = SchemaTreeShaker::new(&schema);
         let (operation_document, operation_def, _comments) =
-            operation_defs("query TestQuery { id }", false, MutationMode::None).unwrap();
+            operation_defs("query TestQuery { id }", false)
+                .unwrap()
+                .unwrap();
         shaker.retain_operation(&operation_def, &operation_document, DepthLimit::Unlimited);
         assert_eq!(
             shaker.shaken().unwrap().to_string(),
@@ -1172,6 +1174,29 @@ mod test {
         assert_eq!(
             shaker.shaken().unwrap().to_string(),
             "directive @CustomDirective(arg: CustomScalar) on FIELD_DEFINITION\n\ntype Query {\n  field1: String @CustomDirective(arg: \"Use 'field2' instead\")\n  field2: String\n}\n\nscalar CustomScalar\n"
+        );
+    }
+
+    #[test]
+    fn recursive_input() {
+        let source_text = r#"
+            input Filter {
+                field: String
+                filter: Filter
+            }
+            type Query {
+                field(filter: Filter): String
+            }
+        "#;
+        let document = Parser::new()
+            .parse_ast(source_text, "schema.graphql")
+            .unwrap();
+        let schema = document.to_schema_validate().unwrap();
+        let mut shaker = SchemaTreeShaker::new(&schema);
+        shaker.retain_operation_type(OperationType::Query, None, DepthLimit::Unlimited);
+        assert_eq!(
+            shaker.shaken().unwrap().to_string(),
+            "input Filter {\n  field: String\n  filter: Filter\n}\n\ntype Query {\n  field(filter: Filter): String\n}\n"
         );
     }
 }

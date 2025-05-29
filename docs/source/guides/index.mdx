@@ -29,7 +29,7 @@ To install or upgrade to a **specific version** of Apollo MCP Server (recommende
 
 ```bash
 # Note the `v` prefixing the version number
-curl -sSL https://mcp.apollo.dev/download/nix/v0.2.0 | sh
+curl -sSL https://mcp.apollo.dev/download/nix/v0.2.1 | sh
 ```
 
 If your machine doesn't have the `curl` command, you can get the latest version from the [`curl` downloads page](https://curl.se/download.html).
@@ -52,7 +52,7 @@ To install or upgrade to a **specific version** of Apollo MCP Server (recommende
 
 ```bash
 # Note the `v` prefixing the version number
-iwr 'https://mcp.apollo.dev/download/win/v0.2.0' | iex
+iwr 'https://mcp.apollo.dev/download/win/v0.2.1' | iex
 ```
 
 {/* ### Download container image
@@ -62,6 +62,12 @@ TODO */}
 ## Set up graph
 
 An Apollo MCP Server must know the schema of GraphQL API it supports. You can use either [the `--schema` or `--uplink` option](/apollo-mcp-server/command-reference#options) to provide the schema. If using `--schema` option, it can be either an API or supergraph schema.
+
+The schema is required for three main purposes:
+
+1. **Tool Descriptions**: The schema provides type information used to generate tool descriptions. You can override these descriptions by adding comments to your operation files.
+1. **Input Validation**: The schema is used to translate GraphQL input types into JSON Schema, ensuring that AI models provide correctly formatted inputs.
+1. **Introspection Support**: If you enable the `--introspection` option, the schema is used to provide information about available types and operations to AI models.
 
 ## Define GraphQL operations for tools
 
@@ -196,7 +202,7 @@ docker run \
   -p 5000:5000 \
   -v $PWD/graphql/weather:/data \
   ghcr.io/apollographql/apollo-mcp-server:latest \
-  --sse-port 5000 \
+  --http-port 5000 \
   -s api.graphql \
   -o operations/forecast.graphql operations/alerts.graphql operations/all.graphql
 ``` */}
@@ -230,16 +236,16 @@ Starting MCP inspector...
 
 1. In a browser, go to the URL returned by Inspector, then click **Connect** and **List Tools**. You should see the tools for the operations you provided.
 
-### Debug over SSE transport
+### Debug over the Streamable HTTP transport
 
-When running the MCP Server over SSE transport, you can run MCP Inspector with the SSE transport.
+When running the MCP Server over the Streamable HTTP transport, you can run MCP Inspector as follows.
 
-1. Start the MCP Server in SSE mode:
+1. Start the MCP Server in Streamable HTTP mode:
 
 ```sh
 target/debug/apollo-mcp-server \
   --directory <absolute path to this git repo> \
-  --sse-port 5000 -s graphql/weather/api.graphql \
+  --http-port 5000 -s graphql/weather/api.graphql \
   -o graphql/weather/operations/forecast.graphql graphql/weather/operations/alerts.graphql graphql/weather/operations/all.graphql
 ```
 
@@ -250,7 +256,7 @@ npx @modelcontextprotocol/inspector
 ```
 
 1. In a browser, go to the URL returned by Inspector, then fill in the details:
-    - **Transport Type**: Select `SSE`
-    - **URL**: Enter `http://localhost:5000/sse`, where the port must match the `--sse-port` option
+    - **Transport Type**: Select `Streamable HTTP`
+    - **URL**: Enter `http://localhost:5000/mcp`, where the port must match the `--http-port` option
 
 1. Click **Connect** and **List Tools**. You should see the tools for the operations you provided.
