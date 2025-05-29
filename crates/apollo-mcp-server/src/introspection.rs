@@ -32,6 +32,7 @@ fn default_depth() -> u32 {
 #[derive(Clone)]
 pub struct Introspect {
     schema: Arc<Mutex<Valid<Schema>>>,
+    allow_mutations: bool,
     pub tool: Tool,
 }
 
@@ -52,6 +53,7 @@ impl Introspect {
     ) -> Self {
         Self {
             schema,
+            allow_mutations: root_mutation_type.is_some(),
             tool: Tool::new(
                 INTROSPECT_TOOL_NAME,
                 format!(
@@ -113,11 +115,14 @@ impl Introspect {
                         && schema
                             .root_operation(OperationType::Mutation)
                             .is_none_or(|root_name| {
-                                extended_type.name() != root_name || type_name == root_name.as_str()
+                                extended_type.name() != root_name
+                                    || (type_name == root_name.as_str() && self.allow_mutations)
                             })
                         && schema
                             .root_operation(OperationType::Subscription)
-                            .is_none_or(|root_name| extended_type.name() == root_name)
+                            .is_none_or(|root_name| {
+                                extended_type.name() != root_name || type_name == root_name.as_str()
+                            })
                 })
                 .map(|(_, extended_type)| extended_type.serialize())
                 .map(|serialized| serialized.to_string())
@@ -140,8 +145,7 @@ pub struct Input {
     query: String,
 
     /// The variable values
-    #[serde(default)]
-    variables: String,
+    variables: Option<Value>,
 }
 
 impl Execute {
@@ -168,22 +172,29 @@ impl graphql::Executable for Execute {
         })?;
 
         // validate the operation
-        operation_defs(
-            &input.query,
-            self.mutation_mode == MutationMode::All,
-            self.mutation_mode,
-        )
-        .map_err(|e| McpError::new(ErrorCode::INVALID_PARAMS, e.to_string(), None))?;
+        operation_defs(&input.query, self.mutation_mode == MutationMode::All)
+            .map_err(|e| McpError::new(ErrorCode::INVALID_PARAMS, e.to_string(), None))?;
 
         Ok(input.query)
     }
 
     fn variables(&self, input: Value) -> Result<Value, McpError> {
-        serde_json::from_value::<Input>(input)
-            .and_then(|input| serde_json::from_str(input.variables.as_str()))
-            .map_err(|_| {
+        let input = serde_json::from_value::<Input>(input).map_err(|_| {
+            McpError::new(ErrorCode::INVALID_PARAMS, "Invalid input".to_string(), None)
+        })?;
+        match input.variables {
+            None => Ok(Value::Null),
+            Some(Value::Null) => Ok(Value::Null),
+            Some(Value::String(s)) => serde_json::from_str(&s).map_err(|_| {
                 McpError::new(ErrorCode::INVALID_PARAMS, "Invalid input".to_string(), None)
-            })
+            }),
+            Some(obj) if obj.is_object() => Ok(obj),
+            _ => Err(McpError::new(
+                ErrorCode::INVALID_PARAMS,
+                "Invalid input".to_string(),
+                None,
+            )),
+        }
     }
 }
 
@@ -194,7 +205,7 @@ mod tests {
     use rmcp::serde_json::json;
 
     #[test]
-    fn execute_query_with_variables() {
+    fn execute_query_with_variables_as_string() {
         let execute = Execute::new(MutationMode::None);
 
         let query = "query GetUser($id: ID!) { user(id: $id) { id name } }";
@@ -210,5 +221,86 @@ mod tests {
             Ok(query.to_string())
         );
         assert_eq!(Executable::variables(&execute, input), Ok(variables));
+    }
+
+    #[test]
+    fn execute_query_with_variables_as_json() {
+        let execute = Execute::new(MutationMode::None);
+
+        let query = "query GetUser($id: ID!) { user(id: $id) { id name } }";
+        let variables = json!({ "id": "123" });
+
+        let input = json!({
+            "query": query,
+            "variables": variables
+        });
+
+        assert_eq!(
+            Executable::operation(&execute, input.clone()),
+            Ok(query.to_string())
+        );
+        assert_eq!(Executable::variables(&execute, input), Ok(variables));
+    }
+
+    #[test]
+    fn execute_query_without_variables() {
+        let execute = Execute::new(MutationMode::None);
+
+        let query = "query GetUser($id: ID!) { user(id: $id) { id name } }";
+
+        let input = json!({
+            "query": query,
+        });
+
+        assert_eq!(
+            Executable::operation(&execute, input.clone()),
+            Ok(query.to_string())
+        );
+        assert_eq!(Executable::variables(&execute, input), Ok(Value::Null));
+    }
+
+    #[test]
+    fn execute_query_invalid_input() {
+        let execute = Execute::new(MutationMode::None);
+
+        let input = json!({
+            "nonsense": "whatever",
+        });
+
+        assert_eq!(
+            Executable::operation(&execute, input.clone()),
+            Err(McpError::new(
+                ErrorCode::INVALID_PARAMS,
+                "Invalid input".to_string(),
+                None
+            ))
+        );
+        assert_eq!(
+            Executable::variables(&execute, input),
+            Err(McpError::new(
+                ErrorCode::INVALID_PARAMS,
+                "Invalid input".to_string(),
+                None
+            ))
+        );
+    }
+
+    #[test]
+    fn execute_query_invalid_variables() {
+        let execute = Execute::new(MutationMode::None);
+
+        let input = json!({
+            "query": "query GetUser($id: ID!) { user(id: $id) { id name } }",
+            "variables": "garbage",
+        });
+
+        assert_eq!(
+            Executable::variables(&execute, input),
+            Err(McpError::new(
+                ErrorCode::INVALID_PARAMS,
+                "Invalid input".to_string(),
+                None
+            ))
+        );
     }
 }

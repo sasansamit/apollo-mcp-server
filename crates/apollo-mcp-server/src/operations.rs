@@ -16,6 +16,8 @@ use apollo_mcp_registry::uplink::persisted_queries::ManifestSource;
 use apollo_mcp_registry::uplink::persisted_queries::event::Event as ManifestEvent;
 use futures::{Stream, StreamExt};
 use regex::Regex;
+use rmcp::model::ToolAnnotations;
+use rmcp::schemars::Map;
 use rmcp::{
     model::Tool,
     schemars::schema::{
@@ -25,9 +27,11 @@ use rmcp::{
     serde_json::{self, Value},
 };
 use serde::Serialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use tracing::{info, warn};
+use std::sync::{Arc, Mutex};
+use tracing::{debug, info, warn};
 
 const OPERATION_DOCUMENT_EXTENSION: &str = "graphql";
 
@@ -65,44 +69,70 @@ impl OperationSource {
     }
 
     fn stream_file_changes(paths: Vec<PathBuf>) -> impl Stream<Item = Event> {
-        futures::stream::select_all(paths.clone().into_iter().map(move |raw_path| {
-            let paths = paths.clone();
-            files::watch(raw_path.as_ref()).map(move |_| {
-                let operations = paths
-                    .iter()
-                    .filter_map(|path| {
+        let path_count = paths.len();
+        let state = Arc::new(Mutex::new(HashMap::<PathBuf, Vec<RawOperation>>::new()));
+        futures::stream::select_all(paths.into_iter().map(|path| {
+            let state = Arc::clone(&state);
+            files::watch(path.as_ref())
+                .filter_map(move |_| {
+                    let path = path.clone();
+                    let state = Arc::clone(&state);
+                    async move {
+                        let mut operations = Vec::new();
                         if path.is_dir() {
-                            match fs::read_dir(path) {
-                                Ok(entries) => Some(
-                                    entries
-                                        .filter_map(|entry| {
-                                            let entry = entry.ok()?;
-                                            let path = entry.path();
-                                            if path.extension()?.to_str()?
-                                                == OPERATION_DOCUMENT_EXTENSION
-                                            {
-                                                Some(path)
-                                            } else {
-                                                None
+                            // Handle a directory
+                            if let Ok(entries) = fs::read_dir(&path) {
+                                for entry in entries.flatten() {
+                                    let entry_path = entry.path();
+                                    if entry_path.extension().and_then(|e| e.to_str())
+                                        == Some(OPERATION_DOCUMENT_EXTENSION)
+                                    {
+                                        if let Ok(content) = fs::read_to_string(&entry_path) {
+                                            // Be forgiving of empty files in the directory case.
+                                            // It likely means a new file was created in an editor,
+                                            // but the operation hasn't been written yet.
+                                            if !content.trim().is_empty() {
+                                                operations.push(RawOperation::from(content));
                                             }
-                                        })
-                                        .collect::<Vec<_>>(),
-                                ),
-                                Err(_) => None,
+                                        }
+                                    }
+                                }
                             }
                         } else {
-                            Some(vec![path.clone()])
+                            // Handle a single file
+                            match fs::read_to_string(&path) {
+                                Ok(content) => {
+                                    if !content.trim().is_empty() {
+                                        operations.push(RawOperation::from(content));
+                                    } else {
+                                        warn!(?path, "Empty operation file");
+                                    }
+                                }
+                                Err(e) => return Some(Event::OperationError(e)),
+                            }
                         }
-                    })
-                    .flatten()
-                    .filter_map(|path| {
-                        fs::read_to_string(&path).ok().and_then(|content| {
-                            (!content.trim().is_empty()).then(|| RawOperation::from(content))
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                Event::OperationsUpdated(operations.clone())
-            })
+                        match state.lock() {
+                            Ok(mut state) => {
+                                state.insert(path.clone(), operations);
+                                // All paths send an initial event on startup. To avoid repeated
+                                // operation events on startup, wait until all paths have been
+                                // loaded, then send a single event with the operations for all
+                                // paths.
+                                if state.len() == path_count {
+                                    Some(Event::OperationsUpdated(
+                                        state.values().flatten().cloned().collect::<Vec<_>>(),
+                                    ))
+                                } else {
+                                    None
+                                }
+                            }
+                            Err(_) => Some(Event::OperationError(std::io::Error::other(
+                                "State mutex poisoned",
+                            ))),
+                        }
+                    }
+                })
+                .boxed()
         }))
         .boxed()
     }
@@ -164,7 +194,7 @@ impl RawOperation {
         mutation_mode: MutationMode,
         disable_type_description: bool,
         disable_schema_description: bool,
-    ) -> Result<Operation, OperationError> {
+    ) -> Result<Option<Operation>, OperationError> {
         Operation::from_document(
             &self.source_text,
             schema,
@@ -201,11 +231,11 @@ impl Operation {
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn operation_defs(
     source_text: &str,
     allow_mutations: bool,
-    mutation_mode: MutationMode,
-) -> Result<(Document, Node<OperationDefinition>, Option<String>), OperationError> {
+) -> Result<Option<(Document, Node<OperationDefinition>, Option<String>)>, OperationError> {
     let document = Parser::new()
         .parse_ast(source_text, "operation.graphql")
         .map_err(|e| OperationError::GraphQLDocument(Box::new(e)))?;
@@ -248,17 +278,25 @@ pub fn operation_defs(
 
     match operation.operation_type {
         OperationType::Subscription => {
-            return Err(OperationError::SubscriptionNotAllowed(operation));
+            debug!(
+                "Skipping subscription operation {}",
+                operation_name(&operation)?
+            );
+            return Ok(None);
         }
         OperationType::Mutation => {
             if !allow_mutations {
-                return Err(OperationError::MutationNotAllowed(operation, mutation_mode));
+                warn!(
+                    "Skipping mutation operation {}",
+                    operation_name(&operation)?
+                );
+                return Ok(None);
             }
         }
         OperationType::Query => {}
     }
 
-    Ok((document, operation, comments.map(|c| c.to_string())))
+    Ok(Some((document, operation, comments.map(|c| c.to_string()))))
 }
 
 impl Operation {
@@ -270,62 +308,59 @@ impl Operation {
         mutation_mode: MutationMode,
         disable_type_description: bool,
         disable_schema_description: bool,
-    ) -> Result<Self, OperationError> {
-        let (document, operation, comments) = operation_defs(
-            source_text,
-            mutation_mode != MutationMode::None,
-            mutation_mode,
-        )?;
+    ) -> Result<Option<Self>, OperationError> {
+        if let Some((document, operation, comments)) =
+            operation_defs(source_text, mutation_mode != MutationMode::None)?
+        {
+            let operation_name = operation_name(&operation)?;
 
-        let operation_name = operation
-            .name
-            .as_ref()
-            .ok_or_else(|| {
-                OperationError::MissingName(operation.serialize().no_indent().to_string())
-            })?
-            .to_string();
+            let description = Self::tool_description(
+                comments,
+                &document,
+                graphql_schema,
+                &operation,
+                disable_type_description,
+                disable_schema_description,
+            );
 
-        let description = Self::tool_description(
-            comments,
-            &document,
-            graphql_schema,
-            &operation,
-            disable_type_description,
-            disable_schema_description,
-        );
+            let object = serde_json::to_value(get_json_schema(
+                &operation,
+                graphql_schema,
+                custom_scalar_map,
+            ))?;
+            let Value::Object(schema) = object else {
+                return Err(OperationError::Internal(
+                    "Schemars should have returned an object".to_string(),
+                ));
+            };
 
-        let object = serde_json::to_value(get_json_schema(
-            &operation,
-            graphql_schema,
-            custom_scalar_map,
-        ))?;
-        let Value::Object(schema) = object else {
-            return Err(OperationError::Internal(
-                "Schemars should have returned an object".to_string(),
-            ));
-        };
-
-        let tool: Tool = Tool::new(operation_name.clone(), description, schema);
-        let character_count = tool_character_length(&tool);
-        match character_count {
-            Ok(length) => info!(
-                "Tool {} loaded with a character count of {}. Estimated tokens: {}",
-                operation_name,
-                length,
-                length / 4 // We don't know the tokenization algorithm, so we just use 4 characters per token as a rough estimate. https://docs.anthropic.com/en/docs/resources/glossary#tokens
-            ),
-            Err(_) => info!(
-                "Tool {} loaded with an unknown character count",
-                operation_name
-            ),
+            let tool: Tool = Tool::new(operation_name.clone(), description, schema).annotate(
+                ToolAnnotations::new()
+                    .read_only(operation.operation_type != OperationType::Mutation),
+            );
+            let character_count = tool_character_length(&tool);
+            match character_count {
+                Ok(length) => info!(
+                    "Tool {} loaded with a character count of {}. Estimated tokens: {}",
+                    operation_name,
+                    length,
+                    length / 4 // We don't know the tokenization algorithm, so we just use 4 characters per token as a rough estimate. https://docs.anthropic.com/en/docs/resources/glossary#tokens
+                ),
+                Err(_) => info!(
+                    "Tool {} loaded with an unknown character count",
+                    operation_name
+                ),
+            }
+            Ok(Some(Operation {
+                tool,
+                inner: RawOperation {
+                    source_text: source_text.to_string(),
+                    persisted_query_id,
+                },
+            }))
+        } else {
+            Ok(None)
         }
-        Ok(Operation {
-            tool,
-            inner: RawOperation {
-                source_text: source_text.to_string(),
-                persisted_query_id,
-            },
-        })
     }
 
     /// Generate a description for an operation based on documentation in the schema
@@ -474,9 +509,19 @@ impl Operation {
     }
 }
 
+fn operation_name(operation: &Node<OperationDefinition>) -> Result<String, OperationError> {
+    Ok(operation
+        .name
+        .as_ref()
+        .ok_or_else(|| OperationError::MissingName(operation.serialize().no_indent().to_string()))?
+        .to_string())
+}
+
 fn tool_character_length(tool: &Tool) -> Result<usize, serde_json::Error> {
     let tool_schema_string = serde_json::to_string_pretty(&serde_json::json!(tool.input_schema))?;
-    Ok(tool.name.len() + tool.description.len() + tool_schema_string.len())
+    Ok(tool.name.len()
+        + tool.description.as_ref().map(|d| d.len()).unwrap_or(0)
+        + tool_schema_string.len())
 }
 
 fn get_json_schema(
@@ -485,16 +530,16 @@ fn get_json_schema(
     custom_scalar_map: Option<&CustomScalarMap>,
 ) -> RootSchema {
     let mut obj = ObjectValidation::default();
+    let mut definitions = Map::new();
 
     operation.variables.iter().for_each(|variable| {
         let variable_name = variable.name.to_string();
-        let type_name = variable.ty.inner_named_type();
         let schema = type_to_schema(
-            // For the root description, for now we can use the type description.
-            description(type_name, graphql_schema),
+            None,
             variable.ty.as_ref(),
             graphql_schema,
             custom_scalar_map,
+            &mut definitions,
         );
         obj.properties.insert(variable_name.clone(), schema);
         if variable.ty.is_non_null() {
@@ -508,6 +553,7 @@ fn get_json_schema(
             object: Some(Box::new(obj)),
             ..Default::default()
         },
+        definitions,
         ..Default::default()
     }
 }
@@ -535,7 +581,7 @@ fn schema_factory(
     })
 }
 
-fn description(name: &Name, graphql_schema: &GraphqlSchema) -> Option<String> {
+fn input_object_description(name: &Name, graphql_schema: &GraphqlSchema) -> Option<String> {
     if let Some(input_object) = graphql_schema.get_input_object(name) {
         input_object.description.as_ref().map(|d| d.to_string())
     } else if let Some(scalar) = graphql_schema.get_scalar(name) {
@@ -576,6 +622,7 @@ fn type_to_schema(
     variable_type: &Type,
     graphql_schema: &GraphqlSchema,
     custom_scalar_map: Option<&CustomScalarMap>,
+    definitions: &mut Map<String, Schema>,
 ) -> Schema {
     match variable_type {
         Type::NonNullNamed(named) | Type::Named(named) => match named.as_str() {
@@ -605,69 +652,124 @@ fn type_to_schema(
             ),
             _ => {
                 if let Some(input_type) = graphql_schema.get_input_object(named) {
-                    let mut obj = ObjectValidation::default();
+                    if !definitions.contains_key(named.as_str()) {
+                        definitions
+                            .insert(named.to_string(), Schema::Object(SchemaObject::default())); // Insert temporary value into map so any recursive references will not try to also create it.
+                        let mut obj = ObjectValidation::default();
 
-                    input_type.fields.iter().for_each(|(name, field)| {
-                        let description = field.description.as_ref().map(|n| n.to_string());
-                        obj.properties.insert(
-                            name.to_string(),
-                            type_to_schema(
-                                description,
-                                field.ty.as_ref(),
-                                graphql_schema,
-                                custom_scalar_map,
+                        input_type.fields.iter().for_each(|(name, field)| {
+                            let description = field.description.as_ref().map(|n| n.to_string());
+                            obj.properties.insert(
+                                name.to_string(),
+                                type_to_schema(
+                                    description,
+                                    field.ty.as_ref(),
+                                    graphql_schema,
+                                    custom_scalar_map,
+                                    definitions,
+                                ),
+                            );
+
+                            if field.is_required() {
+                                obj.required.insert(name.to_string());
+                            }
+                        });
+
+                        definitions.insert(
+                            named.to_string(),
+                            schema_factory(
+                                input_object_description(named, graphql_schema),
+                                Some(InstanceType::Object),
+                                Some(obj),
+                                None,
+                                None,
+                                None,
                             ),
                         );
-
-                        if field.is_required() {
-                            obj.required.insert(name.to_string());
-                        }
-                    });
-
-                    schema_factory(
-                        description,
-                        Some(InstanceType::Object),
-                        Some(obj),
-                        None,
-                        None,
-                        None,
-                    )
-                } else if graphql_schema.get_scalar(named).is_some() {
-                    if let Some(custom_scalar_map) = custom_scalar_map {
-                        if let Some(custom_scalar_schema_object) =
-                            custom_scalar_map.get(named.as_str())
-                        {
-                            let mut custom_schema = custom_scalar_schema_object.clone();
-                            let mut meta = *custom_schema.metadata.unwrap_or_default();
-                            // If description isn't included in custom schema, inject the one from the schema
-                            if meta.description.is_none() {
-                                meta.description = description;
-                            }
-                            custom_schema.metadata = Some(Box::new(meta));
-                            Schema::Object(custom_schema)
-                        } else {
-                            warn!(name=?named, "custom scalar missing from custom_scalar_map");
-                            schema_factory(description, None, None, None, None, None)
-                        }
-                    } else {
-                        warn!(name=?named, "custom scalars aren't currently supported without a custom_scalar_map");
-                        schema_factory(None, None, None, None, None, None)
                     }
+
+                    Schema::Object(SchemaObject {
+                        metadata: Some(Box::new(Metadata {
+                            description,
+                            ..Default::default()
+                        })),
+                        reference: Some(format!("#/definitions/{}", named)),
+                        ..Default::default()
+                    })
+                } else if graphql_schema.get_scalar(named).is_some() {
+                    if !definitions.contains_key(named.as_str()) {
+                        let default_description = input_object_description(named, graphql_schema);
+                        if let Some(custom_scalar_map) = custom_scalar_map {
+                            if let Some(custom_scalar_schema_object) =
+                                custom_scalar_map.get(named.as_str())
+                            {
+                                let mut custom_schema = custom_scalar_schema_object.clone();
+                                let mut meta = *custom_schema.metadata.unwrap_or_default();
+                                // If description isn't included in custom schema, inject the one from the schema
+                                if meta.description.is_none() {
+                                    meta.description = default_description;
+                                }
+                                custom_schema.metadata = Some(Box::new(meta));
+                                definitions
+                                    .insert(named.to_string(), Schema::Object(custom_schema));
+                            } else {
+                                warn!(name=?named, "custom scalar missing from custom_scalar_map");
+                                definitions.insert(
+                                    named.to_string(),
+                                    schema_factory(
+                                        default_description,
+                                        None,
+                                        None,
+                                        None,
+                                        None,
+                                        None,
+                                    ),
+                                );
+                            }
+                        } else {
+                            warn!(name=?named, "custom scalars aren't currently supported without a custom_scalar_map");
+                            definitions.insert(
+                                named.to_string(),
+                                schema_factory(default_description, None, None, None, None, None),
+                            );
+                        }
+                    }
+                    Schema::Object(SchemaObject {
+                        metadata: Some(Box::new(Metadata {
+                            description,
+                            ..Default::default()
+                        })),
+                        reference: Some(format!("#/definitions/{}", named)),
+                        ..Default::default()
+                    })
                 } else if let Some(enum_type) = graphql_schema.get_enum(named) {
-                    schema_factory(
-                        description,
-                        Some(InstanceType::String),
-                        None,
-                        None,
-                        None,
-                        Some(
-                            enum_type
-                                .values
-                                .iter()
-                                .map(|(_name, value)| serde_json::json!(value.value))
-                                .collect(),
-                        ),
-                    )
+                    if !definitions.contains_key(named.as_str()) {
+                        definitions.insert(
+                            named.to_string(),
+                            schema_factory(
+                                input_object_description(named, graphql_schema),
+                                Some(InstanceType::String),
+                                None,
+                                None,
+                                None,
+                                Some(
+                                    enum_type
+                                        .values
+                                        .iter()
+                                        .map(|(_name, value)| serde_json::json!(value.value))
+                                        .collect(),
+                                ),
+                            ),
+                        );
+                    }
+                    Schema::Object(SchemaObject {
+                        metadata: Some(Box::new(Metadata {
+                            description,
+                            ..Default::default()
+                        })),
+                        reference: Some(format!("#/definitions/{}", named)),
+                        ..Default::default()
+                    })
                 } else {
                     warn!(name=?named, "Type not found in schema");
                     schema_factory(None, None, None, None, None, None)
@@ -675,8 +777,13 @@ fn type_to_schema(
             }
         },
         Type::NonNullList(list_type) | Type::List(list_type) => {
-            let inner_type_schema =
-                type_to_schema(description, list_type, graphql_schema, custom_scalar_map);
+            let inner_type_schema = type_to_schema(
+                description,
+                list_type,
+                graphql_schema,
+                custom_scalar_map,
+                definitions,
+            );
             schema_factory(
                 None,
                 Some(InstanceType::Array),
@@ -724,7 +831,6 @@ mod tests {
 
     use crate::{
         custom_scalar_map::CustomScalarMap,
-        errors::OperationError,
         operations::{MutationMode, Operation},
     };
 
@@ -775,42 +881,37 @@ mod tests {
 
     #[test]
     fn subscriptions() {
-        let error = Operation::from_document(
-            "subscription SubscriptionName { id }",
-            &SCHEMA,
-            None,
-            None,
-            MutationMode::None,
-            false,
-            false,
-        )
-        .err()
-        .unwrap();
-
-        if let OperationError::SubscriptionNotAllowed(_) = error {
-        } else {
-            unreachable!()
-        }
+        assert!(
+            Operation::from_document(
+                "subscription SubscriptionName { id }",
+                &SCHEMA,
+                None,
+                None,
+                MutationMode::None,
+                false,
+                false,
+            )
+            .unwrap()
+            .is_none()
+        );
     }
 
     #[test]
     fn mutation_mode_none() {
-        let error = Operation::from_document(
-            "mutation MutationName { id }",
-            &SCHEMA,
-            None,
-            None,
-            MutationMode::None,
-            false,
-            false,
-        )
-        .err()
-        .unwrap();
-
-        if let OperationError::MutationNotAllowed(_, _) = error {
-        } else {
-            unreachable!()
-        }
+        assert!(
+            Operation::from_document(
+                "mutation MutationName { id }",
+                &SCHEMA,
+                None,
+                None,
+                MutationMode::None,
+                false,
+                false,
+            )
+            .ok()
+            .unwrap()
+            .is_none()
+        );
     }
 
     #[test]
@@ -824,16 +925,30 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
 
         insta::assert_debug_snapshot!(operation, @r###"
         Operation {
             tool: Tool {
                 name: "MutationName",
-                description: "The returned value is optional and has type `String`",
+                description: Some(
+                    "The returned value is optional and has type `String`",
+                ),
                 input_schema: {
                     "type": String("object"),
                 },
+                annotations: Some(
+                    ToolAnnotations {
+                        title: None,
+                        read_only_hint: Some(
+                            false,
+                        ),
+                        destructive_hint: None,
+                        idempotent_hint: None,
+                        open_world_hint: None,
+                    },
+                ),
             },
             inner: RawOperation {
                 source_text: "mutation MutationName { id }",
@@ -854,16 +969,30 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
 
         insta::assert_debug_snapshot!(operation, @r###"
         Operation {
             tool: Tool {
                 name: "MutationName",
-                description: "The returned value is optional and has type `String`",
+                description: Some(
+                    "The returned value is optional and has type `String`",
+                ),
                 input_schema: {
                     "type": String("object"),
                 },
+                annotations: Some(
+                    ToolAnnotations {
+                        title: None,
+                        read_only_hint: Some(
+                            false,
+                        ),
+                        destructive_hint: None,
+                        idempotent_hint: None,
+                        open_world_hint: None,
+                    },
+                ),
             },
             inner: RawOperation {
                 source_text: "mutation MutationName { id }",
@@ -884,16 +1013,30 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
             },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -914,13 +1057,16 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "properties": Object {
@@ -929,6 +1075,17 @@ mod tests {
                     },
                 },
             },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -954,13 +1111,16 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "required": Array [
@@ -972,6 +1132,17 @@ mod tests {
                     },
                 },
             },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1000,13 +1171,16 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "required": Array [
@@ -1026,6 +1200,17 @@ mod tests {
                     },
                 },
             },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1062,13 +1247,16 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "required": Array [
@@ -1083,6 +1271,17 @@ mod tests {
                     },
                 },
             },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1114,13 +1313,16 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "properties": Object {
@@ -1137,6 +1339,17 @@ mod tests {
                     },
                 },
             },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1170,13 +1383,16 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "properties": Object {
@@ -1188,6 +1404,17 @@ mod tests {
                     },
                 },
             },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1216,13 +1443,16 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "properties": Object {
@@ -1247,6 +1477,17 @@ mod tests {
                     },
                 },
             },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
@@ -1288,17 +1529,25 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "properties": Object {
                     "id": Object {
+                        "$ref": String("#/definitions/RealInputObject"),
+                    },
+                },
+                "definitions": Object {
+                    "RealInputObject": Object {
                         "type": String("object"),
                         "required": Array [
                             String("required"),
@@ -1316,29 +1565,17 @@ mod tests {
                     },
                 },
             },
-        }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
-        {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "object",
-              "required": [
-                "required"
-              ],
-              "properties": {
-                "optional": {
-                  "description": "optional is a input field that is optional",
-                  "type": "string"
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
                 },
-                "required": {
-                  "description": "required is a input field that is required",
-                  "type": "string"
-                }
-              }
-            }
-          }
+            ),
         }
         "###);
     }
@@ -1354,13 +1591,16 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "required": Array [
@@ -1368,6 +1608,11 @@ mod tests {
                 ],
                 "properties": Object {
                     "id": Object {
+                        "$ref": String("#/definitions/RealEnum"),
+                    },
+                },
+                "definitions": Object {
+                    "RealEnum": Object {
                         "description": String("the description for the enum\n\nValues:\nENUM_VALUE_1: ENUM_VALUE_1 is a value\nENUM_VALUE_2: ENUM_VALUE_2 is a value"),
                         "type": String("string"),
                         "enum": Array [
@@ -1377,24 +1622,17 @@ mod tests {
                     },
                 },
             },
-        }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
-        {
-          "type": "object",
-          "required": [
-            "id"
-          ],
-          "properties": {
-            "id": {
-              "description": "the description for the enum\n\nValues:\nENUM_VALUE_1: ENUM_VALUE_1 is a value\nENUM_VALUE_2: ENUM_VALUE_2 is a value",
-              "type": "string",
-              "enum": [
-                "ENUM_VALUE_1",
-                "ENUM_VALUE_2"
-              ]
-            }
-          }
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
@@ -1487,19 +1725,33 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "properties": Object {
                     "id": Object {},
                 },
             },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
@@ -1516,19 +1768,40 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "properties": Object {
-                    "id": Object {},
+                    "id": Object {
+                        "$ref": String("#/definitions/RealCustomScalar"),
+                    },
+                },
+                "definitions": Object {
+                    "RealCustomScalar": Object {
+                        "description": String("RealCustomScalar exists"),
+                    },
                 },
             },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
@@ -1545,21 +1818,40 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "properties": Object {
                     "id": Object {
+                        "$ref": String("#/definitions/RealCustomScalar"),
+                    },
+                },
+                "definitions": Object {
+                    "RealCustomScalar": Object {
                         "description": String("RealCustomScalar exists"),
                     },
                 },
             },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
@@ -1578,33 +1870,41 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
             name: "QueryName",
-            description: "The returned value is optional and has type `String`",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
             input_schema: {
                 "type": String("object"),
                 "properties": Object {
                     "id": Object {
+                        "$ref": String("#/definitions/RealCustomScalar"),
+                    },
+                },
+                "definitions": Object {
+                    "RealCustomScalar": Object {
                         "description": String("RealCustomScalar exists"),
                         "type": String("string"),
                     },
                 },
             },
-        }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
-        {
-          "type": "object",
-          "properties": {
-            "id": {
-              "description": "RealCustomScalar exists",
-              "type": "string"
-            }
-          }
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
         }
         "###);
     }
@@ -1746,10 +2046,11 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
 
         insta::assert_snapshot!(
-            operation.tool.description.as_ref(),
+            operation.tool.description.unwrap(),
             @r###"
         Get a list of A
         The returned value is an array of type `A`
@@ -1826,10 +2127,11 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
 
         insta::assert_snapshot!(
-            operation.tool.description.as_ref(),
+            operation.tool.description.unwrap(),
             @r###"Overridden tool #description"###
         );
     }
@@ -1852,10 +2154,11 @@ mod tests {
             false,
             false,
         )
+        .unwrap()
         .unwrap();
 
         insta::assert_snapshot!(
-            operation.tool.description.as_ref(),
+            operation.tool.description.unwrap(),
             @r###"The returned value is optional and has type `String`"###
         );
     }
@@ -1871,10 +2174,11 @@ mod tests {
             false,
             true,
         )
+        .unwrap()
         .unwrap();
 
         insta::assert_snapshot!(
-            operation.tool.description.as_ref(),
+            operation.tool.description.unwrap(),
             @r###"
                 The returned value is optional and has type `String`
                 ---
@@ -1894,10 +2198,11 @@ mod tests {
             true,
             false,
         )
+        .unwrap()
         .unwrap();
 
         insta::assert_snapshot!(
-            operation.tool.description.as_ref(),
+            operation.tool.description.unwrap(),
             @r###"
                 """the description for the enum"""
                 enum RealEnum {
@@ -1921,11 +2226,94 @@ mod tests {
             true,
             true,
         )
+        .unwrap()
         .unwrap();
 
         insta::assert_snapshot!(
-            operation.tool.description.as_ref(),
+            operation.tool.description.unwrap(),
             @r###""###
         );
+    }
+
+    #[test]
+    fn recursive_inputs() {
+        let operation = Operation::from_document(
+            r###"query Test($filter: Filter){
+                field(filter: $filter) {
+                    id
+                }
+            }"###,
+            &Schema::parse(
+                r#"
+                """the filter input"""
+                input Filter {
+                """the filter.field field"""
+                    field: String
+                    """the filter.filter field"""
+                    filter: Filter
+                }
+                type Query {
+                """the Query.field field"""
+                  field(
+                    """the filter argument"""
+                    filter: Filter
+                  ): String
+                }
+            "#,
+                "operation.graphql",
+            )
+            .unwrap(),
+            None,
+            None,
+            MutationMode::None,
+            true,
+            true,
+        )
+        .unwrap()
+        .unwrap();
+
+        insta::assert_debug_snapshot!(operation.tool, @r###"
+        Tool {
+            name: "Test",
+            description: Some(
+                "",
+            ),
+            input_schema: {
+                "type": String("object"),
+                "properties": Object {
+                    "filter": Object {
+                        "$ref": String("#/definitions/Filter"),
+                    },
+                },
+                "definitions": Object {
+                    "Filter": Object {
+                        "description": String("the filter input"),
+                        "type": String("object"),
+                        "properties": Object {
+                            "field": Object {
+                                "description": String("the filter.field field"),
+                                "type": String("string"),
+                            },
+                            "filter": Object {
+                                "description": String("the filter.filter field"),
+                                "$ref": String("#/definitions/Filter"),
+                            },
+                        },
+                    },
+                },
+            },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
+        }
+        "###);
     }
 }

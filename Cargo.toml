@@ -2,7 +2,7 @@
 resolver = "2"
 members = ["crates/apollo-mcp-server", "crates/apollo-mcp-registry"]
 
-package.version = "0.2.0"
+package.version = "0.3.0"
 
 [workspace.dependencies]
 apollo-compiler = "1.27.0"
@@ -47,3 +47,6 @@ expect_used = "deny"
 indexing_slicing = "deny"
 unwrap_used = "deny"
 panic = "deny"
+
+[patch.crates-io]
+rmcp = { git = 'https://github.com/modelcontextprotocol/rust-sdk.git' }

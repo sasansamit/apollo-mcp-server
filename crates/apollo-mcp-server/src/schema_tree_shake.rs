@@ -507,7 +507,13 @@ fn selection_set_to_fields(
     named_fragments: &HashMap<String, Node<FragmentDefinition>>,
 ) -> Vec<Node<Field>> {
     match selection_set {
-        Selection::Field(field) => vec![field.clone()],
+        Selection::Field(field) => {
+            if field.name == "__typename" {
+                vec![]
+            } else {
+                vec![field.clone()]
+            }
+        }
         Selection::FragmentSpread(fragment) => named_fragments
             .get(fragment.fragment_name.as_str())
             .map(|f| {
@@ -826,10 +832,11 @@ fn retain_directive(
     if let Some(tree_directive_node) = tree_shaker.directive_nodes.get_mut(directive_name) {
         tree_directive_node.retain = true;
         tree_directive_node.node.arguments.iter().for_each(|arg| {
-            if let Some(arg_type) = tree_shaker.schema.types.get(arg.name.as_str()) {
+            let arg_type_name = arg.ty.inner_named_type();
+            if let Some(arg_type) = tree_shaker.schema.types.get(arg_type_name) {
                 retain_type(tree_shaker, arg_type, None, depth_limit.decrement())
             } else {
-                tracing::error!("argument type {} not found", arg.name);
+                tracing::error!("argument type {} not found", arg_type_name);
             }
         });
     }
@@ -841,7 +848,7 @@ mod test {
     use rstest::{fixture, rstest};
 
     use crate::{
-        operations::{MutationMode, operation_defs},
+        operations::operation_defs,
         schema_tree_shake::{DepthLimit, SchemaTreeShaker},
     };
 
@@ -973,7 +980,9 @@ mod test {
         let schema = document.to_schema_validate().unwrap();
         let mut shaker = SchemaTreeShaker::new(&schema);
         let (operation_document, operation_def, _comments) =
-            operation_defs("query TestQuery { id }", false, MutationMode::None).unwrap();
+            operation_defs("query TestQuery { id }", false)
+                .unwrap()
+                .unwrap();
         shaker.retain_operation(&operation_def, &operation_document, DepthLimit::Unlimited);
         assert_eq!(
             shaker.shaken().unwrap().to_string(),
@@ -1123,6 +1132,71 @@ mod test {
         assert_eq!(
             shaker.shaken().unwrap().to_string(),
             "type Query {\n  field1: TypeA\n  field2: TypeB\n}\n\ntype TypeA {\n  id: TypeB\n}\n\ntype TypeB {\n  id: TypeC\n}\n\ntype TypeC {\n  id: TypeA\n}\n"
+        );
+    }
+
+    #[test]
+    fn should_retain_builtin_directives() {
+        let source_text = r#"
+            type Query {
+                field1: String @deprecated(reason: "Use 'field2' instead")
+                field2: String
+            }
+        "#;
+        let document = Parser::new()
+            .parse_ast(source_text, "schema.graphql")
+            .unwrap();
+        let schema = document.to_schema_validate().unwrap();
+        let mut shaker = SchemaTreeShaker::new(&schema);
+        shaker.retain_operation_type(OperationType::Query, None, DepthLimit::Limited(3));
+        assert_eq!(
+            shaker.shaken().unwrap().to_string(),
+            "type Query {\n  field1: String @deprecated(reason: \"Use 'field2' instead\")\n  field2: String\n}\n"
+        );
+    }
+
+    #[test]
+    fn should_retain_custom_directives() {
+        let source_text = r#"
+            type Query {
+                field1: String @CustomDirective(arg: "Use 'field2' instead")
+                field2: String
+            }
+            directive @CustomDirective(arg: CustomScalar) on FIELD_DEFINITION
+            scalar CustomScalar
+        "#;
+        let document = Parser::new()
+            .parse_ast(source_text, "schema.graphql")
+            .unwrap();
+        let schema = document.to_schema_validate().unwrap();
+        let mut shaker = SchemaTreeShaker::new(&schema);
+        shaker.retain_operation_type(OperationType::Query, None, DepthLimit::Limited(3));
+        assert_eq!(
+            shaker.shaken().unwrap().to_string(),
+            "directive @CustomDirective(arg: CustomScalar) on FIELD_DEFINITION\n\ntype Query {\n  field1: String @CustomDirective(arg: \"Use 'field2' instead\")\n  field2: String\n}\n\nscalar CustomScalar\n"
+        );
+    }
+
+    #[test]
+    fn recursive_input() {
+        let source_text = r#"
+            input Filter {
+                field: String
+                filter: Filter
+            }
+            type Query {
+                field(filter: Filter): String
+            }
+        "#;
+        let document = Parser::new()
+            .parse_ast(source_text, "schema.graphql")
+            .unwrap();
+        let schema = document.to_schema_validate().unwrap();
+        let mut shaker = SchemaTreeShaker::new(&schema);
+        shaker.retain_operation_type(OperationType::Query, None, DepthLimit::Unlimited);
+        assert_eq!(
+            shaker.shaken().unwrap().to_string(),
+            "input Filter {\n  field: String\n  filter: Filter\n}\n\ntype Query {\n  field(filter: Filter): String\n}\n"
         );
     }
 }
