@@ -32,6 +32,16 @@
 
     nativeBuildInputs = [perl pkg-config];
     buildInputs = [];
+
+    # Meta information about the packages
+    meta = {
+      description = "Apollo MCP Server";
+      homepage = "https://www.apollographql.com/docs/apollo-mcp-server";
+      license = lib.licenses.elastic20;
+
+      # The main binary that should be run when using `nix run`
+      mainProgram = "apollo-mcp-server";
+    };
   };
 
   # Generate a derivation for just the dependencies of the project so that they
