@@ -152,6 +152,9 @@ Let's verify everything is working:
 - **Problem**: "Connection refused" errors
   - Solution: Check if the MCP server is still running
   - Solution: Verify the port numbers match in both the server and Claude config
+- **Problem**: "MCP thespacedevs: Server disconnected" errors
+  - Solution: Uninstall older versions of Node. `mcp-remote` only works with Node 18 or later.
+  - Solution: Restart Claude Desktop
 
 #### GraphQL Operation Issues
 - **Error**: "Operation not found"
