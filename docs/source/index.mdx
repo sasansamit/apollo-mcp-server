@@ -25,7 +25,7 @@ The GraphQL operations can be configured from persisted queries, which are prede
 
 Apollo MCP Server is deployable in local environments via Apollo's Rover CLI or in containerized services in your cloud infrastructure. It can expose an MCP endpoint using Streamable HTTP for communication with AI clients.
 
-## How Apollo MCP Server Works
+## How Apollo MCP Server works
 
 Apollo MCP Server bridges AI applications and your GraphQL APIs, translating GraphQL operations into MCP tools that AI models can discover and use.
 
@@ -91,12 +91,14 @@ Existing Infrastructure: Your GraphQL API handles requests normally, with Apollo
 
 This design lets you expose precise GraphQL capabilities to AI while maintaining complete control over data access and security.
 
-### Example Usage
+### Example ussage
 
 Once configured, AI applications can use your GraphQL operations naturally:
 
 > User: "Show me the astronauts currently in space"
+>
 > Claude: *Uses GetAstronautsCurrentlyInSpace tool to query your GraphQL API*
+>
 > "There are currently 7 astronauts aboard the ISS..."
 
 ## Why GraphQL for AI?
