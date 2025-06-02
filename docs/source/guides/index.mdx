@@ -139,7 +139,7 @@ From the root of a local MCP Server repo, run the `apollo-mcp-server` binary wit
 ```sh showLineNumbers=false
 apollo-mcp-server \
   --directory <absolute path to this local repo> \
-  -s graphql/weather/api.graphql \
+  --schema graphql/weather/api.graphql \
   --header "apollographql-client-name:my-web-app" \
   --manifest graphql/weather/persisted_queries/apollo.json
 ```
@@ -164,7 +164,7 @@ Use a [contract variant](/graphos/platform/schema-management/delivery/contracts/
 ```sh title="Example command using GraphOS-managed persisted queries"
 apollo-mcp-server \
   --directory <absolute path to this git repo> \
-  -s graphql/weather/api.graphql \
+  --schema graphql/weather/api.graphql \
   --header "apollographql-client-name:my-web-app" \
   --uplink
 ```
@@ -234,8 +234,8 @@ You can inspect a local Apollo MCP Server by running it with MCP Inspector.
 npx @modelcontextprotocol/inspector \
   target/debug/apollo-mcp-server \
   --directory <absolute path to this git repo> \
-  -s graphql/weather/api.graphql \
-  -o graphql/weather/operations/forecast.graphql graphql/weather/operations/alerts.graphql graphql/weather/operations/all.graphql
+  --schema graphql/weather/api.graphql \
+  --operations graphql/weather/operations/forecast.graphql graphql/weather/operations/alerts.graphql graphql/weather/operations/all.graphql
 ```
 
 <ExpansionPanel title="Example output">
@@ -264,8 +264,9 @@ You can also deploy the server as a container using the instructions in [Deployi
 ```sh
 target/debug/apollo-mcp-server \
   --directory <absolute path to this git repo> \
-  --http-port 5000 -s graphql/weather/api.graphql \
-  -o graphql/weather/operations/forecast.graphql graphql/weather/operations/alerts.graphql graphql/weather/operations/all.graphql
+  --http-port 5000 \
+  --schema graphql/weather/api.graphql \
+  --operations graphql/weather/operations/forecast.graphql graphql/weather/operations/alerts.graphql graphql/weather/operations/all.graphql
 ```
 
 1. Start the MCP Inspector:
