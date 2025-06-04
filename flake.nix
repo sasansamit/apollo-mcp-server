@@ -84,6 +84,9 @@
 
             # For consistent TOML formatting
             taplo
+
+            # To allow using dependencies from git repositories in Cargo.toml
+            git
           ]);
       };
 
