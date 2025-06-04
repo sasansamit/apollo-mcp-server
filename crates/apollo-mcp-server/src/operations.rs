@@ -16,7 +16,8 @@ use apollo_mcp_registry::uplink::persisted_queries::ManifestSource;
 use apollo_mcp_registry::uplink::persisted_queries::event::Event as ManifestEvent;
 use futures::{Stream, StreamExt};
 use regex::Regex;
-use rmcp::model::ToolAnnotations;
+use reqwest::header::{HeaderMap, HeaderValue};
+use rmcp::model::{ErrorCode, ToolAnnotations};
 use rmcp::schemars::Map;
 use rmcp::{
     model::Tool,
@@ -161,11 +162,45 @@ pub enum MutationMode {
     All,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct RawOperation {
     source_text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     persisted_query_id: Option<String>,
+    headers: Option<HeaderMap<HeaderValue>>,
+    variables: Option<HashMap<String, Value>>,
+}
+
+// Custom Serialize implementation for RawOperation
+// This is needed because reqwest HeaderMap/HeaderValue/HeaderName don't derive Serialize
+impl serde::Serialize for RawOperation {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("RawOperation", 4)?;
+        state.serialize_field("source_text", &self.source_text)?;
+        if let Some(ref id) = self.persisted_query_id {
+            state.serialize_field("persisted_query_id", id)?;
+        }
+        if let Some(ref variables) = self.variables {
+            state.serialize_field("variables", variables)?;
+        }
+        if let Some(ref headers) = self.headers {
+            state.serialize_field(
+                "headers",
+                headers
+                    .iter()
+                    .map(|(name, value)| {
+                        format!("{}: {}", name, value.to_str().unwrap_or_default())
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    .as_str(),
+            )?;
+        }
+        state.end()
+    }
 }
 
 impl From<String> for RawOperation {
@@ -173,6 +208,8 @@ impl From<String> for RawOperation {
         Self {
             source_text,
             persisted_query_id: None,
+            headers: None,
+            variables: None,
         }
     }
 }
@@ -182,6 +219,8 @@ impl From<(String, String)> for RawOperation {
         Self {
             persisted_query_id: Some(persisted_query_id),
             source_text,
+            headers: None,
+            variables: None,
         }
     }
 }
@@ -196,9 +235,8 @@ impl RawOperation {
         disable_schema_description: bool,
     ) -> Result<Option<Operation>, OperationError> {
         Operation::from_document(
-            &self.source_text,
+            self,
             schema,
-            None,
             custom_scalars,
             mutation_mode,
             disable_type_description,
@@ -301,17 +339,17 @@ pub fn operation_defs(
 
 impl Operation {
     pub fn from_document(
-        source_text: &str,
+        raw_operation: RawOperation,
         graphql_schema: &GraphqlSchema,
-        persisted_query_id: Option<String>,
         custom_scalar_map: Option<&CustomScalarMap>,
         mutation_mode: MutationMode,
         disable_type_description: bool,
         disable_schema_description: bool,
     ) -> Result<Option<Self>, OperationError> {
-        if let Some((document, operation, comments)) =
-            operation_defs(source_text, mutation_mode != MutationMode::None)?
-        {
+        if let Some((document, operation, comments)) = operation_defs(
+            &raw_operation.source_text,
+            mutation_mode != MutationMode::None,
+        )? {
             let operation_name = operation_name(&operation)?;
 
             let description = Self::tool_description(
@@ -327,6 +365,7 @@ impl Operation {
                 &operation,
                 graphql_schema,
                 custom_scalar_map,
+                raw_operation.variables.as_ref(),
             ))?;
             let Value::Object(schema) = object else {
                 return Err(OperationError::Internal(
@@ -353,10 +392,7 @@ impl Operation {
             }
             Ok(Some(Operation {
                 tool,
-                inner: RawOperation {
-                    source_text: source_text.to_string(),
-                    persisted_query_id,
-                },
+                inner: raw_operation,
             }))
         } else {
             Ok(None)
@@ -528,22 +564,28 @@ fn get_json_schema(
     operation: &Node<OperationDefinition>,
     graphql_schema: &GraphqlSchema,
     custom_scalar_map: Option<&CustomScalarMap>,
+    variable_overrides: Option<&HashMap<String, Value>>,
 ) -> RootSchema {
     let mut obj = ObjectValidation::default();
     let mut definitions = Map::new();
 
     operation.variables.iter().for_each(|variable| {
         let variable_name = variable.name.to_string();
-        let schema = type_to_schema(
-            None,
-            variable.ty.as_ref(),
-            graphql_schema,
-            custom_scalar_map,
-            &mut definitions,
-        );
-        obj.properties.insert(variable_name.clone(), schema);
-        if variable.ty.is_non_null() {
-            obj.required.insert(variable_name);
+        if !variable_overrides
+            .map(|o| o.contains_key(&variable_name))
+            .unwrap_or_default()
+        {
+            let schema = type_to_schema(
+                None,
+                variable.ty.as_ref(),
+                graphql_schema,
+                custom_scalar_map,
+                &mut definitions,
+            );
+            obj.properties.insert(variable_name.clone(), schema);
+            if variable.ty.is_non_null() {
+                obj.required.insert(variable_name);
+            }
         }
     });
 
@@ -810,28 +852,76 @@ fn type_to_schema(
 
 impl graphql::Executable for Operation {
     fn persisted_query_id(&self) -> Option<String> {
-        self.inner.persisted_query_id.clone()
+        // TODO: id was being overridden, should we be returning? Should this be behind a flag? self.inner.persisted_query_id.clone()
+        None
     }
 
     fn operation(&self, _input: Value) -> Result<String, McpError> {
         Ok(self.inner.source_text.clone())
     }
 
-    fn variables(&self, input: Value) -> Result<Value, McpError> {
-        Ok(input)
+    fn variables(&self, input_variables: Value) -> Result<Value, McpError> {
+        if let Some(raw_variables) = self.inner.variables.as_ref() {
+            let mut variables = match input_variables {
+                Value::Null => Ok(serde_json::Map::new()),
+                Value::Object(obj) => Ok(obj.clone()),
+                _ => Err(McpError::new(
+                    ErrorCode::INVALID_PARAMS,
+                    "Invalid input".to_string(),
+                    None,
+                )),
+            }?;
+
+            raw_variables.iter().try_for_each(|(key, value)| {
+                if variables.contains_key(key) {
+                    Err(McpError::new(
+                        ErrorCode::INVALID_PARAMS,
+                        "No such parameter: {key}",
+                        None,
+                    ))
+                } else {
+                    variables.insert(key.clone(), value.clone());
+                    Ok(())
+                }
+            })?;
+
+            Ok(Value::Object(variables))
+        } else {
+            Ok(input_variables)
+        }
+    }
+
+    fn headers(&self, default_headers: &HeaderMap<HeaderValue>) -> HeaderMap<HeaderValue> {
+        match self.inner.headers.as_ref() {
+            None => default_headers.clone(),
+            Some(raw_headers) if default_headers.is_empty() => raw_headers.clone(),
+            Some(raw_headers) => {
+                let mut headers = default_headers.clone();
+                raw_headers.iter().for_each(|(key, value)| {
+                    if headers.contains_key(key) {
+                        tracing::debug!(
+                            "Header {} has a default value, overwriting with operation value",
+                            key
+                        );
+                    }
+                    headers.insert(key, value.clone());
+                });
+                headers
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{str::FromStr, sync::LazyLock};
+    use std::{collections::HashMap, str::FromStr, sync::LazyLock};
 
     use apollo_compiler::{Schema, parser::Parser, validation::Valid};
     use rmcp::{model::Tool, serde_json};
 
     use crate::{
         custom_scalar_map::CustomScalarMap,
-        operations::{MutationMode, Operation},
+        operations::{MutationMode, Operation, RawOperation},
     };
 
     // Example schema for tests
@@ -883,9 +973,13 @@ mod tests {
     fn subscriptions() {
         assert!(
             Operation::from_document(
-                "subscription SubscriptionName { id }",
+                RawOperation {
+                    source_text: "subscription SubscriptionName { id }".to_string(),
+                    persisted_query_id: None,
+                    headers: None,
+                    variables: None,
+                },
                 &SCHEMA,
-                None,
                 None,
                 MutationMode::None,
                 false,
@@ -900,9 +994,13 @@ mod tests {
     fn mutation_mode_none() {
         assert!(
             Operation::from_document(
-                "mutation MutationName { id }",
+                RawOperation {
+                    source_text: "mutation MutationName { id }".to_string(),
+                    persisted_query_id: None,
+                    headers: None,
+                    variables: None,
+                },
                 &SCHEMA,
-                None,
                 None,
                 MutationMode::None,
                 false,
@@ -917,9 +1015,13 @@ mod tests {
     #[test]
     fn mutation_mode_explicit() {
         let operation = Operation::from_document(
-            "mutation MutationName { id }",
+            RawOperation {
+                source_text: "mutation MutationName { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::Explicit,
             false,
@@ -953,6 +1055,8 @@ mod tests {
             inner: RawOperation {
                 source_text: "mutation MutationName { id }",
                 persisted_query_id: None,
+                headers: None,
+                variables: None,
             },
         }
         "###);
@@ -961,9 +1065,13 @@ mod tests {
     #[test]
     fn mutation_mode_all() {
         let operation = Operation::from_document(
-            "mutation MutationName { id }",
+            RawOperation {
+                source_text: "mutation MutationName { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::All,
             false,
@@ -997,6 +1105,8 @@ mod tests {
             inner: RawOperation {
                 source_text: "mutation MutationName { id }",
                 persisted_query_id: None,
+                headers: None,
+                variables: None,
             },
         }
         "###);
@@ -1005,9 +1115,13 @@ mod tests {
     #[test]
     fn no_variables() {
         let operation = Operation::from_document(
-            "query QueryName { id }",
+            RawOperation {
+                source_text: "query QueryName { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1049,9 +1163,13 @@ mod tests {
     #[test]
     fn nullable_named_type() {
         let operation = Operation::from_document(
-            "query QueryName($id: ID) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: ID) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1103,9 +1221,13 @@ mod tests {
     #[test]
     fn non_nullable_named_type() {
         let operation = Operation::from_document(
-            "query QueryName($id: ID!) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: ID!) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1163,9 +1285,13 @@ mod tests {
     #[test]
     fn non_nullable_list_of_nullable_named_type() {
         let operation = Operation::from_document(
-            "query QueryName($id: [ID]!) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: [ID]!) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1239,9 +1365,13 @@ mod tests {
     #[test]
     fn non_nullable_list_of_non_nullable_named_type() {
         let operation = Operation::from_document(
-            "query QueryName($id: [ID!]!) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: [ID!]!) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1305,9 +1435,13 @@ mod tests {
     #[test]
     fn nullable_list_of_nullable_named_type() {
         let operation = Operation::from_document(
-            "query QueryName($id: [ID]) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: [ID]) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1375,9 +1509,13 @@ mod tests {
     #[test]
     fn nullable_list_of_non_nullable_named_type() {
         let operation = Operation::from_document(
-            "query QueryName($id: [ID!]) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: [ID!]) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1435,9 +1573,13 @@ mod tests {
     #[test]
     fn nullable_list_of_nullable_lists_of_nullable_named_types() {
         let operation = Operation::from_document(
-            "query QueryName($id: [[ID]]) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: [[ID]]) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1521,9 +1663,13 @@ mod tests {
     #[test]
     fn nullable_input_object() {
         let operation = Operation::from_document(
-            "query QueryName($id: RealInputObject) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: RealInputObject) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1583,9 +1729,13 @@ mod tests {
     #[test]
     fn non_nullable_enum() {
         let operation = Operation::from_document(
-            "query QueryName($id: RealEnum!) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: RealEnum!) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1640,9 +1790,13 @@ mod tests {
     #[test]
     fn multiple_operations_should_error() {
         let operation = Operation::from_document(
-            "query QueryName { id } query QueryName { id }",
+            RawOperation {
+                source_text: "query QueryName { id } query QueryName { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1660,9 +1814,13 @@ mod tests {
     #[test]
     fn unnamed_operations_should_error() {
         let operation = Operation::from_document(
-            "query { id }",
+            RawOperation {
+                source_text: "query { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1680,9 +1838,13 @@ mod tests {
     #[test]
     fn no_operations_should_error() {
         let operation = Operation::from_document(
-            "fragment Test on Query { id }",
+            RawOperation {
+                source_text: "fragment Test on Query { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1698,9 +1860,13 @@ mod tests {
     #[test]
     fn schema_should_error() {
         let operation = Operation::from_document(
-            "type Query { id: String }",
+            RawOperation {
+                source_text: "type Query { id: String }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1717,9 +1883,13 @@ mod tests {
     fn unknown_type_should_be_any() {
         // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
-            "query QueryName($id: FakeType) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: FakeType) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1760,9 +1930,13 @@ mod tests {
     fn custom_scalar_without_map_should_be_any() {
         // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
-            "query QueryName($id: RealCustomScalar) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: RealCustomScalar) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -1810,9 +1984,13 @@ mod tests {
     fn custom_scalar_with_map_but_not_found_should_error() {
         // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
-            "query QueryName($id: RealCustomScalar) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: RealCustomScalar) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             Some(&CustomScalarMap::from_str("{}").unwrap()),
             MutationMode::None,
             false,
@@ -1862,9 +2040,13 @@ mod tests {
             CustomScalarMap::from_str("{ \"RealCustomScalar\": { \"type\": \"string\" }}");
 
         let operation = Operation::from_document(
-            "query QueryName($id: RealCustomScalar) { id }",
+            RawOperation {
+                source_text: "query QueryName($id: RealCustomScalar) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             custom_scalar_map.ok().as_ref(),
             MutationMode::None,
             false,
@@ -2006,7 +2188,8 @@ mod tests {
         let schema = document.to_schema().unwrap();
 
         let operation = Operation::from_document(
-            r###"
+            RawOperation {
+                source_text: r###"
             query GetABZ($state: String!) {
               a(input: $input) {
                 d {
@@ -2038,9 +2221,13 @@ mod tests {
             fragment JustZZZ on Z {
               zzz
             }
-            "###,
+            "###
+                .to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &schema,
-            None,
             None,
             MutationMode::None,
             false,
@@ -2110,7 +2297,8 @@ mod tests {
     #[test]
     fn tool_comment_description() {
         let operation = Operation::from_document(
-            r###"
+            RawOperation {
+                source_text: r###"
             # Overridden tool #description
             query GetABZ($state: String!) {
               b {
@@ -2119,9 +2307,13 @@ mod tests {
                 }
               }
             }
-            "###,
+            "###
+                .to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -2139,16 +2331,21 @@ mod tests {
     #[test]
     fn tool_empty_comment_description() {
         let operation = Operation::from_document(
-            r###"
+            RawOperation {
+                source_text: r###"
             #
 
             #
             query GetABZ($state: String!) {
               id
             }
-            "###,
+            "###
+                .to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -2166,9 +2363,13 @@ mod tests {
     #[test]
     fn no_schema_description() {
         let operation = Operation::from_document(
-            r###"query GetABZ($state: String!) { id enum }"###,
+            RawOperation {
+                source_text: r###"query GetABZ($state: String!) { id enum }"###.to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             false,
@@ -2190,9 +2391,13 @@ mod tests {
     #[test]
     fn no_type_description() {
         let operation = Operation::from_document(
-            r###"query GetABZ($state: String!) { id enum }"###,
+            RawOperation {
+                source_text: r###"query GetABZ($state: String!) { id enum }"###.to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             true,
@@ -2218,9 +2423,13 @@ mod tests {
     #[test]
     fn no_type_description_or_schema_description() {
         let operation = Operation::from_document(
-            r###"query GetABZ($state: String!) { id enum }"###,
+            RawOperation {
+                source_text: r###"query GetABZ($state: String!) { id enum }"###.to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &SCHEMA,
-            None,
             None,
             MutationMode::None,
             true,
@@ -2238,11 +2447,17 @@ mod tests {
     #[test]
     fn recursive_inputs() {
         let operation = Operation::from_document(
-            r###"query Test($filter: Filter){
+            RawOperation {
+                source_text: r###"query Test($filter: Filter){
                 field(filter: $filter) {
                     id
                 }
-            }"###,
+            }"###
+                    .to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+            },
             &Schema::parse(
                 r#"
                 """the filter input"""
@@ -2263,7 +2478,6 @@ mod tests {
                 "operation.graphql",
             )
             .unwrap(),
-            None,
             None,
             MutationMode::None,
             true,
@@ -2299,6 +2513,57 @@ mod tests {
                                 "$ref": String("#/definitions/Filter"),
                             },
                         },
+                    },
+                },
+            },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
+        }
+        "###);
+    }
+
+    #[test]
+    fn with_variable_overrides() {
+        let operation = Operation::from_document(
+            RawOperation {
+                source_text: "query QueryName($id: ID, $name: String) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: Some(HashMap::from([(
+                    "id".to_string(),
+                    serde_json::Value::String("v".to_string()),
+                )])),
+            },
+            &SCHEMA,
+            None,
+            MutationMode::None,
+            false,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        let tool = Tool::from(operation);
+
+        insta::assert_debug_snapshot!(tool, @r###"
+        Tool {
+            name: "QueryName",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
+            input_schema: {
+                "type": String("object"),
+                "properties": Object {
+                    "name": Object {
+                        "type": String("string"),
                     },
                 },
             },
