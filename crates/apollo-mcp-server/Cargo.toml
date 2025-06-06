@@ -2,7 +2,7 @@
 name = "apollo-mcp-server"
 version.workspace = true
 edition = "2024"
-license = "Elastic-2.0"
+license-file = "../LICENSE"
 
 [dependencies]
 anyhow = "1.0.98"
