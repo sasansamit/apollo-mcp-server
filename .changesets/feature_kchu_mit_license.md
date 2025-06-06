@@ -1,3 +1,3 @@
 ### Update license to MIT - @kbychu PR #122
 
-Updating the license to MIT
+The Apollo MCP Server is now licensed under MIT instead of ELv2
