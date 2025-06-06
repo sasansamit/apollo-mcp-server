@@ -264,7 +264,6 @@ You can also deploy the server as a container using the instructions in [Deployi
 ```sh
 target/debug/apollo-mcp-server \
   --directory <absolute path to this git repo> \
-  --http-address 127.0.0.1 \
   --http-port 5000 \
   --schema graphql/weather/api.graphql \
   --operations graphql/weather/operations/forecast.graphql graphql/weather/operations/alerts.graphql graphql/weather/operations/all.graphql
