@@ -393,11 +393,13 @@ impl Starting {
             .introspection
             .then(|| Introspect::new(schema.clone(), root_query_type, root_mutation_type));
 
-        let explorer_tool = self
-            .explorer
-            .then(|| std::env::var("APOLLO_GRAPH_REF").ok())
-            .flatten()
-            .map(Explorer::new);
+        let explorer_tool = if self.explorer {
+            Some(Explorer::new(std::env::var("APOLLO_GRAPH_REF").map_err(
+                |_| ServerError::EnvironmentVariable("APOLLO_GRAPH_REF".to_string()),
+            )?))
+        } else {
+            None
+        };
 
         let cancellation_token = CancellationToken::new();
 
