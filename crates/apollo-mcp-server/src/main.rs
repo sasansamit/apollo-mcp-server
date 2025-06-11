@@ -1,4 +1,6 @@
 use anyhow::bail;
+use apollo_mcp_registry::platform_api::PlatformApiConfig;
+use apollo_mcp_registry::platform_api::operation_collections::collection_poller::CollectionSource;
 use apollo_mcp_registry::uplink::persisted_queries::ManifestSource;
 use apollo_mcp_registry::uplink::schema::SchemaSource;
 use apollo_mcp_registry::uplink::{SecretString, UplinkConfig};
@@ -82,7 +84,7 @@ struct Args {
     operations: Vec<PathBuf>,
 
     /// The path to the persisted query manifest containing operations
-    #[arg(long)]
+    #[arg(long, conflicts_with_all(["operations", "collection"]))]
     manifest: Option<PathBuf>,
 
     // Configure when to allow mutations
@@ -112,6 +114,10 @@ struct Args {
     /// [default: 5000]
     #[arg(long, conflicts_with_all(["sse_port", "sse_address"]))]
     http_port: Option<u16>,
+
+    /// collection id to expose as MCP tools (requires APOLLO_KEY)
+    #[arg(long, conflicts_with_all(["operations", "manifest"]))]
+    collection: Option<String>,
 }
 
 #[tokio::main]
@@ -164,6 +170,11 @@ async fn main() -> anyhow::Result<()> {
         OperationSource::from(ManifestSource::LocalHotReload(vec![manifest]))
     } else if !args.operations.is_empty() {
         OperationSource::from(args.operations)
+    } else if let Some(collection_id) = args.collection {
+        OperationSource::Collection(CollectionSource {
+            collection_id,
+            platform_api_config: platform_api_config()?,
+        })
     } else if args.uplink {
         OperationSource::from(ManifestSource::Uplink(uplink_config()?))
     } else {
@@ -221,5 +232,16 @@ fn uplink_config() -> Result<UplinkConfig, ServerError> {
         poll_interval: Duration::from_secs(10),
         timeout: Duration::from_secs(30),
         endpoints: None, // Use the default endpoints
+    })
+}
+
+fn platform_api_config() -> Result<PlatformApiConfig, ServerError> {
+    Ok(PlatformApiConfig {
+        apollo_key: SecretString::from(
+            env::var("APOLLO_KEY")
+                .map_err(|_| ServerError::EnvironmentVariable(String::from("APOLLO_KEY")))?,
+        ),
+        poll_interval: Duration::from_secs(30),
+        timeout: Duration::from_secs(30),
     })
 }

@@ -1,5 +1,6 @@
 use apollo_compiler::{Schema, ast::Document, validation::WithErrors};
 use apollo_federation::error::FederationError;
+use apollo_mcp_registry::platform_api::operation_collections::error::CollectionError;
 use reqwest::header::{InvalidHeaderName, InvalidHeaderValue};
 use rmcp::serde_json;
 use tokio::task::JoinError;
@@ -27,6 +28,9 @@ pub enum OperationError {
 
     #[error(transparent)]
     File(#[from] std::io::Error),
+
+    #[error("Error loading collection: {0}")]
+    Collection(CollectionError),
 }
 
 /// An error in server initialization

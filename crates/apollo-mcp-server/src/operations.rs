@@ -12,11 +12,16 @@ use apollo_compiler::{
     parser::Parser,
 };
 use apollo_mcp_registry::files;
+use apollo_mcp_registry::platform_api::operation_collections::collection_poller::{
+    CollectionSource, OperationData,
+};
+use apollo_mcp_registry::platform_api::operation_collections::error::CollectionError;
+use apollo_mcp_registry::platform_api::operation_collections::event::CollectionEvent;
 use apollo_mcp_registry::uplink::persisted_queries::ManifestSource;
 use apollo_mcp_registry::uplink::persisted_queries::event::Event as ManifestEvent;
 use futures::{Stream, StreamExt};
 use regex::Regex;
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use rmcp::model::{ErrorCode, ToolAnnotations};
 use rmcp::schemars::Map;
 use rmcp::{
@@ -31,6 +36,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use tracing::{debug, info, warn};
 
@@ -44,6 +50,9 @@ pub enum OperationSource {
 
     /// Persisted Query manifest
     Manifest(ManifestSource),
+
+    /// Operation collection
+    Collection(CollectionSource),
 
     /// No operations provided
     None,
@@ -61,6 +70,22 @@ impl OperationSource {
                     Event::OperationsUpdated(
                         operations.into_iter().map(RawOperation::from).collect(),
                     )
+                })
+                .boxed(),
+            OperationSource::Collection(collection_source) => collection_source
+                .into_stream()
+                .map(|event| match event {
+                    CollectionEvent::UpdateOperationCollection(operations) => {
+                        match operations
+                            .iter()
+                            .map(RawOperation::try_from)
+                            .collect::<Result<Vec<_>, _>>()
+                        {
+                            Ok(operations) => Event::OperationsUpdated(operations),
+                            Err(e) => Event::CollectionError(e),
+                        }
+                    }
+                    CollectionEvent::CollectionError(error) => Event::CollectionError(error),
                 })
                 .boxed(),
             OperationSource::None => {
@@ -222,6 +247,45 @@ impl From<(String, String)> for RawOperation {
             headers: None,
             variables: None,
         }
+    }
+}
+
+impl TryFrom<&OperationData> for RawOperation {
+    type Error = CollectionError;
+
+    fn try_from(operation_data: &OperationData) -> Result<Self, Self::Error> {
+        let variables = if let Some(variables) = operation_data.variables.as_ref() {
+            if variables.trim().is_empty() {
+                Some(HashMap::new())
+            } else {
+                Some(
+                    serde_json::from_str::<HashMap<String, Value>>(variables)
+                        .map_err(|_| CollectionError::InvalidVariables(variables.clone()))?,
+                )
+            }
+        } else {
+            None
+        };
+
+        let headers = if let Some(headers) = operation_data.headers.as_ref() {
+            let mut header_map = HeaderMap::new();
+            for header in headers {
+                header_map.insert(
+                    HeaderName::from_str(&header.0).map_err(CollectionError::HeaderName)?,
+                    HeaderValue::from_str(&header.1).map_err(CollectionError::HeaderValue)?,
+                );
+            }
+            Some(header_map)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            persisted_query_id: None,
+            source_text: operation_data.source_text.clone(),
+            headers,
+            variables,
+        })
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::operations::RawOperation;
+use apollo_mcp_registry::platform_api::operation_collections::error::CollectionError;
 use apollo_mcp_registry::uplink::schema::event::Event as SchemaEvent;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -15,6 +16,9 @@ pub enum Event {
     /// An error occurred when loading operations
     OperationError(io::Error),
 
+    /// An error occurred when loading operations from collection
+    CollectionError(CollectionError),
+
     /// The server should gracefully shut down
     Shutdown,
 }
@@ -29,7 +33,10 @@ impl Debug for Event {
                 write!(f, "OperationsChanged({:?})", operations)
             }
             Event::OperationError(e) => {
-                write!(f, "OperationError({:?}", e)
+                write!(f, "OperationError({:?})", e)
+            }
+            Event::CollectionError(e) => {
+                write!(f, "OperationError({:?})", e)
             }
             Event::Shutdown => {
                 write!(f, "Shutdown")
