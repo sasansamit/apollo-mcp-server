@@ -14,7 +14,7 @@ pub enum Event {
     OperationsUpdated(Vec<RawOperation>),
 
     /// An error occurred when loading operations
-    OperationError(io::Error),
+    OperationError(io::Error, Option<String>),
 
     /// An error occurred when loading operations from collection
     CollectionError(CollectionError),
@@ -32,8 +32,8 @@ impl Debug for Event {
             Event::OperationsUpdated(operations) => {
                 write!(f, "OperationsChanged({:?})", operations)
             }
-            Event::OperationError(e) => {
-                write!(f, "OperationError({:?})", e)
+            Event::OperationError(e, path) => {
+                write!(f, "OperationError({:?}, {:?})", e, path)
             }
             Event::CollectionError(e) => {
                 write!(f, "OperationError({:?})", e)
