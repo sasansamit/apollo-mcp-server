@@ -20,7 +20,6 @@
                 "5000",
                 "--allow-mutations",
                 "all",
-                "--explorer",
             ],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
@@ -53,7 +52,6 @@
                 "5000",
                 "--allow-mutations",
                 "all",
-                "--explorer",
             ],
             "cwd": "${workspaceFolder}",
             "env": {
