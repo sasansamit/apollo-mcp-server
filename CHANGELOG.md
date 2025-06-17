@@ -8,11 +8,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## 🚀 Features
 
-### Add `--collection <COLLECTION_ID>` as another option for operation source
+### Add `--collection <COLLECTION_ID>` as another option for operation source - @Jephuff PR #118
 
 Use operation collections as the source of operations for your MCP server. The server will watch for changes and automatically update when you change your operation collection.
 
-### Allow overriding registry endpoints 
+### Allow overriding registry endpoints - @Jephuff PR #134
 
 Set APOLLO_UPLINK_ENDPOINTS and APOLLO_REGISTRY_URL to override the endpoints for fetching schemas and operations
 
@@ -47,12 +47,12 @@ The MCP server won't crash when a header's value contains colons.
 ### Automate changesets and changelog - @pubmodmatt PR #107
 
 Contributors can now generate a changeset file automatically with:
+
 ```console
 cargo xtask changeset create
 ```
+
 This will generate a file in the `.changesets` directory, which can be added to the pull request.
-
-
 
 ## [0.3.0] - 2025-05-29
 
@@ -73,7 +73,7 @@ This will generate a file in the `.changesets` directory, which can be added to 
 
 - Reduce the log level of many messages emitted by the server so INFO is less verbose, and add a `--log` option to specify the log level used by the MCP Server (default is INFO) (#82)
 - Ignore mutations and subscriptions rather than erroring out (#91)
-- Silence __typename used in operations errors (#79)
+- Silence \_\_typename used in operations errors (#79)
 - Fix issues with the `introspect` tool. (#83)
   - The tool was not working when there were top-level subscription in the schema
   - Argument types were not being resolved correctly
