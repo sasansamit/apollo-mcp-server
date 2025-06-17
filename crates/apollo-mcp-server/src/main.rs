@@ -248,10 +248,10 @@ async fn main() -> anyhow::Result<()> {
     } else if !args.operations.is_empty() {
         OperationSource::from(args.operations)
     } else if let Some(collection_id) = &args.collection {
-        OperationSource::Collection(CollectionSource {
-            collection_id: collection_id.clone(),
-            platform_api_config: args.platform_api_config()?,
-        })
+        OperationSource::Collection(CollectionSource::Id(
+            collection_id.clone(),
+            args.platform_api_config()?,
+        ))
     } else if args.uplink {
         OperationSource::from(ManifestSource::Uplink(args.uplink_config()?))
     } else {
