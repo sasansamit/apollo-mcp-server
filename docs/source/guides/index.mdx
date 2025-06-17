@@ -9,6 +9,7 @@ This feature is [experimental](/graphos/resources/feature-launch-stages#experime
 </ExperimentalFeature>
 
 A typical workflow for developing with Apollo MCP Server:
+
 1. Download (or build) an MCP Server binary.
 1. Set up the graph that the MCP Server sits in front of.
 1. Define the GraphQL operations to expose as MCP tools.
@@ -29,7 +30,7 @@ To install or upgrade to a **specific version** of Apollo MCP Server (recommende
 
 ```bash
 # Note the `v` prefixing the version number
-curl -sSL https://mcp.apollo.dev/download/nix/v0.3.0 | sh
+curl -sSL https://mcp.apollo.dev/download/nix/v0.4.0 | sh
 ```
 
 If your machine doesn't have the `curl` command, you can get the latest version from the [`curl` downloads page](https://curl.se/download.html).
@@ -46,7 +47,8 @@ To install or upgrade to a **specific version** of Apollo MCP Server (recommende
 
 ```bash
 # Note the `v` prefixing the version number
-iwr 'https://mcp.apollo.dev/download/win/v0.3.0' | iex
+iwr 'https://mcp.apollo.dev/download/win/v0.4.0' | iex
+```
 
 ### Download container image
 
@@ -145,6 +147,7 @@ apollo-mcp-server \
 For graphs managed by GraphOS, Apollo MCP Server can get operations by reading persisted queries from GraphOS. The MCP Server uses Apollo Uplink to access the persisted queries.
 
 To use GraphOS persisted queries, you must:
+
 - Set `APOLLO_GRAPH_REF` and `APOLLO_KEY` environment variables for a GraphOS graph
 - Run Apollo MCP Server with the `--uplink` option
 
@@ -153,7 +156,6 @@ To use GraphOS persisted queries, you must:
 Use a [contract variant](/graphos/platform/schema-management/delivery/contracts/overview) with a persisted query list associated with that variant, so you can control what AI can consume from your graph. [Learn more](/apollo-mcp-server/best-practices#use-contract-variants-to-control-ai-access-to-graphs).
 
 </Tip>
-
 
 ```sh title="Example command using GraphOS-managed persisted queries"
 apollo-mcp-server \
@@ -169,15 +171,14 @@ If you register a persisted query with a specific client name instead of `null`,
 
 Use the `--header` option when running the MCP Server to pass the header to the router. The default name of the header expected by the router is `apollographql-client-name`. To use a different header name, configure `telemetry.apollo.client_name_header` in router YAML configuration.
 
-
 ### From schema introspection
 
 For use cases where not all operations can be pre-defined, Apollo MCP Server supports tool creation based on introspection of the graph schema. This allows AI agents to explore a graph and execute operations dynamically.
 
 To enable these schema-aware tools, run the MCP Server with the `--introspection` option, which exposes two new tools:
 
-* `introspect` - returns information about schema types
-* `execute` - executes an operation on the GraphQL endpoint
+- `introspect` - returns information about schema types
+- `execute` - executes an operation on the GraphQL endpoint
 
 The MCP client can use these tools to provide schema information to the model and its context window, and allow the model to execute GraphQL operations based on that schema.
 
@@ -190,7 +191,7 @@ Use a [contract variant](/graphos/platform/schema-management/delivery/contracts/
 ### Documenting tools
 
 TODO
-*/}
+\*/}
 
 ## Deploying a container
 
@@ -239,6 +240,7 @@ Starting MCP inspector...
 ⚙️ Proxy server listening on port 6277
 🔍 MCP Inspector is up and running at http://127.0.0.1:6274 🚀
 ```
+
 </ExpansionPanel>
 
 1. In a browser, go to the URL returned by Inspector, then click **Connect** and **List Tools**. You should see the tools for the operations you provided.
@@ -270,26 +272,33 @@ npx @modelcontextprotocol/inspector
 ```
 
 1. In a browser, go to the URL returned by Inspector, then fill in the details:
-    - **Transport Type**: Select `Streamable HTTP`
-    - **URL**: Enter `http://127.0.0.1:5000/mcp`, where the port must match the `--http-port` option
+
+   - **Transport Type**: Select `Streamable HTTP`
+   - **URL**: Enter `http://127.0.0.1:5000/mcp`, where the port must match the `--http-port` option
 
 1. Click **Connect** and **List Tools**. You should see the tools for the operations you provided.
 
 ## Custom scalars configuration
 
 You can specify a custom scalars configuration JSON file to map a custom scalar to a [JSON schema type](https://json-schema.org/understanding-json-schema/reference/type). The JSON file is an object with custom scalar names as keys and JSON schema types as values:
+
 ```json
 {
-   "MyCustomScalar": { "type": "string" }
+  "MyCustomScalar": { "type": "string" }
 }
 ```
+
 Other than JSON schema type, an overriding description can also be provided. In the following example the description provided in the schema, `scalar description`, would get overridden by the description found in the custom scalar configuration file, `override description`:
+
 ```graphql
-"""scalar description"""
+"""
+scalar description
+"""
 scalar MyCustomScalar
 ```
+
 ```json
 {
-   "MyCustomScalar": { "type": "string", "description":  "override description" }
+  "MyCustomScalar": { "type": "string", "description": "override description" }
 }
 ```
