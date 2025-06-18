@@ -1021,6 +1021,7 @@ mod tests {
 
     use apollo_compiler::{Schema, parser::Parser, validation::Valid};
     use rmcp::{model::Tool, serde_json};
+    use tracing_test::traced_test;
 
     use crate::{
         custom_scalar_map::CustomScalarMap,
@@ -2015,8 +2016,8 @@ mod tests {
     }
 
     #[test]
+    #[traced_test]
     fn unknown_type_should_be_any() {
-        // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
             RawOperation {
                 source_text: "query QueryName($id: FakeType) { id }".to_string(),
@@ -2034,6 +2035,16 @@ mod tests {
         .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
+
+        // Verify that a warning was logged
+        logs_assert(|lines: &[&str]| {
+            lines
+                .iter()
+                .filter(|line| line.contains("WARN"))
+                .any(|line| line.contains("Type not found in schema name=\"FakeType\""))
+                .then_some(())
+                .ok_or("Expected warning about unknown type in logs".to_string())
+        });
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
@@ -2063,8 +2074,8 @@ mod tests {
     }
 
     #[test]
+    #[traced_test]
     fn custom_scalar_without_map_should_be_any() {
-        // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
             RawOperation {
                 source_text: "query QueryName($id: RealCustomScalar) { id }".to_string(),
@@ -2082,6 +2093,16 @@ mod tests {
         .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
+
+        // Verify that a warning was logged
+        logs_assert(|lines: &[&str]| {
+            lines
+                .iter()
+                .filter(|line| line.contains("WARN"))
+                .any(|line| line.contains("custom scalars aren't currently supported without a custom_scalar_map name=\"RealCustomScalar\""))
+                .then_some(())
+                .ok_or("Expected warning about custom scalar without map in logs".to_string())
+        });
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
@@ -2118,8 +2139,8 @@ mod tests {
     }
 
     #[test]
+    #[traced_test]
     fn custom_scalar_with_map_but_not_found_should_error() {
-        // TODO: should this test that the warning was logged?
         let operation = Operation::from_document(
             RawOperation {
                 source_text: "query QueryName($id: RealCustomScalar) { id }".to_string(),
@@ -2137,6 +2158,20 @@ mod tests {
         .unwrap()
         .unwrap();
         let tool = Tool::from(operation);
+
+        // Verify that a warning was logged
+        logs_assert(|lines: &[&str]| {
+            lines
+                .iter()
+                .filter(|line| line.contains("WARN"))
+                .any(|line| {
+                    line.contains(
+                        "custom scalar missing from custom_scalar_map name=\"RealCustomScalar\"",
+                    )
+                })
+                .then_some(())
+                .ok_or("Expected warning about custom scalar missing in logs".to_string())
+        });
 
         insta::assert_debug_snapshot!(tool, @r###"
         Tool {
