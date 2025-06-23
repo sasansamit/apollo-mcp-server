@@ -10,63 +10,11 @@ This feature is [experimental](/graphos/resources/feature-launch-stages#experime
 
 Here is the typical workflow for developing with Apollo MCP Server:
 
-1. [Install the MCP server](https://www.apollographql.com/docs/apollo-mcp-server/command-reference#installation).
+1. [Install the MCP server](https://www.apollographql.com/docs/apollo-mcp-server/command-reference#installation-methods).
 1. Set up the graph that the MCP Server sits in front of.
 1. Define the GraphQL operations to expose as MCP tools.
 1. Configure and run your MCP Server.
 1. Connect an MCP client and run the tools.
-
-## How to get Apollo MCP Server
-
-### Linux / MacOS installer
-
-To install or upgrade to the **latest release** of Apollo MCP Server:
-
-```sh showLineNumbers=false
-curl -sSL https://mcp.apollo.dev/download/nix/latest | sh
-```
-
-To install or upgrade to a **specific version** of Apollo MCP Server (recommended for CI environments to ensure predictable behavior):
-
-```bash
-# Note the `v` prefixing the version number
-curl -sSL https://mcp.apollo.dev/download/nix/v0.4.2 | sh
-```
-
-If your machine doesn't have the `curl` command, you can get the latest version from the [`curl` downloads page](https://curl.se/download.html).
-
-### Windows PowerShell installer
-
-To install or upgrade to the **latest release** of Apollo MCP Server:
-
-```bash
-iwr 'https://mcp.apollo.dev/download/win/latest' | iex
-```
-
-To install or upgrade to a **specific version** of Apollo MCP Server (recommended for CI environments to ensure predictable behavior):
-
-```bash
-# Note the `v` prefixing the version number
-iwr 'https://mcp.apollo.dev/download/win/v0.4.2' | iex
-```
-
-### Download container image
-
-__In addition to the standalone container we also provide the Apollo Runtime Container that provides all the necessary components to run the Apollo Runtime, including the Apollo Router and the MCP Server.
-For more information, including how to deploy and configure this container, please see the [Apollo Runtime Container repository](https://github.com/apollographql/apollo-runtime).__
-
-To pull the **latest release** docker container of Apollo MCP Server:
-
-```bash
-docker image pull ghcr.io/apollographql/apollo-mcp-server:latest
-```
-
-To pull a **specific version** of Apollo MCP Server (recommended for CI environments to ensure predictable behavior):
-
-```bash
-# Note the `v` prefixing the version number
-docker image pull ghcr.io/apollographql/apollo-mcp-server:v0.2.0
-```
 
 ## Set up graph
 
