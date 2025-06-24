@@ -10,17 +10,31 @@ This feature is [experimental](/graphos/resources/feature-launch-stages#experime
 
 </ExperimentalFeature>
 
-## Installation
+## Installation Methods
 
-### Container
+### Download container image
 
 A container is built for the Apollo MCP Server with every release at `ghcr.io/apollographql/apollo-mcp-server`.
 
-Available tags include the following:
+To download the **latest release** Docker container of Apollo MCP Server:
 
-- `latest`: The latest versioned release, including release candidates
-- `v<VERSION>`: The fixed release version
-- `v<VERSION>-rc.<NUMBER>`: The fixed release candidate of the specified version
+```bash
+docker image pull ghcr.io/apollographql/apollo-mcp-server:latest
+```
+
+To download a **specific version** of Apollo MCP Server (recommended for CI environments to ensure predictable behavior):
+
+```bash
+# Note the `v` prefixing the version number
+docker image pull ghcr.io/apollographql/apollo-mcp-server:v0.4.2
+```
+
+To download a specific version of Apollo MCP Server that is a release candidate:
+
+```bash
+# Note the `v` prefixing the version number and the `-rc` suffix
+docker image pull ghcr.io/apollographql/apollo-mcp-server:v0.4.1-rc.1
+```
 
 <Note>
 
@@ -33,11 +47,11 @@ The container sets a few defaults for ease of use:
 
 </Note>
 
-### Apollo GraphOS Runtime Container
+### Apollo Runtime Container
 
-In addition to the standalone container we also provide the GraphOS Runtime Container that provides all the necessary components to run the Apollo Runtime, including the Apollo Router and the MCP Server.
+The Apollo Runtime Container runs both the MCP Server and the [Apollo Router](https://www.apollographql.com/docs/graphos/routing) in a single container. It's useful for local development, testing, and production deployments.
 
-For more information, including how to deploy and configure this container, please see the [GraphOS Runtime Container repository](https://github.com/apollographql/graphos-runtime).
+Learn more about deploying and configuring this container in the [Runtime Container repository](https://github.com/apollographql/apollo-runtime).
 
 ### Linux / MacOS installer
 
@@ -69,21 +83,6 @@ To install or upgrade to a **specific version** of Apollo MCP Server (recommende
 ```bash
 # Note the `v` prefixing the version number
 iwr 'https://mcp.apollo.dev/download/win/v0.4.2' | iex
-```
-
-### Download container image
-
-To pull the **latest release** docker container of Apollo MCP Server:
-
-```bash
-docker image pull ghcr.io/apollographql/apollo-mcp-server:latest
-```
-
-To pull a **specific version** of Apollo MCP Server (recommended for CI environments to ensure predictable behavior):
-
-```bash
-# Note the `v` prefixing the version number
-docker image pull ghcr.io/apollographql/apollo-mcp-server:v0.4.2
 ```
 
 ## Usage
