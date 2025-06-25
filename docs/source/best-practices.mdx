@@ -31,7 +31,7 @@ Use the `--header` option when running the MCP Server to pass the header to the 
 Token passthrough refers to forwarding `Authorization` headers from MCP clients through MCP Servers to downstream APIs.
 While this might seem helpful in some multi-tenant setups, the Apollo MCP Server does not support this pattern by design, and we strongly discourage it.
 
-According to the [MCP security best practices](https://modelcontextprotocol.io/specification/draft/basic/security_best_practices#token-passthrough) and the [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#access-token-privilege-restriction), this pattern introduces serious security risks:
+According to [MCP security best practices](https://modelcontextprotocol.io/specification/2025-06-18/basic/security_best_practices#token-passthrough) and the [MCP authorization specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization#access-token-privilege-restriction), this pattern introduces serious security risks:
 
 - **Audience confusion**: If the MCP Server accepts tokens not intended for it, it can violate OAuth’s trust boundaries.
 - **Confused deputy problem**: If an unvalidated token is passed downstream, a downstream API may incorrectly trust it as though it were validated by the MCP Server.
