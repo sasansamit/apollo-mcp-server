@@ -1,6 +1,11 @@
 //! Tree shaking for GraphQL schemas
 
-use apollo_compiler::ast::{Argument, Definition, DirectiveDefinition, DirectiveList, Document, EnumTypeDefinition, Field, FieldDefinition, FragmentDefinition, InputObjectTypeDefinition, InputValueDefinition, InterfaceTypeDefinition, NamedType, ObjectTypeDefinition, OperationDefinition, OperationType, ScalarTypeDefinition, SchemaDefinition, Selection, Type, UnionTypeDefinition};
+use apollo_compiler::ast::{
+    Argument, Definition, DirectiveDefinition, DirectiveList, Document, EnumTypeDefinition, Field,
+    FieldDefinition, FragmentDefinition, InputObjectTypeDefinition, InputValueDefinition,
+    InterfaceTypeDefinition, NamedType, ObjectTypeDefinition, OperationDefinition, OperationType,
+    ScalarTypeDefinition, SchemaDefinition, Selection, Type, UnionTypeDefinition,
+};
 use apollo_compiler::schema::ExtendedType;
 use apollo_compiler::validation::WithErrors;
 use apollo_compiler::{Name, Node, Schema};
@@ -672,11 +677,7 @@ fn retain_type(
                             }
 
                             field_type.arguments.iter().for_each(|arg| {
-                                retain_variable_descriptions(
-                                    tree_shaker,
-                                    arg,
-                                    &field_arguments,
-                                );
+                                retain_variable_descriptions(tree_shaker, arg, &field_arguments);
 
                                 let arg_type_name = arg.ty.inner_named_type();
                                 if let Some(arg_type) = tree_shaker.schema.types.get(arg_type_name)
