@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="format - test - clippy" type="CompoundRunConfigurationType">
+    <toRun name="Test apollo-mcp-server" type="CargoCommandRunConfiguration" />
+    <toRun name="clippy" type="CargoCommandRunConfiguration" />
+    <toRun name="format" type="CargoCommandRunConfiguration" />
+    <method v="2" />
+  </configuration>
+</component>
