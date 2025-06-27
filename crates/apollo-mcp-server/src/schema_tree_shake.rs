@@ -543,14 +543,14 @@ fn retain_argument_descriptions(
     arg: &Node<InputValueDefinition>,
     operation_arguments: &HashMap<&str, &Name>,
 ) {
-    let variable_name = operation_arguments.get(arg.name.as_str());
+    let operation_argument_name = operation_arguments.get(arg.name.as_str());
 
-    if let Some(variable_name) = variable_name {
+    if let Some(op_arg_name) = operation_argument_name {
         if let Some(description) = arg.description.as_deref() {
             if !description.trim().is_empty() {
                 let descriptions = tree_shaker
                     .arguments_descriptions
-                    .entry(variable_name.to_string())
+                    .entry(op_arg_name.to_string())
                     .or_default();
                 descriptions.push(description.trim().to_string())
             }
