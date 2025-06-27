@@ -538,7 +538,7 @@ fn selection_set_to_fields(
     }
 }
 
-fn retain_variable_descriptions(
+fn retain_argument_descriptions(
     tree_shaker: &mut SchemaTreeShaker,
     arg: &Node<InputValueDefinition>,
     operation_arguments: &HashMap<&str, &Name>,
@@ -546,12 +546,12 @@ fn retain_variable_descriptions(
     let variable_name = operation_arguments.get(arg.name.as_str());
 
     if let Some(variable_name) = variable_name {
-        let descriptions = tree_shaker
-            .arguments_descriptions
-            .entry(variable_name.to_string())
-            .or_default();
         if let Some(description) = arg.description.as_deref() {
             if !description.trim().is_empty() {
+                let descriptions = tree_shaker
+                    .arguments_descriptions
+                    .entry(variable_name.to_string())
+                    .or_default();
                 descriptions.push(description.trim().to_string())
             }
         }
@@ -677,7 +677,7 @@ fn retain_type(
                             }
 
                             field_type.arguments.iter().for_each(|arg| {
-                                retain_variable_descriptions(tree_shaker, arg, &field_arguments);
+                                retain_argument_descriptions(tree_shaker, arg, &field_arguments);
 
                                 let arg_type_name = arg.ty.inner_named_type();
                                 if let Some(arg_type) = tree_shaker.schema.types.get(arg_type_name)
@@ -716,7 +716,7 @@ fn retain_type(
                                     let directive_args_map =
                                         build_argument_name_to_value_map(&directive.arguments);
                                     directive_definition.arguments.iter().for_each(|arg| {
-                                        retain_variable_descriptions(
+                                        retain_argument_descriptions(
                                             tree_shaker,
                                             arg,
                                             &directive_args_map,
@@ -1307,6 +1307,7 @@ mod test {
         let source_text = r#"
             type Query {
                 someQuery(""" an id """ id: ID!, """ other arg """ other: String, """ another arg """ otherArg: String): OutoutType
+                someQuery2(""" another id """ id: ID!, """ arg 2 """ other: String): OutoutType
             }
 
             type OutoutType {
@@ -1319,8 +1320,8 @@ mod test {
         let schema = document.to_schema_validate().unwrap();
         let mut shaker = SchemaTreeShaker::new(&schema);
         let (operation_document, operation_def, _comments) = operation_defs(
-            "query TestQuery($id: ID, $other: String) { \
-                someQuery(id: $id, other: $other, otherArg: $other) { \
+            "query TestQuery($id: ID, $other2: String) { \
+                someQuery(id: $id, other: $other2, otherArg: $other2) { \
                     value
                 }
             }",
@@ -1332,7 +1333,7 @@ mod test {
         shaker.retain_operation(&operation_def, &operation_document, DepthLimit::Unlimited);
 
         let id_description = shaker.arguments_descriptions.get("id");
-        let other_description = shaker.arguments_descriptions.get("other");
+        let other_description = shaker.arguments_descriptions.get("other2");
 
         assert_eq!(shaker.arguments_descriptions.len(), 2);
         assert!(id_description.is_some());

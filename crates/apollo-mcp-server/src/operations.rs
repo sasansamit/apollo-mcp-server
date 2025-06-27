@@ -41,7 +41,6 @@ use std::sync::{Arc, Mutex};
 use tracing::{debug, info, warn};
 
 const OPERATION_DOCUMENT_EXTENSION: &str = "graphql";
-const SEPARATOR: &str = "\n---\n";
 
 /// The source of the operations exposed as MCP tools
 #[derive(Clone)]
@@ -578,7 +577,7 @@ impl Operation {
                             }
                         })
                         .collect::<Vec<String>>()
-                        .join(SEPARATOR);
+                        .join("\n---\n");
 
                     // Add the tree-shaken types to the end of the tool description
 
@@ -683,7 +682,7 @@ fn get_json_schema(
             let joined_descriptions = argument_descriptions
                 .get(&variable_name)
                 .filter(|d| !d.is_empty())
-                .map(|d| d.join(SEPARATOR));
+                .map(|d| d.join("#"));
 
             let schema = type_to_schema(
                 joined_descriptions,
@@ -2833,12 +2832,12 @@ mod tests {
             .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
             "flag": {
-              "description": "Skipped when true.\n---\na flag",
+              "description": "Skipped when true.#a flag",
               "type": "boolean"
             },
             "idArg": {
@@ -2847,7 +2846,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
