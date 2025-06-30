@@ -341,6 +341,7 @@ impl RawOperation {
 pub struct Operation {
     tool: Tool,
     inner: RawOperation,
+    operation_name: String,
 }
 
 impl AsRef<Tool> for Operation {
@@ -493,6 +494,7 @@ impl Operation {
             Ok(Some(Operation {
                 tool,
                 inner: raw_operation,
+                operation_name,
             }))
         } else {
             Ok(None)
@@ -1021,18 +1023,7 @@ impl graphql::Executable for Operation {
     }
 
     fn operation_name(&self) -> Option<String> {
-        match Parser::new().parse_ast(&self.inner.source_text, "operation") {
-            Ok(document) => {
-                // Find the first operation definition
-                for definition in document.definitions {
-                    if let Definition::OperationDefinition(operation) = definition {
-                        return operation.name.as_ref().map(|name| name.to_string());
-                    }
-                }
-                None
-            }
-            Err(_) => None,
-        }
+        Some(self.operation_name.clone())
     }
 }
 
@@ -1194,6 +1185,7 @@ mod tests {
                 variables: None,
                 source_path: None,
             },
+            operation_name: "MutationName",
         }
         "###);
     }
@@ -1246,6 +1238,7 @@ mod tests {
                 variables: None,
                 source_path: None,
             },
+            operation_name: "MutationName",
         }
         "###);
     }
