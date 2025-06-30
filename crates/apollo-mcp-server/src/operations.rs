@@ -1019,6 +1019,21 @@ impl graphql::Executable for Operation {
             }
         }
     }
+
+    fn operation_name(&self) -> Option<String> {
+        match Parser::new().parse_ast(&self.inner.source_text, "operation") {
+            Ok(document) => {
+                // Find the first operation definition
+                for definition in document.definitions {
+                    if let Definition::OperationDefinition(operation) = definition {
+                        return operation.name.as_ref().map(|name| name.to_string());
+                    }
+                }
+                None
+            }
+            Err(_) => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2884,5 +2899,46 @@ mod tests {
           }
         }
         "###);
+    }
+
+    #[test]
+    fn test_operation_name_with_named_query() {
+        let source_text = "query GetUser($id: ID!) { user(id: $id) { name email } }";
+        let raw_op = RawOperation {
+            source_text: source_text.to_string(),
+            persisted_query_id: None,
+            headers: None,
+            variables: None,
+            source_path: None,
+        };
+        let operation =
+            Operation::from_document(raw_op, &SCHEMA, None, MutationMode::None, false, false)
+                .unwrap()
+                .unwrap();
+
+        use crate::graphql::Executable;
+        let op_name = operation.operation_name();
+        assert_eq!(op_name, Some("GetUser".to_string()));
+    }
+
+    #[test]
+    fn test_operation_name_with_named_mutation() {
+        let source_text =
+            "mutation CreateUser($input: UserInput!) { createUser(input: $input) { id name } }";
+        let raw_op = RawOperation {
+            source_text: source_text.to_string(),
+            persisted_query_id: None,
+            headers: None,
+            variables: None,
+            source_path: None,
+        };
+        let operation =
+            Operation::from_document(raw_op, &SCHEMA, None, MutationMode::Explicit, false, false)
+                .unwrap()
+                .unwrap();
+
+        use crate::graphql::Executable;
+        let op_name = operation.operation_name();
+        assert_eq!(op_name, Some("CreateUser".to_string()));
     }
 }

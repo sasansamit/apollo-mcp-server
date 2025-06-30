@@ -79,6 +79,12 @@ impl graphql::Executable for Execute {
     fn headers(&self, default_headers: &HeaderMap<HeaderValue>) -> HeaderMap<HeaderValue> {
         default_headers.clone()
     }
+
+    fn operation_name(&self) -> Option<String> {
+        // For ad-hoc operations, we don't have access to the input here,
+        // so we can't extract the operation name. This is acceptable for ad-hoc queries.
+        None
+    }
 }
 
 #[cfg(test)]
