@@ -1,7 +1,7 @@
 use crate::custom_scalar_map::CustomScalarMap;
 use crate::errors::{McpError, OperationError};
 use crate::event::Event;
-use crate::graphql;
+use crate::graphql::{self, OperationDetails};
 use crate::schema_tree_shake::{DepthLimit, SchemaTreeShaker};
 use apollo_compiler::ast::{Document, OperationType, Selection};
 use apollo_compiler::schema::ExtendedType;
@@ -644,7 +644,7 @@ impl Operation {
     }
 }
 
-fn operation_name(
+pub fn operation_name(
     operation: &Node<OperationDefinition>,
     source_path: Option<String>,
 ) -> Result<String, OperationError> {
@@ -967,8 +967,11 @@ impl graphql::Executable for Operation {
         None
     }
 
-    fn operation(&self, _input: Value) -> Result<String, McpError> {
-        Ok(self.inner.source_text.clone())
+    fn operation(&self, _input: Value) -> Result<OperationDetails, McpError> {
+        Ok(OperationDetails {
+            query: self.inner.source_text.clone(),
+            operation_name: Some(self.operation_name.clone()),
+        })
     }
 
     fn variables(&self, input_variables: Value) -> Result<Value, McpError> {
@@ -1021,18 +1024,15 @@ impl graphql::Executable for Operation {
             }
         }
     }
-
-    fn operation_name(&self) -> Option<String> {
-        Some(self.operation_name.clone())
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, str::FromStr, sync::LazyLock};
-
+    use crate::graphql::Executable;
     use apollo_compiler::{Schema, parser::Parser, validation::Valid};
+    use rmcp::serde_json::Value;
     use rmcp::{model::Tool, serde_json};
+    use std::{collections::HashMap, str::FromStr, sync::LazyLock};
     use tracing_test::traced_test;
 
     use crate::{
@@ -2909,9 +2909,8 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-        use crate::graphql::Executable;
-        let op_name = operation.operation_name();
-        assert_eq!(op_name, Some("GetUser".to_string()));
+        let op_details = operation.operation(Value::Null).unwrap();
+        assert_eq!(op_details.operation_name, Some(String::from("GetUser")));
     }
 
     #[test]
@@ -2930,8 +2929,7 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-        use crate::graphql::Executable;
-        let op_name = operation.operation_name();
-        assert_eq!(op_name, Some("CreateUser".to_string()));
+        let op_details = operation.operation(Value::Null).unwrap();
+        assert_eq!(op_details.operation_name, Some(String::from("CreateUser")));
     }
 }
