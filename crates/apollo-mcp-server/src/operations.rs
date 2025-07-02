@@ -1,7 +1,7 @@
 use crate::custom_scalar_map::CustomScalarMap;
 use crate::errors::{McpError, OperationError};
 use crate::event::Event;
-use crate::graphql;
+use crate::graphql::{self, OperationDetails};
 use crate::schema_tree_shake::{DepthLimit, SchemaTreeShaker};
 use apollo_compiler::ast::{Document, OperationType, Selection};
 use apollo_compiler::schema::ExtendedType;
@@ -341,6 +341,7 @@ impl RawOperation {
 pub struct Operation {
     tool: Tool,
     inner: RawOperation,
+    operation_name: String,
 }
 
 impl AsRef<Tool> for Operation {
@@ -493,6 +494,7 @@ impl Operation {
             Ok(Some(Operation {
                 tool,
                 inner: raw_operation,
+                operation_name,
             }))
         } else {
             Ok(None)
@@ -642,7 +644,7 @@ impl Operation {
     }
 }
 
-fn operation_name(
+pub fn operation_name(
     operation: &Node<OperationDefinition>,
     source_path: Option<String>,
 ) -> Result<String, OperationError> {
@@ -965,8 +967,11 @@ impl graphql::Executable for Operation {
         None
     }
 
-    fn operation(&self, _input: Value) -> Result<String, McpError> {
-        Ok(self.inner.source_text.clone())
+    fn operation(&self, _input: Value) -> Result<OperationDetails, McpError> {
+        Ok(OperationDetails {
+            query: self.inner.source_text.clone(),
+            operation_name: Some(self.operation_name.clone()),
+        })
     }
 
     fn variables(&self, input_variables: Value) -> Result<Value, McpError> {
@@ -1023,10 +1028,11 @@ impl graphql::Executable for Operation {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, str::FromStr, sync::LazyLock};
-
+    use crate::graphql::Executable;
     use apollo_compiler::{Schema, parser::Parser, validation::Valid};
+    use rmcp::serde_json::Value;
     use rmcp::{model::Tool, serde_json};
+    use std::{collections::HashMap, str::FromStr, sync::LazyLock};
     use tracing_test::traced_test;
 
     use crate::{
@@ -1179,6 +1185,7 @@ mod tests {
                 variables: None,
                 source_path: None,
             },
+            operation_name: "MutationName",
         }
         "###);
     }
@@ -1231,6 +1238,7 @@ mod tests {
                 variables: None,
                 source_path: None,
             },
+            operation_name: "MutationName",
         }
         "###);
     }
@@ -2884,5 +2892,44 @@ mod tests {
           }
         }
         "###);
+    }
+
+    #[test]
+    fn test_operation_name_with_named_query() {
+        let source_text = "query GetUser($id: ID!) { user(id: $id) { name email } }";
+        let raw_op = RawOperation {
+            source_text: source_text.to_string(),
+            persisted_query_id: None,
+            headers: None,
+            variables: None,
+            source_path: None,
+        };
+        let operation =
+            Operation::from_document(raw_op, &SCHEMA, None, MutationMode::None, false, false)
+                .unwrap()
+                .unwrap();
+
+        let op_details = operation.operation(Value::Null).unwrap();
+        assert_eq!(op_details.operation_name, Some(String::from("GetUser")));
+    }
+
+    #[test]
+    fn test_operation_name_with_named_mutation() {
+        let source_text =
+            "mutation CreateUser($input: UserInput!) { createUser(input: $input) { id name } }";
+        let raw_op = RawOperation {
+            source_text: source_text.to_string(),
+            persisted_query_id: None,
+            headers: None,
+            variables: None,
+            source_path: None,
+        };
+        let operation =
+            Operation::from_document(raw_op, &SCHEMA, None, MutationMode::Explicit, false, false)
+                .unwrap()
+                .unwrap();
+
+        let op_details = operation.operation(Value::Null).unwrap();
+        assert_eq!(op_details.operation_name, Some(String::from("CreateUser")));
     }
 }
