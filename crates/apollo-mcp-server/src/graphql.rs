@@ -1,10 +1,9 @@
 //! Execute GraphQL operations from an MCP tool
 
 use crate::errors::McpError;
-use apollo_compiler::response::serde_json_bytes::serde_json;
-use apollo_compiler::response::serde_json_bytes::serde_json::Value;
 use reqwest::header::{HeaderMap, HeaderValue};
 use rmcp::model::{CallToolResult, Content, ErrorCode};
+use rmcp::serde_json::{self, Map, Value};
 
 pub struct Request<'a> {
     pub input: Value,
@@ -36,40 +35,43 @@ pub trait Executable {
             "version": std::env!("CARGO_PKG_VERSION")
         });
 
-        let mut request_body = if let Some(id) = self.persisted_query_id() {
-            serde_json::json!({
-                "variables": self.variables(request.input)?,
-                "extensions": {
+        let mut request_body = Map::from_iter([(
+            String::from("variables"),
+            self.variables(request.input.clone())?,
+        )]);
+
+        if let Some(id) = self.persisted_query_id() {
+            request_body.insert(
+                String::from("extensions"),
+                serde_json::json!({
                     "persistedQuery": {
                         "version": 1,
                         "sha256Hash": id,
                     },
                     "ApolloClientMetadata": client_metadata,
-                },
-            })
+                }),
+            );
         } else {
-            serde_json::json!({
-                "query": self.operation(request.input.clone())?,
-                "variables": self.variables(request.input)?,
-                "extensions": {
+            request_body.insert(
+                String::from("query"),
+                Value::String(self.operation(request.input)?),
+            );
+            request_body.insert(
+                String::from("extensions"),
+                serde_json::json!({
                     "ApolloClientMetadata": client_metadata,
-                },
-            })
-        };
+                }),
+            );
+        }
 
         if let Some(op_name) = self.operation_name() {
-            if let Some(obj) = request_body.as_object_mut() {
-                obj.insert(
-                    "operationName".to_string(),
-                    serde_json::Value::String(op_name),
-                );
-            }
+            request_body.insert("operationName".to_string(), Value::String(op_name));
         }
 
         reqwest::Client::new()
             .post(request.endpoint)
             .headers(self.headers(&request.headers))
-            .body(request_body.to_string())
+            .body(Value::Object(request_body).to_string())
             .send()
             .await
             .map_err(|reqwest_error| {
