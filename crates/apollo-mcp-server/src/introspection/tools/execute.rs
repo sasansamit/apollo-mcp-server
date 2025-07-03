@@ -53,18 +53,16 @@ impl graphql::Executable for Execute {
             McpError::new(ErrorCode::INVALID_PARAMS, "Invalid input".to_string(), None)
         })?;
 
-        // validate the operation
-        let operation_defs =
+        let (_, operation_def, source_path) =
             operation_defs(&input.query, self.mutation_mode == MutationMode::All, None)
-                .map_err(|e| McpError::new(ErrorCode::INVALID_PARAMS, e.to_string(), None))?;
-
-        let (_, operation_def, source_path) = operation_defs.ok_or_else(|| {
-            McpError::new(
-                ErrorCode::INVALID_PARAMS,
-                "Invalid operation type".to_string(),
-                None,
-            )
-        })?;
+                .map_err(|e| McpError::new(ErrorCode::INVALID_PARAMS, e.to_string(), None))?
+                .ok_or_else(|| {
+                    McpError::new(
+                        ErrorCode::INVALID_PARAMS,
+                        "Invalid operation type".to_string(),
+                        None,
+                    )
+                })?;
 
         Ok(OperationDetails {
             query: input.query,
