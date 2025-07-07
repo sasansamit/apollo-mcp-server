@@ -15,6 +15,7 @@ use tracing::{debug, error, info};
 use crate::{
     errors::{OperationError, ServerError},
     explorer::Explorer,
+    connectors::Connectors,
     introspection::tools::{execute::Execute, introspect::Introspect},
     operations::{MutationMode, Operation, RawOperation},
     server::Transport,
@@ -92,6 +93,8 @@ impl Starting {
 
         let explorer_tool = self.config.explorer_graph_ref.map(Explorer::new);
 
+        let connectors_tool = Option::Some(Connectors::new());
+
         let cancellation_token = CancellationToken::new();
 
         let running = Running {
@@ -102,6 +105,7 @@ impl Starting {
             execute_tool,
             introspect_tool,
             explorer_tool,
+            connectors_tool,
             custom_scalar_map: self.config.custom_scalar_map,
             peers,
             cancellation_token: cancellation_token.clone(),

@@ -19,6 +19,7 @@ use crate::{
     custom_scalar_map::CustomScalarMap,
     errors::{McpError, OperationError, ServerError},
     explorer::{EXPLORER_TOOL_NAME, Explorer},
+    connectors::{CONNECTORS_TOOL_NAME, Connectors},
     graphql::{self, Executable as _},
     introspection::tools::{
         execute::{EXECUTE_TOOL_NAME, Execute},
@@ -36,6 +37,7 @@ pub(super) struct Running {
     pub(super) execute_tool: Option<Execute>,
     pub(super) introspect_tool: Option<Introspect>,
     pub(super) explorer_tool: Option<Explorer>,
+    pub(super) connectors_tool: Option<Connectors>,
     pub(super) custom_scalar_map: Option<CustomScalarMap>,
     pub(super) peers: Arc<RwLock<Vec<Peer<RoleServer>>>>,
     pub(super) cancellation_token: CancellationToken,
@@ -180,6 +182,12 @@ impl ServerHandler for Running {
                 .ok_or(tool_not_found(&request.name))?
                 .execute(convert_arguments(request)?)
                 .await
+        }  else if request.name == CONNECTORS_TOOL_NAME {
+            self.connectors_tool
+                .as_ref()
+                .ok_or(tool_not_found(&request.name))?
+                .execute()
+                .await
         } else {
             let graphql_request = graphql::Request {
                 input: Value::from(request.arguments.clone()),
@@ -234,6 +242,13 @@ impl ServerHandler for Running {
                 )
                 .chain(
                     self.explorer_tool
+                        .as_ref()
+                        .iter()
+                        .clone()
+                        .map(|e| e.tool.clone()),
+                )
+                .chain(
+                    self.connectors_tool
                         .as_ref()
                         .iter()
                         .clone()

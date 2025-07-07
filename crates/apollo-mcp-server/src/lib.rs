@@ -2,6 +2,7 @@ pub mod custom_scalar_map;
 pub mod errors;
 pub mod event;
 mod explorer;
+mod connectors;
 mod graphql;
 mod introspection;
 pub mod json_schema;
