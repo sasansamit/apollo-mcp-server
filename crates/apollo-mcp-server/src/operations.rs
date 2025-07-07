@@ -452,10 +452,14 @@ impl Operation {
             {
                 Ok(name) => name,
                 Err(OperationError::MissingName {
-                    source_path: _,
+                    source_path,
                     operation,
                 }) => {
-                    warn!("Skipping unnamed operation: {operation}");
+                    if let Some(path) = source_path {
+                        warn!("Skipping unnamed operation in {path}: {operation}");
+                    } else {
+                        warn!("Skipping unnamed operation: {operation}");
+                    }
                     return Ok(None);
                 }
                 Err(e) => return Err(e),
@@ -1990,7 +1994,9 @@ mod tests {
             lines
                 .iter()
                 .filter(|line| line.contains("WARN"))
-                .any(|line| line.contains("Skipping unnamed operation: { id }"))
+                .any(|line| {
+                    line.contains("Skipping unnamed operation in operation.graphql: { id }")
+                })
                 .then_some(())
                 .ok_or("Expected warning about unnamed operation in logs".to_string())
         });
