@@ -516,7 +516,6 @@ impl Operation {
             mutation_mode != MutationMode::None,
             raw_operation.source_path.clone(),
         )? {
-<<<<<<< HEAD
             let operation_name = match operation_name(&operation, raw_operation.source_path.clone())
             {
                 Ok(name) => name,
@@ -535,7 +534,6 @@ impl Operation {
             };
             let variable_description_overrides =
                 variable_description_overrides(&raw_operation.source_text, &operation);
-            let operation_name = operation_name(&operation, raw_operation.source_path.clone())?;
             let mut tree_shaker = SchemaTreeShaker::new(graphql_schema);
             tree_shaker.retain_operation(&operation, &document, DepthLimit::Unlimited);
 
