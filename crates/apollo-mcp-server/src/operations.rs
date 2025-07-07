@@ -436,7 +436,7 @@ pub fn operation_defs(
 
 pub fn extract_and_format_comments(comments: Option<String>) -> Option<String> {
     comments.and_then(|comments| {
-        let content = Regex::new(r"(\n|^)\s*,*\s*#")
+        let content = Regex::new(r"(\n|^)(\s*,*)*#")
             .ok()?
             .replace_all(comments.as_str(), "$1");
         let trimmed = content.trim();
@@ -3178,6 +3178,43 @@ mod tests {
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
           "type": "object"
+        }
+        "###);
+    }
+
+    #[test]
+    fn commas_between_variables_are_ignored() {
+        let operation = Operation::from_document(
+            RawOperation {
+                source_text: "query QueryName(# id arg\n $idArg: ID,,\n,,\n # a flag\n $flag: Boolean,  ,,) { customQuery(id: $idArg, flag: $flag) { id } }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+                source_path: None,
+            },
+            &SCHEMA,
+            None,
+            MutationMode::None,
+            false,
+            false,
+        )
+            .unwrap()
+            .unwrap();
+        let tool = Tool::from(operation);
+
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        {
+          "type": "object",
+          "properties": {
+            "flag": {
+              "description": "a flag",
+              "type": "boolean"
+            },
+            "idArg": {
+              "description": "id arg",
+              "type": "string"
+            }
+          }
         }
         "###);
     }
