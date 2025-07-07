@@ -13,10 +13,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 use crate::{
-    errors::{OperationError, ServerError},
+    errors::ServerError,
     explorer::Explorer,
     introspection::tools::{execute::Execute, introspect::Introspect},
-    operations::{MutationMode, Operation, RawOperation},
+    operations::{MutationMode, RawOperation},
     server::Transport,
 };
 
@@ -35,18 +35,21 @@ impl Starting {
         let operations: Vec<_> = self
             .operations
             .into_iter()
-            .map(|operation| {
-                operation.into_operation(
+            .filter_map(|operation| {
+                match operation.into_operation(
                     &self.schema,
                     self.config.custom_scalar_map.as_ref(),
                     self.config.mutation_mode,
                     self.config.disable_type_description,
                     self.config.disable_schema_description,
-                )
+                ) {
+                    Ok(operation) => operation,
+                    Err(error) => {
+                        error!("Invalid operation: {}", error);
+                        None
+                    }
+                }
             })
-            .collect::<Result<Vec<Option<Operation>>, OperationError>>()?
-            .into_iter()
-            .flatten()
             .collect();
 
         debug!(
