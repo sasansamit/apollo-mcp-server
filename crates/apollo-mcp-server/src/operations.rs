@@ -335,10 +335,6 @@ impl RawOperation {
             disable_schema_description,
         )
     }
-
-    pub fn source_path(&self) -> Option<&str> {
-        self.source_path.as_deref()
-    }
 }
 
 #[derive(Debug, Clone, Serialize)]
