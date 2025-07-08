@@ -34,9 +34,9 @@ Include the operation name with GraphQL requests if it's available.
       "state":"CO"
    },
    "extensions":{
-      "ApolloClientMetadata":{
-         "type":"mcp",
-         "version":"0.4.2"
+      "clientLibrary":{
+         "name":"mcp",
+         "version": ...
       }
    },
 +  "operationName":"GetAlerts"
