@@ -10,7 +10,7 @@ use rmcp::{
 };
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::{
     errors::ServerError,
@@ -45,7 +45,7 @@ impl Starting {
                 ) {
                     Ok(operation) => operation,
                     Err(error) => {
-                        warn!("Invalid operation: {}", error);
+                        error!("Invalid operation: {}", error);
                         None
                     }
                 }

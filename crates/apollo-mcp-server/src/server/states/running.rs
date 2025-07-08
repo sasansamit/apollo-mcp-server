@@ -13,7 +13,7 @@ use rmcp::{
 use serde_json::Value;
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, warn};
+use tracing::{debug, error};
 
 use crate::{
     custom_scalar_map::CustomScalarMap,
@@ -68,7 +68,7 @@ impl Running {
                 ) {
                     Ok(operation) => operation,
                     Err(error) => {
-                        warn!("Invalid operation: {}", error);
+                        error!("Invalid operation: {}", error);
                         None
                     }
                 }
@@ -111,7 +111,7 @@ impl Running {
                     ) {
                         Ok(operation) => operation,
                         Err(error) => {
-                            warn!("Invalid operation: {}", error);
+                            error!("Invalid operation: {}", error);
                             None
                         }
                     }
