@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.5.1] - 2025-07-08
+
+## 🐛 Fixes
+
+### Fix an issue with rmcp 0.2.x upgrade - @pubmodmatt PR #181
+
+Fix an issue where the server was unresponsive to external events such as changes to operation collections.
+
+
+
 # [0.5.0] - 2025-07-08
 
 ## ❗ BREAKING ❗
