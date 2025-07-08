@@ -59,19 +59,18 @@ impl Running {
             .cloned()
             .map(|operation| operation.into_inner())
             .filter_map(|operation| {
-                match operation.into_operation(
-                    &schema,
-                    self.custom_scalar_map.as_ref(),
-                    self.mutation_mode,
-                    self.disable_type_description,
-                    self.disable_schema_description,
-                ) {
-                    Ok(operation) => operation,
-                    Err(error) => {
+                operation
+                    .into_operation(
+                        &schema,
+                        self.custom_scalar_map.as_ref(),
+                        self.mutation_mode,
+                        self.disable_type_description,
+                        self.disable_schema_description,
+                    )
+                    .unwrap_or_else(|error| {
                         error!("Invalid operation: {}", error);
                         None
-                    }
-                }
+                    })
             })
             .collect();
 
@@ -102,19 +101,18 @@ impl Running {
             let updated_operations: Vec<Operation> = operations
                 .into_iter()
                 .filter_map(|operation| {
-                    match operation.into_operation(
-                        schema,
-                        self.custom_scalar_map.as_ref(),
-                        self.mutation_mode,
-                        self.disable_type_description,
-                        self.disable_schema_description,
-                    ) {
-                        Ok(operation) => operation,
-                        Err(error) => {
+                    operation
+                        .into_operation(
+                            schema,
+                            self.custom_scalar_map.as_ref(),
+                            self.mutation_mode,
+                            self.disable_type_description,
+                            self.disable_schema_description,
+                        )
+                        .unwrap_or_else(|error| {
                             error!("Invalid operation: {}", error);
                             None
-                        }
-                    }
+                        })
                 })
                 .collect();
 
