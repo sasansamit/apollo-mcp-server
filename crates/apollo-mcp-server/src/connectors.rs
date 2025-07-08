@@ -1,11 +1,12 @@
 use crate::errors::McpError;
 use crate::schema_from_type;
-use reqwest;
 use rmcp::model::{CallToolResult, Content, ErrorCode, Tool};
 use rmcp::schemars::JsonSchema;
 use rmcp::serde_json::Value;
 use rmcp::{schemars, serde_json};
 use serde::{Deserialize, Serialize};
+use std::env;
+use tokio::fs;
 
 pub(crate) const CONNECTORS_TOOL_NAME: &str = "connectors-spec";
 
@@ -44,11 +45,29 @@ impl Connectors {
     /// # Errors
     ///
     /// The method returns an error if the HTTP request fails.
-    async fn fetch_specification() -> Result<String, reqwest::Error> {
+    async fn fetch_specification() -> Result<String, Box<dyn std::error::Error>> {
+        // Check if there's a local file path in environment variable
+        if let Ok(local_path) = env::var("CONNECTORS_SPEC_PATH") {
+            println!("📁 Using local specification file: {local_path}");
+            match fs::read_to_string(&local_path).await {
+                Ok(content) => {
+                    println!("✅ Successfully read local file");
+                    return Ok(content);
+                }
+                Err(e) => {
+                    eprintln!("⚠️  Failed to read local file '{local_path}': {e}");
+                    eprintln!("🌐 Falling back to remote URL...");
+                }
+            }
+        }
+        // Fallback to HTTP request
+        println!("🌐 Fetching specification from remote URL...");
         let response = reqwest::get(r"https://raw.githubusercontent.com/apollographql/router/refs/heads/am/connectorsllmmd/connectors-llm/connector-llm.md")
             .await?;
-
-        response.text().await
+        
+        // Convert the reqwest::Error to Box<dyn std::error::Error>
+        let text = response.text().await?;
+        Ok(text)
     }
 
     /// Execute the tool.
