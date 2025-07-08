@@ -1,6 +1,6 @@
 use crate::errors::McpError;
 use crate::schema_from_type;
-// use reqwest::header::HeaderMap;
+use reqwest;
 use rmcp::model::{CallToolResult, Content, ErrorCode, Tool};
 use rmcp::schemars::JsonSchema;
 use rmcp::serde_json::Value;
@@ -26,7 +26,6 @@ fn default_input() -> String {
 }
 
 impl Connectors {
-
     pub fn new() -> Self {
         Self {
             tool: Tool::new(
@@ -37,39 +36,48 @@ impl Connectors {
         }
     }
 
+    /// Fetch the Apollo Connectors specification from GitHub.
+    ///
+    /// The method asynchronously fetches the specification from the
+    /// [Apollo Router](https://github.com/apollographql/router) repository.
+    ///
+    /// # Errors
+    ///
+    /// The method returns an error if the HTTP request fails.
+    async fn fetch_specification() -> Result<String, reqwest::Error> {
+        let response = reqwest::get(r"https://raw.githubusercontent.com/apollographql/router/refs/heads/am/connectorsllmmd/connectors-llm/connector-llm.md")
+            .await?;
+
+        response.text().await
+    }
+
+    /// Execute the tool.
+    ///
+    /// The method asynchronously fetches the Apollo Connectors specification from GitHub and returns it as a `CallToolResult`.
+    ///
+    /// # Errors
+    ///
+    /// The method returns an MCP error if the spec fetch fails.
     pub async fn execute(&self) -> Result<CallToolResult, McpError> {
+        let result = Self::fetch_specification().await;
 
-        let content = reqwest::Client::new()
-            .get(r"https://raw.githubusercontent.com/apollographql/router/refs/heads/am/connectorsllmmd/connectors-llm/connector-llm.md")
-            .send()
-            .await
-            .map_err(|err| {
-                McpError::new(
+        match result {
+            Ok(specification) => {
+                println!("Specification fetched successfully");
+                Ok(CallToolResult {
+                    content: vec![Content::text(specification)],
+                    is_error: None,
+                })
+            }
+            Err(err) => {
+                println!("Failed to fetch connectors specification: {err}");
+                Err(McpError::new(
                     ErrorCode::INTERNAL_ERROR,
-                    format!("Failed to query for connectors markdown file: {err}"),
+                    format!("Failed to fetch connectors specification: {err}"),
                     None,
-                )
-            })
-            .map( async |response| {
-                response.text().await
-            });
-
-        let result = match content {
-            Ok(fut) => fut.await,
-            Err(_) => todo!(),
-        };
-
-        let result = match result {
-            Ok(value) => value,
-            Err(_) => todo!(),
-        };
-
-        println!("{:?}", result);
-        
-        Ok(CallToolResult {
-            content: vec![Content::text(result)],
-            is_error: None,
-        })
+                ))
+            }
+        }
     }
 }
 
