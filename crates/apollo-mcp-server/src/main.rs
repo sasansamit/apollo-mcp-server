@@ -14,11 +14,11 @@ use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
 use clap::{ArgAction, Parser};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use std::env;
 use std::net::{IpAddr, Ipv4Addr};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
-use std::{env};
 use tracing::{Level, info};
 use url::{ParseError, Url};
 
