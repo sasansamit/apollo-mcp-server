@@ -43,7 +43,6 @@ fn build_log_writer(
 
     let log_dir = Path::new(log_path.as_str());
 
-    println!("Creating log dir: {:?}", log_dir);
     if let Err(e) = fs::create_dir_all(log_dir) {
         eprintln!("Failed to create log directory: {}", e);
         return (fallback_writer, true, None);
@@ -63,8 +62,7 @@ fn build_log_writer(
 
             (writer, false, Some(guard))
         }
-        Err(e) => {
-            eprintln!("{:?}", e);
+        Err(_) => {
             (fallback_writer, true, None)
         }
     }

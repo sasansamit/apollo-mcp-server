@@ -19,9 +19,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 use std::{env};
-use std::env::home_dir;
 use tracing::{Level, info};
-use tracing_subscriber::EnvFilter;
 use url::{ParseError, Url};
 
 /// Clap styling
