@@ -26,6 +26,7 @@ pub use schema_source::SchemaSource;
 const ENV_NESTED_SEPARATOR: &str = "__";
 
 /// Read in a config from a YAML file, filling in any missing values from the environment
+#[allow(clippy::result_large_err)]
 pub fn read_config(yaml_path: impl AsRef<Path>) -> Result<Config, figment::Error> {
     Figment::new()
         .join(apollo_common_env())

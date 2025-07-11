@@ -10,6 +10,9 @@ pub struct Introspection {
 
     /// Introspect configuration for allowing clients to run introspection
     pub introspect: IntrospectConfig,
+
+    /// Search tool configuration
+    pub search: SearchConfig,
 }
 
 /// Execution-specific introspection configuration
@@ -28,9 +31,17 @@ pub struct IntrospectConfig {
     pub enabled: bool,
 }
 
+/// Search tool configuration
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct SearchConfig {
+    /// Enable search tool
+    pub enabled: bool,
+}
+
 impl Introspection {
     /// Check if any introspection tools are enabled
     pub fn any_enabled(&self) -> bool {
-        self.execute.enabled | self.introspect.enabled
+        self.execute.enabled | self.introspect.enabled | self.search.enabled
     }
 }

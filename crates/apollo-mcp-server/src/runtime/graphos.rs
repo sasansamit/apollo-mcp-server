@@ -32,6 +32,7 @@ pub struct GraphOSConfig {
 
 impl GraphOSConfig {
     /// Extract the apollo graph reference from the config or from the current env
+    #[allow(clippy::result_large_err)]
     pub fn graph_ref(&self) -> Result<String, ServerError> {
         self.apollo_graph_ref
             .clone()
@@ -39,6 +40,7 @@ impl GraphOSConfig {
     }
 
     /// Extract the apollo key from the config or from the current env
+    #[allow(clippy::result_large_err)]
     fn key(&self) -> Result<SecretString, ServerError> {
         self.apollo_key
             .clone()
@@ -46,6 +48,7 @@ impl GraphOSConfig {
     }
 
     /// Generate an uplink config based on configuration params
+    #[allow(clippy::result_large_err)]
     pub fn uplink_config(&self) -> Result<UplinkConfig, ServerError> {
         let config = UplinkConfig {
             apollo_key: self.key()?,
@@ -64,6 +67,7 @@ impl GraphOSConfig {
     }
 
     /// Generate a platform API config based on configuration params
+    #[allow(clippy::result_large_err)]
     pub fn platform_api_config(&self) -> Result<PlatformApiConfig, ServerError> {
         let config = PlatformApiConfig::new(
             self.apollo_key

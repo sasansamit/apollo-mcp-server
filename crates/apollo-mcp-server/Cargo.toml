@@ -10,6 +10,7 @@ anyhow = "1.0.98"
 apollo-compiler.workspace = true
 apollo-federation.workspace = true
 apollo-mcp-registry = { path = "../apollo-mcp-registry" }
+apollo-schema-index = { path = "../apollo-schema-index" }
 axum = "0.8.4"
 bon = "3.6.3"
 clap = { version = "4.5.36", features = ["derive", "env"] }
@@ -36,9 +37,8 @@ url.workspace = true
 
 [dev-dependencies]
 figment = { version = "0.10.19", features = ["test"] }
-insta = { workspace = true }
-rstest = "0.25.0"
-secrecy.workspace = true
+insta.workspace = true
+rstest.workspace = true
 tracing-test = "0.2.5"
 
 [lints]

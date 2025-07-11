@@ -12,8 +12,7 @@ use clap::Parser;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
 use runtime::IdOrDefault;
-use tracing::info;
-use tracing::warn;
+use tracing::{Level, info, warn};
 use tracing_subscriber::EnvFilter;
 
 mod runtime;
@@ -44,19 +43,24 @@ async fn main() -> anyhow::Result<()> {
         runtime::read_config(args.config)?
     };
 
+    let mut env_filter = EnvFilter::from_default_env().add_directive(config.logging.level.into());
+
+    // Suppress noisy dependency logging at the INFO level
+    if config.logging.level == Level::INFO {
+        env_filter = env_filter
+            .add_directive("rmcp=warn".parse()?)
+            .add_directive("tantivy=warn".parse()?);
+    }
+
     // When using the Stdio transport, send output to stderr since stdout is used for MCP messages
     match config.transport {
         Transport::SSE { .. } | Transport::StreamableHttp { .. } => tracing_subscriber::fmt()
-            .with_env_filter(
-                EnvFilter::from_default_env().add_directive(config.logging.level.into()),
-            )
+            .with_env_filter(env_filter)
             .with_ansi(true)
             .with_target(false)
             .init(),
         Transport::Stdio => tracing_subscriber::fmt()
-            .with_env_filter(
-                EnvFilter::from_default_env().add_directive(config.logging.level.into()),
-            )
+            .with_env_filter(env_filter)
             .with_writer(std::io::stderr)
             .with_ansi(true)
             .with_target(false)
@@ -135,6 +139,7 @@ async fn main() -> anyhow::Result<()> {
         .headers(config.headers)
         .execute_introspection(config.introspection.execute.enabled)
         .introspect_introspection(config.introspection.introspect.enabled)
+        .search_introspection(config.introspection.search.enabled)
         .mutation_mode(config.overrides.mutation_mode)
         .disable_type_description(config.overrides.disable_type_description)
         .disable_schema_description(config.overrides.disable_schema_description)

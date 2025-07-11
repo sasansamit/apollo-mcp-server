@@ -14,7 +14,7 @@ use tracing::{debug, error, info};
 use crate::{
     errors::ServerError,
     explorer::Explorer,
-    introspection::tools::{execute::Execute, introspect::Introspect},
+    introspection::tools::{execute::Execute, introspect::Introspect, search::Search},
     operations::{MutationMode, RawOperation},
     server::Transport,
 };
@@ -90,6 +90,14 @@ impl Starting {
             .config
             .introspect_introspection
             .then(|| Introspect::new(schema.clone(), root_query_type, root_mutation_type));
+        let search_tool = if self.config.search_introspection {
+            Some(Search::new(
+                schema.clone(),
+                matches!(self.config.mutation_mode, MutationMode::All),
+            )?)
+        } else {
+            None
+        };
 
         let explorer_tool = self.config.explorer_graph_ref.map(Explorer::new);
 
@@ -102,6 +110,7 @@ impl Starting {
             endpoint: self.config.endpoint,
             execute_tool,
             introspect_tool,
+            search_tool,
             explorer_tool,
             custom_scalar_map: self.config.custom_scalar_map,
             peers,
