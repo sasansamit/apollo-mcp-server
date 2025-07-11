@@ -47,12 +47,8 @@ tokio-stream = "0.1"
 tracing = "0.1.41"
 tracing-core = "0.1.33"
 tracing-subscriber = { version = "0.3.19", features = ["json"] }
-<<<<<<< Updated upstream
 url = { version = "2.4", features = ["serde"] }
-=======
 tracing-appender = "0.2.3"
-url = "2.4"
->>>>>>> Stashed changes
 
 [workspace.metadata]
 crane.name = "apollo-mcp"

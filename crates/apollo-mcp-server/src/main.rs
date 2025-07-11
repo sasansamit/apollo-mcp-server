@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use apollo_mcp_proxy::client::start_proxy_client;
 use apollo_mcp_registry::platform_api::operation_collections::collection_poller::CollectionSource;
 use apollo_mcp_registry::uplink::persisted_queries::ManifestSource;
 use apollo_mcp_registry::uplink::schema::SchemaSource;
@@ -50,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
             .with_env_filter(
                 EnvFilter::from_default_env().add_directive(config.logging.level.into()),
             )
+            .with_writer(std::io::stderr)
             .with_ansi(true)
             .with_target(false)
             .init(),
@@ -65,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
 
     info!(
         "Apollo MCP Server v{} // (c) Apollo Graph, Inc. // Licensed under MIT",
-        std::env!("CARGO_PKG_VERSION")
+        env!("CARGO_PKG_VERSION")
     );
 
     let schema_source = match config.schema {
@@ -126,8 +128,8 @@ async fn main() -> anyhow::Result<()> {
         .then(|| config.graphos.graph_ref())
         .transpose()?;
 
-    Ok(Server::builder()
-        .transport(config.transport)
+    let mcp_server = Server::builder()
+        .transport(config.transport.clone())
         .schema_source(schema_source)
         .operation_source(operation_source)
         .endpoint(config.endpoint)
@@ -145,6 +147,18 @@ async fn main() -> anyhow::Result<()> {
                 .transpose()?,
         )
         .build()
-        .start()
-        .await?)
+        .start();
+
+    if let Some(address) = config.proxy {
+        let proxy_server = async {
+            info!("Starting MCP proxy server on {}", address);
+            let _ = start_proxy_client(address.as_str()).await;
+        };
+
+        let _ = tokio::join!(mcp_server, proxy_server);
+    } else {
+        mcp_server.await?;
+    }
+
+    Ok(())
 }

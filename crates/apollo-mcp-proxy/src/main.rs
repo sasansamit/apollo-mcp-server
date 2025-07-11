@@ -1,4 +1,4 @@
-use apollo_mcp_proxy::client::start_client;
+use apollo_mcp_proxy::client::start_proxy_client;
 use clap::Parser;
 use std::error::Error;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let args = Args::parse();
 
-    let _ = start_client(&args.url).await;
+    let _ = start_proxy_client(&args.url).await;
 
     Ok(())
 }

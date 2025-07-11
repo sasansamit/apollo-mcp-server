@@ -8,7 +8,7 @@ use rmcp::{
 use std::error::Error;
 use tracing::{error, info};
 
-pub async fn start_client(url: &str) -> Result<(), Box<dyn Error>> {
+pub async fn start_proxy_client(url: &str) -> Result<(), Box<dyn Error>> {
     let transport = StreamableHttpClientTransport::from_uri(url);
     let client_info = ClientInfo {
         protocol_version: Default::default(),

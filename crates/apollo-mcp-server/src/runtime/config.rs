@@ -53,6 +53,9 @@ pub struct Config {
     /// The type of server transport to use
     #[serde(default)]
     pub transport: Transport,
+
+    /// Local streamable-http server proxy address
+    pub proxy: Option<String>,
 }
 
 mod defaults {
