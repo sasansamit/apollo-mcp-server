@@ -6,13 +6,14 @@ use apollo_mcp_registry::uplink::schema::SchemaSource;
 use apollo_mcp_server::custom_scalar_map::CustomScalarMap;
 use apollo_mcp_server::errors::ServerError;
 use apollo_mcp_server::operations::OperationSource;
-use apollo_mcp_server::server::Server;
+use apollo_mcp_server::server::{Server, Transport};
 use clap::Parser;
 use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
 use runtime::IdOrDefault;
 use runtime::logging::Logging;
 use tracing::{info, warn};
+use apollo_mcp_proxy::client::start_proxy_client;
 
 mod runtime;
 
@@ -111,8 +112,8 @@ async fn main() -> anyhow::Result<()> {
 
     let transport = config.transport.clone();
 
-    Ok(Server::builder()
-        .transport(config.transport)
+    let mcp_server = Server::builder()
+        .transport(config.transport.clone())
         .schema_source(schema_source)
         .operation_source(operation_source)
         .endpoint(config.endpoint.into_inner())
@@ -146,6 +147,24 @@ async fn main() -> anyhow::Result<()> {
         .index_memory_bytes(config.introspection.search.index_memory_bytes)
         .health_check(config.health_check)
         .build()
-        .start()
-        .await?)
+        .start();
+
+    match config.transport {
+        Transport::StreamableHttp { proxy, proxy_endpoint, .. } => {
+            if proxy {
+                let mut endpoint = proxy_endpoint;
+                if !endpoint.starts_with("http") {
+                    endpoint = format!("http://{endpoint}");
+                }
+                
+                let proxy_client = start_proxy_client(endpoint.as_str());
+                let (_, _ ) = tokio::join!(mcp_server, proxy_client);
+            } else {
+                mcp_server.await?;
+            }
+        }
+        _ => { mcp_server.await?; }
+    }
+
+    Ok(())
 }
