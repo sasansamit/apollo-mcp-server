@@ -176,6 +176,7 @@ dependencies = [
  "axum",
  "clap",
  "rmcp 0.2.1",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-appender",
