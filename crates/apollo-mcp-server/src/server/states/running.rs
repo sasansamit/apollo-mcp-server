@@ -288,7 +288,6 @@ impl ServerHandler for Running {
             capabilities: ServerCapabilities::builder()
                 .enable_tools()
                 .enable_tool_list_changed()
-                .enable_logging()
                 .build(),
             ..Default::default()
         }
