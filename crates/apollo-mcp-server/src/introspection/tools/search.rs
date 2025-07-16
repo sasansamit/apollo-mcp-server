@@ -3,9 +3,9 @@
 use crate::errors::McpError;
 use crate::schema_from_type;
 use crate::schema_tree_shake::{DepthLimit, SchemaTreeShaker};
-use apollo_compiler::Schema;
-use apollo_compiler::ast::OperationType as AstOperationType;
+use apollo_compiler::ast::{Field, OperationType as AstOperationType, Selection};
 use apollo_compiler::validation::Valid;
+use apollo_compiler::{Name, Node, Schema};
 use apollo_schema_index::{OperationType, Options, SchemaIndex};
 use rmcp::model::{CallToolResult, Content, ErrorCode, Tool};
 use rmcp::schemars::JsonSchema;
@@ -20,8 +20,8 @@ use tracing::debug;
 /// The name of the tool to search a GraphQL schema.
 pub const SEARCH_TOOL_NAME: &str = "search";
 
-/// The depth of nested types to include for leaf nodes on matching root paths.
-pub const LEAF_DEPTH: DepthLimit = DepthLimit::Limited(1);
+/// The maximum number of search results to consider.
+const MAX_SEARCH_RESULTS: usize = 5;
 
 /// A tool to search a GraphQL schema.
 #[derive(Clone)]
@@ -29,6 +29,7 @@ pub struct Search {
     schema: Arc<Mutex<Valid<Schema>>>,
     index: SchemaIndex,
     allow_mutations: bool,
+    leaf_depth: usize,
     pub tool: Tool,
 }
 
@@ -53,6 +54,8 @@ impl Search {
     pub fn new(
         schema: Arc<Mutex<Valid<Schema>>>,
         allow_mutations: bool,
+        leaf_depth: usize,
+        index_memory_bytes: usize,
     ) -> Result<Self, IndexingError> {
         let root_types = if allow_mutations {
             OperationType::Query | OperationType::Mutation
@@ -62,8 +65,9 @@ impl Search {
         let locked = &schema.try_lock()?;
         Ok(Self {
             schema: schema.clone(),
-            index: SchemaIndex::new(locked, root_types)?,
+            index: SchemaIndex::new(locked, root_types, index_memory_bytes)?,
             allow_mutations,
+            leaf_depth,
             tool: Tool::new(
                 SEARCH_TOOL_NAME,
                 "Search a GraphQL schema",
@@ -84,7 +88,7 @@ impl Search {
                 )
             })?;
 
-        root_paths.truncate(5);
+        root_paths.truncate(MAX_SEARCH_RESULTS);
         debug!(
             "Root paths for search terms: {}\n{}",
             input.terms.join(", "),
@@ -98,16 +102,32 @@ impl Search {
         let schema = self.schema.lock().await;
         let mut tree_shaker = SchemaTreeShaker::new(&schema);
         for root_path in root_paths {
-            let types = root_path.inner.types.clone();
-            let path_len = types.len();
-            for (i, type_name) in types.into_iter().enumerate() {
-                if let Some(extended_type) = schema.types.get(type_name.as_ref()) {
-                    let depth = if i == path_len - 1 {
-                        LEAF_DEPTH
+            let path_len = root_path.inner.len();
+            for (i, path_node) in root_path.inner.into_iter().enumerate() {
+                if let Some(extended_type) = schema.types.get(path_node.node_type.as_str()) {
+                    let (selection_set, depth) = if i == path_len - 1 {
+                        (None, DepthLimit::Limited(self.leaf_depth))
                     } else {
-                        DepthLimit::Limited(1)
+                        (
+                            path_node.field_name.as_ref().map(|field_name| {
+                                vec![Selection::Field(Node::from(Field {
+                                    alias: Default::default(),
+                                    name: Name::new_unchecked(field_name),
+                                    arguments: Default::default(),
+                                    selection_set: Default::default(),
+                                    directives: Default::default(),
+                                }))]
+                            }),
+                            DepthLimit::Limited(1),
+                        )
                     };
-                    tree_shaker.retain_type(extended_type, depth)
+                    tree_shaker.retain_type(extended_type, selection_set.as_ref(), depth)
+                }
+                for field_arg in path_node.field_args {
+                    if let Some(extended_type) = schema.types.get(field_arg.as_str()) {
+                        // Retain input types with unlimited depth because all input must be given
+                        tree_shaker.retain_type(extended_type, None, DepthLimit::Unlimited);
+                    }
                 }
             }
         }
@@ -171,7 +191,8 @@ mod tests {
     #[tokio::test]
     async fn test_search_tool(schema: Valid<Schema>) {
         let schema = Arc::new(Mutex::new(schema));
-        let search = Search::new(schema.clone(), false).expect("Failed to create search tool");
+        let search = Search::new(schema.clone(), false, 1, 15_000_000)
+            .expect("Failed to create search tool");
 
         let result = search
             .execute(Input {
@@ -188,7 +209,8 @@ mod tests {
     #[tokio::test]
     async fn test_referencing_types_are_collected(schema: Valid<Schema>) {
         let schema = Arc::new(Mutex::new(schema));
-        let search = Search::new(schema.clone(), true).expect("Failed to create search tool");
+        let search =
+            Search::new(schema.clone(), true, 1, 15_000_000).expect("Failed to create search tool");
 
         // Search for a type that should have references
         let result = search

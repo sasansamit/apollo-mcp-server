@@ -30,7 +30,7 @@ pub struct Input {
     type_name: String,
     /// How far to recurse the type hierarchy. Use 0 for no limit. Defaults to 1.
     #[serde(default = "default_depth")]
-    depth: u32,
+    depth: usize,
 }
 
 impl Introspect {
@@ -65,6 +65,7 @@ impl Introspect {
         match schema.types.get(type_name) {
             Some(extended_type) => tree_shaker.retain_type(
                 extended_type,
+                None,
                 if input.depth > 0 {
                     DepthLimit::Limited(input.depth)
                 } else {
@@ -106,6 +107,6 @@ impl Introspect {
 }
 
 /// The default depth to recurse the type hierarchy.
-fn default_depth() -> u32 {
-    1u32
+fn default_depth() -> usize {
+    1
 }
