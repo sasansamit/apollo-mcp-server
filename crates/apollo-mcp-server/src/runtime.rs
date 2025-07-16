@@ -51,6 +51,7 @@ pub fn read_config(yaml_path: impl AsRef<Path>) -> Result<Config, figment::Error
         .extract()
 }
 
+/// Sets up either file logging or stderr logging depending on provided configuration options
 pub fn setup_logging(config: &Config) -> Result<Option<WorkerGuard>, anyhow::Error> {
     let mut env_filter = EnvFilter::from_default_env().add_directive(config.logging.level.into());
 
@@ -67,6 +68,7 @@ pub fn setup_logging(config: &Config) -> Result<Option<WorkerGuard>, anyhow::Err
     }
 }
 
+/// Sets up rolling file appender logging but falls back to stderr logging on failure
 fn setup_file_logging(
     log_path: &PathBuf,
     env_filter: EnvFilter,
@@ -105,6 +107,7 @@ fn setup_file_logging(
     Ok(Some(guard))
 }
 
+/// Sets up stderr logging
 fn setup_stderr_logging(env_filter: EnvFilter) -> Result<Option<WorkerGuard>, anyhow::Error> {
     tracing_subscriber::registry()
         .with(env_filter)
