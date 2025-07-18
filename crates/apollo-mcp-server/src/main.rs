@@ -13,6 +13,7 @@ use clap::builder::styling::{AnsiColor, Effects};
 use runtime::IdOrDefault;
 use tracing::{info, warn};
 
+mod log;
 mod runtime;
 
 /// Clap styling
@@ -41,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
         None => runtime::read_config_from_env().unwrap_or_default(),
     };
 
-    let _guard = runtime::setup_logging(&config)?;
+    let _guard = log::setup_logging(&config)?;
 
     info!(
         "Apollo MCP Server v{} // (c) Apollo Graph, Inc. // Licensed under MIT",
