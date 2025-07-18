@@ -25,6 +25,8 @@ pub struct Server {
     headers: HeaderMap,
     execute_introspection: bool,
     introspect_introspection: bool,
+    introspect_minify: bool,
+    search_minify: bool,
     search_introspection: bool,
     explorer_graph_ref: Option<String>,
     custom_scalar_map: Option<CustomScalarMap>,
@@ -56,7 +58,7 @@ pub enum Transport {
         port: u16,
     },
 
-    /// Host the MCP server on the configuration, using stremable HTTP messages.
+    /// Host the MCP server on the configuration, using streamable HTTP messages.
     StreamableHttp {
         /// The IP address to bind to
         #[serde(default = "Transport::default_address")]
@@ -90,6 +92,8 @@ impl Server {
         execute_introspection: bool,
         introspect_introspection: bool,
         search_introspection: bool,
+        introspect_minify: bool,
+        search_minify: bool,
         explorer_graph_ref: Option<String>,
         #[builder(required)] custom_scalar_map: Option<CustomScalarMap>,
         mutation_mode: MutationMode,
@@ -112,6 +116,8 @@ impl Server {
             execute_introspection,
             introspect_introspection,
             search_introspection,
+            introspect_minify,
+            search_minify,
             explorer_graph_ref,
             custom_scalar_map,
             mutation_mode,

@@ -86,16 +86,21 @@ impl Starting {
             })
             .flatten();
         let schema = Arc::new(Mutex::new(self.schema));
-        let introspect_tool = self
-            .config
-            .introspect_introspection
-            .then(|| Introspect::new(schema.clone(), root_query_type, root_mutation_type));
+        let introspect_tool = self.config.introspect_introspection.then(|| {
+            Introspect::new(
+                schema.clone(),
+                root_query_type,
+                root_mutation_type,
+                self.config.introspect_minify,
+            )
+        });
         let search_tool = if self.config.search_introspection {
             Some(Search::new(
                 schema.clone(),
                 matches!(self.config.mutation_mode, MutationMode::All),
                 self.config.search_leaf_depth,
                 self.config.index_memory_bytes,
+                self.config.search_minify,
             )?)
         } else {
             None

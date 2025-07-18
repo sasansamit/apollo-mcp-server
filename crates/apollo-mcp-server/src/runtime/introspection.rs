@@ -29,6 +29,9 @@ pub struct ExecuteConfig {
 pub struct IntrospectConfig {
     /// Enable introspection requests
     pub enabled: bool,
+
+    /// Minify introspection results
+    pub minify: bool,
 }
 
 /// Search tool configuration
@@ -45,6 +48,9 @@ pub struct SearchConfig {
     /// (1 is just the matching type, 2 is the matching type plus the types it references, etc.
     /// Defaults to 1.)
     pub leaf_depth: usize,
+
+    /// Minify search results
+    pub minify: bool,
 }
 
 impl Default for SearchConfig {
@@ -53,6 +59,7 @@ impl Default for SearchConfig {
             enabled: false,
             index_memory_bytes: 50_000_000,
             leaf_depth: 1,
+            minify: false,
         }
     }
 }
