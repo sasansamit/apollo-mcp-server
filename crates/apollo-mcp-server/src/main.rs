@@ -44,6 +44,8 @@ async fn main() -> anyhow::Result<()> {
         None => runtime::read_config_from_env().unwrap_or_default(),
     };
 
+    // WorkerGuard is not used but needed to be at least defined or else the guard
+    // is cleaned up too early and file appender logging does not work
     let _guard = setup_logging(&config)?;
 
     info!(
