@@ -175,9 +175,11 @@ version = "0.7.5"
 dependencies = [
  "axum",
  "clap",
+ "futures",
  "rmcp 0.2.1",
  "serde_json",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
