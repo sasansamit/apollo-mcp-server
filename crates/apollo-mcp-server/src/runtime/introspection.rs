@@ -13,6 +13,9 @@ pub struct Introspection {
 
     /// Search tool configuration
     pub search: SearchConfig,
+
+    /// Validate configuration for checking operations before execution
+    pub validate: ValidateConfig,
 }
 
 /// Execution-specific introspection configuration
@@ -64,9 +67,17 @@ impl Default for SearchConfig {
     }
 }
 
+/// Validation tool configuration
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct ValidateConfig {
+    /// Enable validation tool
+    pub enabled: bool,
+}
+
 impl Introspection {
     /// Check if any introspection tools are enabled
     pub fn any_enabled(&self) -> bool {
-        self.execute.enabled | self.introspect.enabled | self.search.enabled
+        self.execute.enabled | self.introspect.enabled | self.search.enabled | self.validate.enabled
     }
 }
