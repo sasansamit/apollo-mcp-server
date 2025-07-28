@@ -2,3 +2,5 @@
 
 pub(crate) mod execute;
 pub(crate) mod introspect;
+pub(crate) mod search;
+pub(crate) mod validate;

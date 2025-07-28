@@ -1,0 +1,45 @@
+---
+source: crates/apollo-mcp-server/src/introspection/tools/search.rs
+expression: content_to_snapshot(result)
+---
+scalar DateTime
+
+enum UserRole {
+  ADMIN
+  MODERATOR
+  USER
+  GUEST
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  DELETED
+}
+
+type User implements Node {
+  role: UserRole!
+}
+
+type Post implements Node & Content {
+  author: User!
+}
+
+type Query {
+  user(id: ID!): User
+  post(id: ID!): Post
+  posts(filter: PostFilter): [Post!]!
+}
+
+input PostFilter {
+  status: ContentStatus
+  authorId: ID
+  tags: [String!]
+  dateRange: DateRangeInput
+}
+
+input DateRangeInput {
+  start: DateTime!
+  end: DateTime!
+}

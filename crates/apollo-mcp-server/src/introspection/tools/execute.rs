@@ -1,6 +1,9 @@
 use crate::errors::McpError;
-use crate::operations::{MutationMode, operation_defs};
-use crate::{graphql, schema_from_type};
+use crate::operations::{MutationMode, operation_defs, operation_name};
+use crate::{
+    graphql::{self, OperationDetails},
+    schema_from_type,
+};
 use reqwest::header::{HeaderMap, HeaderValue};
 use rmcp::model::{ErrorCode, Tool};
 use rmcp::schemars::JsonSchema;
@@ -33,7 +36,7 @@ impl Execute {
             mutation_mode,
             tool: Tool::new(
                 EXECUTE_TOOL_NAME,
-                "Execute a GraphQL operation. Use the `introspect` tool to get information about the GraphQL schema. Always use the schema to create operations - do not try arbitrary operations. DO NOT try to execute introspection queries.",
+                "Execute a GraphQL operation. Use the `introspect` tool to get information about the GraphQL schema. Always use the schema to create operations - do not try arbitrary operations. If available, first use the `validate` tool to validate operations. DO NOT try to execute introspection queries.",
                 schema_from_type!(Input),
             ),
         }
@@ -45,16 +48,26 @@ impl graphql::Executable for Execute {
         None
     }
 
-    fn operation(&self, input: Value) -> Result<String, McpError> {
+    fn operation(&self, input: Value) -> Result<OperationDetails, McpError> {
         let input = serde_json::from_value::<Input>(input).map_err(|_| {
             McpError::new(ErrorCode::INVALID_PARAMS, "Invalid input".to_string(), None)
         })?;
 
-        // validate the operation
-        operation_defs(&input.query, self.mutation_mode == MutationMode::All, None)
-            .map_err(|e| McpError::new(ErrorCode::INVALID_PARAMS, e.to_string(), None))?;
+        let (_, operation_def, source_path) =
+            operation_defs(&input.query, self.mutation_mode == MutationMode::All, None)
+                .map_err(|e| McpError::new(ErrorCode::INVALID_PARAMS, e.to_string(), None))?
+                .ok_or_else(|| {
+                    McpError::new(
+                        ErrorCode::INVALID_PARAMS,
+                        "Invalid operation type".to_string(),
+                        None,
+                    )
+                })?;
 
-        Ok(input.query)
+        Ok(OperationDetails {
+            query: input.query,
+            operation_name: operation_name(&operation_def, source_path).ok(),
+        })
     }
 
     fn variables(&self, input: Value) -> Result<Value, McpError> {
@@ -84,7 +97,7 @@ impl graphql::Executable for Execute {
 #[cfg(test)]
 mod tests {
     use crate::errors::McpError;
-    use crate::graphql::Executable;
+    use crate::graphql::{Executable, OperationDetails};
     use crate::introspection::tools::execute::Execute;
     use crate::operations::MutationMode;
     use rmcp::model::ErrorCode;
@@ -104,7 +117,10 @@ mod tests {
 
         assert_eq!(
             Executable::operation(&execute, input.clone()),
-            Ok(query.to_string())
+            Ok(OperationDetails {
+                query: query.to_string(),
+                operation_name: Some("GetUser".to_string()),
+            })
         );
         assert_eq!(Executable::variables(&execute, input), Ok(variables));
     }
@@ -123,7 +139,10 @@ mod tests {
 
         assert_eq!(
             Executable::operation(&execute, input.clone()),
-            Ok(query.to_string())
+            Ok(OperationDetails {
+                query: query.to_string(),
+                operation_name: Some("GetUser".to_string()),
+            })
         );
         assert_eq!(Executable::variables(&execute, input), Ok(variables));
     }
@@ -140,9 +159,109 @@ mod tests {
 
         assert_eq!(
             Executable::operation(&execute, input.clone()),
-            Ok(query.to_string())
+            Ok(OperationDetails {
+                query: query.to_string(),
+                operation_name: Some("GetUser".to_string()),
+            })
         );
         assert_eq!(Executable::variables(&execute, input), Ok(Value::Null));
+    }
+
+    #[test]
+    fn execute_query_anonymous_operation() {
+        let execute = Execute::new(MutationMode::None);
+
+        let query = "{ user(id: \"123\") { id name } }";
+        let input = json!({
+            "query": query,
+        });
+
+        assert_eq!(
+            Executable::operation(&execute, input.clone()),
+            Ok(OperationDetails {
+                query: query.to_string(),
+                operation_name: None,
+            })
+        );
+    }
+
+    #[test]
+    fn execute_query_err_with_mutation_when_mutation_mode_is_none() {
+        let execute = Execute::new(MutationMode::None);
+
+        let query = "mutation MutationName { id }".to_string();
+        let input = json!({
+            "query": query,
+        });
+
+        assert_eq!(
+            Executable::operation(&execute, input),
+            Err(McpError::new(
+                ErrorCode::INVALID_PARAMS,
+                "Invalid operation type".to_string(),
+                None
+            ))
+        );
+    }
+
+    #[test]
+    fn execute_query_ok_with_mutation_when_mutation_mode_is_all() {
+        let execute = Execute::new(MutationMode::All);
+
+        let query = "mutation MutationName { id }".to_string();
+        let input = json!({
+            "query": query,
+        });
+
+        assert_eq!(
+            Executable::operation(&execute, input),
+            Ok(OperationDetails {
+                query: query.to_string(),
+                operation_name: Some("MutationName".to_string()),
+            })
+        );
+    }
+
+    #[test]
+    fn execute_query_err_with_subscription_regardless_of_mutation_mode() {
+        for mutation_mode in [
+            MutationMode::None,
+            MutationMode::Explicit,
+            MutationMode::All,
+        ] {
+            let execute = Execute::new(mutation_mode);
+
+            let input = json!({
+                "query": "subscription SubscriptionName { id }",
+            });
+
+            assert_eq!(
+                Executable::operation(&execute, input),
+                Err(McpError::new(
+                    ErrorCode::INVALID_PARAMS,
+                    "Invalid operation type".to_string(),
+                    None
+                ))
+            );
+        }
+    }
+
+    #[test]
+    fn execute_query_err_with_subscription_when_mutation_mode_is_all() {
+        let execute = Execute::new(MutationMode::All);
+
+        let input = json!({
+            "query": "subscription { user { id name } }",
+        });
+
+        assert_eq!(
+            Executable::operation(&execute, input),
+            Err(McpError::new(
+                ErrorCode::INVALID_PARAMS,
+                "Invalid operation type".to_string(),
+                None
+            ))
+        );
     }
 
     #[test]
