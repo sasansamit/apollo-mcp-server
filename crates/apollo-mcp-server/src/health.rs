@@ -100,7 +100,7 @@ pub struct HealthCheckConfig {
 impl Default for HealthCheckConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            enabled: false,
             path: "/health".to_string(),
             readiness: Default::default(),
         }
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn test_health_check_default_config() {
         let config = HealthCheckConfig::default();
-        assert!(config.enabled);
+        assert!(!config.enabled);
         assert_eq!(config.path, "/health");
         assert_eq!(config.readiness.allowed, 100);
         assert_eq!(config.readiness.interval.sampling, Duration::from_secs(5));
