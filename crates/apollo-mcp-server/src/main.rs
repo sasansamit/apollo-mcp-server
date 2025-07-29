@@ -38,11 +38,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let config: runtime::Config = Args::parse()
-        .config
-        .map(runtime::read_config)
-        .transpose()?
-        .unwrap_or_default();
+    let config: runtime::Config = match Args::parse().config {
+        Some(config_path) => runtime::read_config(config_path)?,
+        None => runtime::read_config_from_env().unwrap_or_default(),
+    };
 
     let mut env_filter = EnvFilter::from_default_env().add_directive(config.logging.level.into());
 
