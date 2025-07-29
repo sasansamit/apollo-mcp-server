@@ -1405,11 +1405,12 @@ mod tests {
             ),
         }
         "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
-          "type": "object"
+          "type": "object",
+          "properties": {}
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -3212,12 +3213,12 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
-          "properties": {},
+          "properties": {}
         }
-        "###);
+        "#);
     }
 
     #[test]
