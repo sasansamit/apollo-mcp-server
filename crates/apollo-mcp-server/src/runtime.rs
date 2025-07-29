@@ -26,6 +26,15 @@ pub use schema_source::SchemaSource;
 /// Separator to use when drilling down into nested options in the env figment
 const ENV_NESTED_SEPARATOR: &str = "__";
 
+/// Read configuration from environment variables only (when no config file is provided)
+#[allow(clippy::result_large_err)]
+pub fn read_config_from_env() -> Result<Config, figment::Error> {
+    Figment::new()
+        .join(apollo_common_env())
+        .join(Env::prefixed("APOLLO_MCP_").split(ENV_NESTED_SEPARATOR))
+        .extract()
+}
+
 /// Read in a config from a YAML file, filling in any missing values from the environment
 #[allow(clippy::result_large_err)]
 pub fn read_config(yaml_path: impl AsRef<Path>) -> Result<Config, figment::Error> {
