@@ -34,7 +34,7 @@ use rmcp::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -776,7 +776,6 @@ fn get_json_schema(
 ) -> RootSchema {
     let mut obj = ObjectValidation::default();
     let mut definitions = Map::new();
-    obj.properties = BTreeMap::new();
 
     operation.variables.iter().for_each(|variable| {
         let variable_name = variable.name.to_string();
