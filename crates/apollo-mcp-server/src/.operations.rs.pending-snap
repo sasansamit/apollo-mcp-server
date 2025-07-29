@@ -1,0 +1,96 @@
+{"run_id":"1753798488-200982000","line":3246,"new":{"module_name":"apollo_mcp_server__operations__tests","snapshot_name":"fix_test","metadata":{"source":"crates/apollo-mcp-server/src/operations.rs","assertion_line":3246,"expression":"serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap()"},"snapshot":"{\n  \"type\": \"object\"\n}"},"old":{"module_name":"apollo_mcp_server__operations__tests","metadata":{},"snapshot":"{\n  \"type\": \"object\",\n  \"properties\": {\n    \"idArg\": {\n      \"description\": \"id description\",\n      \"type\": \"string\"\n    },\n    \"skipArg\": {\n      \"description\": \"Skipped when true.\",\n      \"type\": \"boolean\"\n    }\n  }\n}"}}
+{"run_id":"1753798557-567793000","line":3255,"new":{"module_name":"apollo_mcp_server__operations__tests","snapshot_name":"fix_test","metadata":{"source":"crates/apollo-mcp-server/src/operations.rs","assertion_line":3255,"expression":"serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap()"},"snapshot":"{\n  \"type\": \"object\"\n}"},"old":{"module_name":"apollo_mcp_server__operations__tests","metadata":{},"snapshot":"{\n  \"type\": \"object\",\n  \"properties\": {\n    \"idArg\": {\n      \"description\": \"id description\",\n      \"type\": \"string\"\n    },\n    \"skipArg\": {\n      \"description\": \"Skipped when true.\",\n      \"type\": \"boolean\"\n    }\n  }\n}"}}
+{"run_id":"1753799456-830230000","line":3256,"new":{"module_name":"apollo_mcp_server__operations__tests","snapshot_name":"fix_test","metadata":{"source":"crates/apollo-mcp-server/src/operations.rs","assertion_line":3256,"expression":"serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap()"},"snapshot":"{\n  \"type\": \"object\"\n}"},"old":{"module_name":"apollo_mcp_server__operations__tests","metadata":{},"snapshot":"{\n  \"type\": \"object\",\n  \"properties\": {}\n}"}}
+{"run_id":"1753799967-866432000","line":3274,"new":{"module_name":"apollo_mcp_server__operations__tests","snapshot_name":"fix_test","metadata":{"source":"crates/apollo-mcp-server/src/operations.rs","assertion_line":3274,"expression":"serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap()"},"snapshot":"{\n  \"type\": \"object\"\n}"},"old":{"module_name":"apollo_mcp_server__operations__tests","metadata":{},"snapshot":"{\n  \"type\": \"object\",\n  \"properties\": {}\n}"}}
+{"run_id":"1753800068-279273000","line":3285,"new":null,"old":null}
+{"run_id":"1753800127-175833000","line":3072,"new":null,"old":null}
+{"run_id":"1753800327-956788000","line":3274,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":3142,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":3239,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2374,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2064,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":3276,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2963,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2930,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":3000,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2123,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":3175,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2762,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2729,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2700,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2006,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2248,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2317,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1491,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1556,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1637,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1594,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1670,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1939,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1521,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1783,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1813,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1848,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1708,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1891,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1432,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1743,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":3109,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":1459,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2150,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":3076,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2811,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2642,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2675,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2190,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2555,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":2880,"new":null,"old":null}
+{"run_id":"1753800343-368562000","line":3212,"new":{"module_name":"apollo_mcp_server__operations__tests","snapshot_name":"operation_with_no_variables_is_handled_properly","metadata":{"source":"crates/apollo-mcp-server/src/operations.rs","assertion_line":3212,"expression":"serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap()"},"snapshot":"{\n  \"type\": \"object\",\n  \"properties\": {}\n}"},"old":{"module_name":"apollo_mcp_server__operations__tests","metadata":{},"snapshot":"{\n  \"type\": \"object\"\n}"}}
+{"run_id":"1753800343-368562000","line":1329,"new":{"module_name":"apollo_mcp_server__operations__tests","snapshot_name":"mutation_mode_all","metadata":{"source":"crates/apollo-mcp-server/src/operations.rs","assertion_line":1329,"expression":"operation"},"snapshot":"Operation {\n    tool: Tool {\n        name: \"MutationName\",\n        description: Some(\n            \"The returned value is optional and has type `String`\",\n        ),\n        input_schema: {\n            \"type\": String(\"object\"),\n            \"properties\": Object {},\n        },\n        annotations: Some(\n            ToolAnnotations {\n                title: None,\n                read_only_hint: Some(\n                    false,\n                ),\n                destructive_hint: None,\n                idempotent_hint: None,\n                open_world_hint: None,\n            },\n        ),\n    },\n    inner: RawOperation {\n        source_text: \"mutation MutationName { id }\",\n        persisted_query_id: None,\n        headers: None,\n        variables: None,\n        source_path: None,\n    },\n    operation_name: \"MutationName\",\n}"},"old":{"module_name":"apollo_mcp_server__operations__tests","metadata":{},"snapshot":"Operation {\n    tool: Tool {\n        name: \"MutationName\",\n        description: Some(\n            \"The returned value is optional and has type `String`\",\n        ),\n        input_schema: {\n            \"type\": String(\"object\"),\n        },\n        annotations: Some(\n            ToolAnnotations {\n                title: None,\n                read_only_hint: Some(\n                    false,\n                ),\n                destructive_hint: None,\n                idempotent_hint: None,\n                open_world_hint: None,\n            },\n        ),\n    },\n    inner: RawOperation {\n        source_text: \"mutation MutationName { id }\",\n        persisted_query_id: None,\n        headers: None,\n        variables: None,\n        source_path: None,\n    },\n    operation_name: \"MutationName\",\n}"}}
+{"run_id":"1753800343-368562000","line":1276,"new":{"module_name":"apollo_mcp_server__operations__tests","snapshot_name":"mutation_mode_explicit","metadata":{"source":"crates/apollo-mcp-server/src/operations.rs","assertion_line":1276,"expression":"operation"},"snapshot":"Operation {\n    tool: Tool {\n        name: \"MutationName\",\n        description: Some(\n            \"The returned value is optional and has type `String`\",\n        ),\n        input_schema: {\n            \"type\": String(\"object\"),\n            \"properties\": Object {},\n        },\n        annotations: Some(\n            ToolAnnotations {\n                title: None,\n                read_only_hint: Some(\n                    false,\n                ),\n                destructive_hint: None,\n                idempotent_hint: None,\n                open_world_hint: None,\n            },\n        ),\n    },\n    inner: RawOperation {\n        source_text: \"mutation MutationName { id }\",\n        persisted_query_id: None,\n        headers: None,\n        variables: None,\n        source_path: None,\n    },\n    operation_name: \"MutationName\",\n}"},"old":{"module_name":"apollo_mcp_server__operations__tests","metadata":{},"snapshot":"Operation {\n    tool: Tool {\n        name: \"MutationName\",\n        description: Some(\n            \"The returned value is optional and has type `String`\",\n        ),\n        input_schema: {\n            \"type\": String(\"object\"),\n        },\n        annotations: Some(\n            ToolAnnotations {\n                title: None,\n                read_only_hint: Some(\n                    false,\n                ),\n                destructive_hint: None,\n                idempotent_hint: None,\n                open_world_hint: None,\n            },\n        ),\n    },\n    inner: RawOperation {\n        source_text: \"mutation MutationName { id }\",\n        persisted_query_id: None,\n        headers: None,\n        variables: None,\n        source_path: None,\n    },\n    operation_name: \"MutationName\",\n}"}}
+{"run_id":"1753800343-368562000","line":1383,"new":{"module_name":"apollo_mcp_server__operations__tests","snapshot_name":"no_variables","metadata":{"source":"crates/apollo-mcp-server/src/operations.rs","assertion_line":1383,"expression":"tool"},"snapshot":"Tool {\n    name: \"QueryName\",\n    description: Some(\n        \"The returned value is optional and has type `String`\",\n    ),\n    input_schema: {\n        \"type\": String(\"object\"),\n        \"properties\": Object {},\n    },\n    annotations: Some(\n        ToolAnnotations {\n            title: None,\n            read_only_hint: Some(\n                true,\n            ),\n            destructive_hint: None,\n            idempotent_hint: None,\n            open_world_hint: None,\n        },\n    ),\n}"},"old":{"module_name":"apollo_mcp_server__operations__tests","metadata":{},"snapshot":"Tool {\n    name: \"QueryName\",\n    description: Some(\n        \"The returned value is optional and has type `String`\",\n    ),\n    input_schema: {\n        \"type\": String(\"object\"),\n    },\n    annotations: Some(\n        ToolAnnotations {\n            title: None,\n            read_only_hint: Some(\n                true,\n            ),\n            destructive_hint: None,\n            idempotent_hint: None,\n            open_world_hint: None,\n        },\n    ),\n}"}}
+{"run_id":"1753800409-651894000","line":3145,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2377,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":3243,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":3003,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":3280,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2320,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2966,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2933,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2251,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":3178,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1330,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2765,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1385,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1640,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1673,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2067,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1494,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2732,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2703,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1276,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1559,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2126,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2009,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1524,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1597,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1942,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1851,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2153,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1894,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1786,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1711,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1816,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2814,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1746,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":3112,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1435,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":1462,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":3079,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2193,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2558,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2678,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2645,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":2883,"new":null,"old":null}
+{"run_id":"1753800409-651894000","line":3215,"new":{"module_name":"apollo_mcp_server__operations__tests","snapshot_name":"operation_with_no_variables_is_handled_properly","metadata":{"source":"crates/apollo-mcp-server/src/operations.rs","assertion_line":3215,"expression":"serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap()"},"snapshot":"{\n  \"type\": \"object\",\n  \"properties\": {}\n}"},"old":{"module_name":"apollo_mcp_server__operations__tests","metadata":{},"snapshot":"{\n  \"type\": \"object\",\n  \"properties\": {},\n}"}}
+{"run_id":"1753800409-651894000","line":1408,"new":{"module_name":"apollo_mcp_server__operations__tests","snapshot_name":"no_variables-2","metadata":{"source":"crates/apollo-mcp-server/src/operations.rs","assertion_line":1408,"expression":"serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap()"},"snapshot":"{\n  \"type\": \"object\",\n  \"properties\": {}\n}"},"old":{"module_name":"apollo_mcp_server__operations__tests","metadata":{},"snapshot":"{\n  \"type\": \"object\"\n}"}}

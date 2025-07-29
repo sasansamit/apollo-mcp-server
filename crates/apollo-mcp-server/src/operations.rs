@@ -34,7 +34,7 @@ use rmcp::{
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -552,7 +552,7 @@ impl Operation {
                 disable_schema_description,
             );
 
-            let object = serde_json::to_value(get_json_schema(
+            let mut object = serde_json::to_value(get_json_schema(
                 &operation,
                 tree_shaker.argument_descriptions(),
                 &variable_description_overrides,
@@ -560,6 +560,11 @@ impl Operation {
                 custom_scalar_map,
                 raw_operation.variables.as_ref(),
             ))?;
+
+            // make sure that the properties field exists since schemas::ObjectValidation is
+            // configured to skip empty maps (in the case where there are no input args)
+            ensure_properties_exists(&mut object);
+
             let Value::Object(schema) = object else {
                 return Err(OperationError::Internal(
                     "Schemars should have returned an object".to_string(),
@@ -725,6 +730,21 @@ impl Operation {
     }
 }
 
+fn ensure_properties_exists(json_object: &mut Value) {
+    if let Some(obj_type) = json_object.get("type") {
+        if obj_type == "object" {
+            if let Some(obj_map) = json_object.as_object_mut() {
+                let props = obj_map
+                    .entry("properties")
+                    .or_insert_with(|| Value::Object(serde_json::Map::new()));
+                if !props.is_object() {
+                    *props = Value::Object(serde_json::Map::new());
+                }
+            }
+        }
+    }
+}
+
 pub fn operation_name(
     operation: &Node<OperationDefinition>,
     source_path: Option<String>,
@@ -756,6 +776,7 @@ fn get_json_schema(
 ) -> RootSchema {
     let mut obj = ObjectValidation::default();
     let mut definitions = Map::new();
+    obj.properties = BTreeMap::new();
 
     operation.variables.iter().for_each(|variable| {
         let variable_name = variable.name.to_string();
@@ -1131,7 +1152,12 @@ mod tests {
     static SCHEMA: LazyLock<Valid<Schema>> = LazyLock::new(|| {
         Schema::parse(
             r#"
-                type Query { id: String enum: RealEnum customQuery(""" id description """ id: ID!, """ a flag """ flag: Boolean): OutputType }
+                type Query {
+                    id: String
+                    enum: RealEnum
+                    customQuery(""" id description """ id: ID!, """ a flag """ flag: Boolean): OutputType
+                    testOp: OpResponse
+                }
                 type Mutation {id: String }
 
                 """
@@ -1148,6 +1174,10 @@ mod tests {
                     required is a input field that is required
                     """
                     required: String!
+                }
+
+                type OpResponse {
+                  id: String
                 }
 
                 """
@@ -1252,6 +1282,7 @@ mod tests {
                 ),
                 input_schema: {
                     "type": String("object"),
+                    "properties": Object {},
                 },
                 annotations: Some(
                     ToolAnnotations {
@@ -1305,6 +1336,7 @@ mod tests {
                 ),
                 input_schema: {
                     "type": String("object"),
+                    "properties": Object {},
                 },
                 annotations: Some(
                     ToolAnnotations {
@@ -1358,6 +1390,7 @@ mod tests {
             ),
             input_schema: {
                 "type": String("object"),
+                "properties": Object {},
             },
             annotations: Some(
                 ToolAnnotations {
@@ -3181,7 +3214,8 @@ mod tests {
 
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
         {
-          "type": "object"
+          "type": "object",
+          "properties": {},
         }
         "###);
     }
@@ -3219,6 +3253,34 @@ mod tests {
               "type": "string"
             }
           }
+        }
+        "###);
+    }
+
+    #[test]
+    fn input_schema_include_properties_field_even_when_operation_has_no_input_args() {
+        let operation = Operation::from_document(
+            RawOperation {
+                source_text: "query TestOp { testOp { id } }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+                source_path: None,
+            },
+            &SCHEMA,
+            None,
+            MutationMode::None,
+            false,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        let tool = Tool::from(operation);
+
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        {
+          "type": "object",
+          "properties": {}
         }
         "###);
     }
