@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.6.1] - 2025-07-29
+
+## 🐛 Fixes
+
+### Handle headers from config file - @tylerscoville PR #213
+
+Fix an issue where the server crashes when headers are set in the config file
+
+### Handle environment variables when no config file is provided - @DaleSeo PR #211
+
+Fix an issue where the server fails with the message "Missing environment variable: APOLLO_GRAPH_REF," even when the variables are properly set.
+
+## 🚀 Features
+
+### Health Check Support - @DaleSeo PR #209
+
+Health reporting functionality has been added to make the MCP server ready for production deployment with proper health monitoring and Kubernetes integration.
+
 # [0.6.0] - 2025-07-14
 
 ## ❗ BREAKING ❗
@@ -74,8 +92,6 @@ The `introspect` and `search` tools now have an option to minify results. Minifi
 
 A new experimental `search` tool has been added that allows the AI model to specify a set of terms to search for in the GraphQL schema. The top types matching that search are returned, as well as enough information to enable creation of GraphQL operations involving those types.
 
-
-
 # [0.5.2] - 2025-07-10
 
 ## 🐛 Fixes
@@ -84,8 +100,6 @@ A new experimental `search` tool has been added that allows the AI model to spec
 
 The server will now report the correct server name and version to clients, rather than the Rust MCP SDK name and version.
 
-
-
 # [0.5.1] - 2025-07-08
 
 ## 🐛 Fixes
@@ -93,8 +107,6 @@ The server will now report the correct server name and version to clients, rathe
 ### Fix an issue with rmcp 0.2.x upgrade - @pubmodmatt PR #181
 
 Fix an issue where the server was unresponsive to external events such as changes to operation collections.
-
-
 
 # [0.5.0] - 2025-07-08
 
