@@ -57,23 +57,17 @@ The example files located in `graphql/TheSpaceDevs/` include:
 ## Step 2: Run the MCP Server
 
 1. From the root directory of your local repo, run `rover dev` to start a local graph with an MCP Server:
-
-    ```yaml title="Config file"
-    operations:
-      source: local
-      paths:
-      - ./graphql/TheSpaceDevs/operations
-    ```
-
     ```sh showLineNumbers=false
     rover dev --supergraph-config ./graphql/TheSpaceDevs/supergraph.yaml \
-    --mcp <path to the preceding config>
+    --mcp ./graphql/TheSpaceDevs/config.yml
     ```
 
     This command:
     - Starts a local graph using the supergraph configuration
     - Starts an MCP Server with the `--mcp` flag
-    - Exposes the specified operations as MCP tools
+    - Provides a configuration file with MCP Server options
+
+    The [command reference](/apollo-mcp-server/command-reference#config-options) has a breakdown of available configuration options. 
 
 2. Start MCP Inspector to verify the server is running:
 
