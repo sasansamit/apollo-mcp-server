@@ -358,7 +358,7 @@ The health check provides different responses based on query parameters:
 | `GET /health?live`  | Liveness check     | Returns `{"status": "UP"}` if server is alive                    |
 | `GET /health?ready` | Readiness check    | Returns `{"status": "UP"}` if server is ready to handle requests |
 
-### Readiness tracking
+### Probes
 
 The server tracks failed requests and automatically marks itself as unready if too many failures occur within a sampling interval:
 
