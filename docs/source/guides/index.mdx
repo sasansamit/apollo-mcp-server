@@ -104,7 +104,7 @@ From the root of a local MCP Server repo, run the `apollo-mcp-server` binary wit
 
 ```yaml title="Example config for using Persisted Query Manifest"
 headers:
-  'apollographql-client-name': 'my-web-app'
+  "apollographql-client-name": "my-web-app"
 operations:
   source: manifest
   path: <absolute path to this local repo>/graphql/weather/persisted_queries/apollo.json
@@ -135,7 +135,7 @@ Use a [contract variant](/graphos/platform/schema-management/delivery/contracts/
 
 ```yaml title="Example config using GraphOS-managed persisted queries"
 headers:
-  'apollographql-client-name': 'my-web-app'
+  "apollographql-client-name": "my-web-app"
 operations:
   source: uplink
 schema:
@@ -161,6 +161,7 @@ You can enable the following introspection tools:
 
 - `introspect` - allows the AI model to introspect the schema of the GraphQL API by providing a specific type name to get information about, and a depth parameter to determine how deep to traverse the subtype hierarchy. The AI model can start the introspection by looking up the top-level `Query` or `Mutation` type.
 - `search` - allows the AI model to search for type information by providing a set of search terms. This can result in fewer tool calls than `introspect`, especially if the desired type is deep in the type hierarchy of the schema. Search results include all the parent type information needed to construct operations involving the matching type.
+- `validate` - validates a GraphQL operation against the schema without executing it. This allows AI models to verify that their operations are syntactically correct and conform to the schema before execution, preventing unintended side effects. Operations should be validated prior to calling the `execute` tool.
 - `execute` - executes an operation on the GraphQL endpoint
 
 The MCP client can use these tools to provide schema information to the model and its context window, and allow the model to execute GraphQL operations based on that schema.
@@ -177,17 +178,13 @@ introspection:
     enabled: true
   introspect:
     enabled: true
+  validate:
+    enabled: true
 ```
 
 ```sh title="Example command using introspection"
 apollo-mcp-server <path to the preceding config>
 ```
-
-{/*
-### Documenting tools
-
-TODO
-\*/}
 
 ## Deploying the MCP server
 
@@ -211,7 +208,7 @@ endpoint: https://thespacedevs-production.up.railway.app/
 operations:
   source: local
   paths:
-  - /data/operations/
+    - /data/operations/
 schema:
   source: local
   path: /data/api.graphql
@@ -260,7 +257,7 @@ You can inspect a local Apollo MCP Server by running it with MCP Inspector.
 operations:
   source: local
   paths:
-  - <absolute path to this git repo>/graphql/weather/operations/
+    - <absolute path to this git repo>/graphql/weather/operations/
 schema:
   source: local
   path: <absolute path to this git repo>/graphql/weather/api.graphql
@@ -301,7 +298,7 @@ You can also deploy the server as a container using the instructions in [Deployi
 operations:
   source: local
   paths:
-  - <absolute path to this git repo>/graphql/weather/operations/
+    - <absolute path to this git repo>/graphql/weather/operations/
 schema:
   source: local
   path: <absolute path to this git repo>/graphql/weather/api.graphql
@@ -327,6 +324,54 @@ npx @modelcontextprotocol/inspector
    - **URL**: Enter `http://127.0.0.1:5000/mcp`, where the port must match the `transport.port` option
 
 1. Click **Connect** and **List Tools**. You should see the tools for the operations you provided.
+
+## Health checks
+
+Apollo MCP Server provides health check endpoints for monitoring server health and readiness. This feature is useful for load balancers, container orchestrators, and monitoring systems.
+
+### Configuration
+
+Health checks are only available when using the `streamable_http` transport and must be explicitly enabled:
+
+```yaml title="Example health check configuration"
+transport:
+  type: streamable_http
+  address: 127.0.0.1
+  port: 5000
+health_check:
+  enabled: true
+  path: /health
+  readiness:
+    allowed: 50
+    interval:
+      sampling: 10s
+      unready: 30s
+```
+
+### Endpoints
+
+The health check provides different responses based on query parameters:
+
+| Endpoint            | Description        | Response                                                         |
+| :------------------ | :----------------- | :--------------------------------------------------------------- |
+| `GET /health`       | Basic health check | Always returns `{"status": "UP"}`                                |
+| `GET /health?live`  | Liveness check     | Returns `{"status": "UP"}` if server is alive                    |
+| `GET /health?ready` | Readiness check    | Returns `{"status": "UP"}` if server is ready to handle requests |
+
+### Probes
+
+The server tracks failed requests and automatically marks itself as unready if too many failures occur within a sampling interval:
+
+- **Sampling interval**: How often the server checks the rejection count (default: 5 seconds)
+- **Allowed rejections**: Maximum failures allowed before becoming unready (default: 100)
+- **Recovery time**: How long to wait before attempting to recover (default: 2x sampling interval)
+
+When the server becomes unready:
+
+- The `/health?ready` endpoint returns HTTP 503 with `{"status": "DOWN"}`
+- After the recovery period, the rejection counter resets and the server becomes ready again
+
+This allows external systems to automatically route traffic away from unhealthy servers and back when they recover.
 
 ## Custom scalars configuration
 
