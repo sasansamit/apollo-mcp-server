@@ -87,11 +87,13 @@ iwr 'https://mcp.apollo.dev/download/win/v0.6.1' | iex
 
 ## Usage
 
-Configure the Apollo MCP server with a configuration file. The path to this file is the only argument.
+Configure the Apollo MCP server with a YAML configuration file.
 
 ```sh showLineNumbers=false
 apollo-mcp-server [OPTIONS] <PATH/TO/CONFIG/FILE>
 ```
+
+A configuration file is optional. If the file is not provided, environment variables for your graph credentials (`APOLLO_GRAPH_REF` and `APOLLO_KEY`) are required for the server to run.
 
 ### CLI options
 
@@ -100,9 +102,31 @@ apollo-mcp-server [OPTIONS] <PATH/TO/CONFIG/FILE>
 | `-h, --help`    | Print help information    |
 | `-V, --version` | Print version information |
 
+### Example config file
+
+The following example file sets your endpoint to `localhost:4001`, configures transport over Streamable HTTP, provides a GraphOS key and graph reference,
+enables introspection, and provides two local MCP operations for the server to expose.
+
+```yaml config.yaml
+endpoint: http://localhost:4001/
+transport:
+  type: streamable_http
+graphos:
+  apollo_key: <YOUR_APOLLO_KEY>
+  apollo_graph_ref: <YOUR_APOLLO_GRAPH_REF>
+introspection:
+  introspect:
+    enabled: true
+operations:
+  source: local
+  paths:
+    - relative/path/to/your/operations/userDetails.graphql
+    - relative/path/to/your/operations/listing.graphql
+```
+
 ### Config options
 
-All fields are optional and have sensible default values.
+All fields are optional.
 
 | Option           | Type                  | Default                  | Description                                                   |
 | :--------------- | :-------------------- | :----------------------- | :------------------------------------------------------------ |
@@ -120,7 +144,7 @@ All fields are optional and have sensible default values.
 
 #### GraphOS configuration
 
-These fields are under the top-level `graphos` key.
+These fields are under the top-level `graphos` key and define your GraphOS graph credentials and endpoints.
 
 | Option                    | Type     | Default | Description                                                                                                     |
 | :------------------------ | :------- | :------ | :-------------------------------------------------------------------------------------------------------------- |
@@ -132,7 +156,7 @@ These fields are under the top-level `graphos` key.
 
 #### Introspection configuration
 
-These fields are under the top-level `introspection` key.
+These fields are under the top-level `introspection` key. Learn more about the MCP [introspection tools](/apollo-mcp-server/guides#introspection-tools).
 
 | Option               | Type     | Default | Description                                                           |
 | :------------------- | :------- | :------ | :-------------------------------------------------------------------- |
@@ -164,7 +188,7 @@ The default value for `source` is `"infer"`.
 | GraphOS Collection | `id`     | `string`         |         | The collection ID to use in GraphOS. Use `default` for the default collection. [Learn more](/apollo-mcp-server/guides/#from-operation-collection) |
 | Introspection      | `source` | `"introspect"`   |         | Load operations by introspecting the schema. Note: You must enable introspection to use this source                                               |
 | Local              | `source` | `"local"`        |         | Load operations from local GraphQL files or directories                                                                                           |
-| Local              | `paths`  | `List<FilePath>` |         | Paths to GraphQL files or directories to search                                                                                                   |
+| Local              | `paths`  | `List<FilePath>` |         | Paths to GraphQL files or directories to search. Note: These paths are relative to the location from which you are running Apollo MCP Server.     |
 | Manifest           | `source` | `"manifest"`     |         | Load operations from a persisted queries manifest file                                                                                            |
 | Manifest           | `path`   | `FilePath`       |         | The path to the persisted query manifest                                                                                                          |
 | Uplink             | `source` | `"uplink"`       |         | Load operations from an uplink manifest. Note: This source requires an Apollo key and graph reference                                             |
