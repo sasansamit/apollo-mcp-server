@@ -87,12 +87,13 @@ iwr 'https://mcp.apollo.dev/download/win/v0.6.1' | iex
 
 ## Usage
 
-Configure the Apollo MCP server with a YAML configuration file. The path to this file is the only argument.
-A configuration file is not required, but if one is not provided environment variables for your Apollo Graph Reference and Apollo Key are needed.
+Configure the Apollo MCP server with a YAML configuration file.
 
 ```sh showLineNumbers=false
 apollo-mcp-server [OPTIONS] <PATH/TO/CONFIG/FILE>
 ```
+
+A configuration file is optional. If the file is not provided, environment variables for your graph credentials (`APOLLO_GRAPH_REF` and `APOLLO_KEY`) are required for the server to run.
 
 ### CLI options
 
@@ -103,8 +104,7 @@ apollo-mcp-server [OPTIONS] <PATH/TO/CONFIG/FILE>
 
 ### Example config file
 
-Detailed options for your configuration file are below, but this is an example configuration file.
-This file sets your endpoint to `localhost:4001`, configures transport over Streamable HTTP, provides a GraphOS key and graph reference,
+The following example file sets your endpoint to `localhost:4001`, configures transport over Streamable HTTP, provides a GraphOS key and graph reference,
 enables introspection, and provides two local MCP operations for the server to expose.
 
 ```yaml config.yaml
@@ -112,8 +112,8 @@ endpoint: http://localhost:4001/
 transport:
   type: streamable_http
 graphos:
-  apollo_key: <YOUR_KEY>
-  apollo_graph_ref: <YOUR_GRAPH>
+  apollo_key: <YOUR_APOLLO_KEY>
+  apollo_graph_ref: <YOUR_APOLLO_GRAPH_REF>
 introspection:
   introspect:
     enabled: true
@@ -126,7 +126,7 @@ operations:
 
 ### Config options
 
-All fields are optional and have sensible default values.
+All fields are optional.
 
 | Option           | Type                  | Default                  | Description                                                   |
 | :--------------- | :-------------------- | :----------------------- | :------------------------------------------------------------ |
@@ -144,7 +144,7 @@ All fields are optional and have sensible default values.
 
 #### GraphOS configuration
 
-These fields are under the top-level `graphos` key and define credentials and other details related to GraphOS.
+These fields are under the top-level `graphos` key and define your GraphOS graph credentials and endpoints.
 
 | Option                    | Type     | Default | Description                                                                                                     |
 | :------------------------ | :------- | :------ | :-------------------------------------------------------------------------------------------------------------- |
