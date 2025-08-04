@@ -11,12 +11,10 @@ use clap::builder::Styles;
 use clap::builder::styling::{AnsiColor, Effects};
 use runtime::IdOrDefault;
 use runtime::logging::Logging;
-use tracing::{info, warn};
-use tokio::signal;
 use std::path::PathBuf;
+use tokio::signal;
 use tokio_util::sync::CancellationToken;
-use tracing::{Level, info, warn};
-use tracing_subscriber::EnvFilter;
+use tracing::{info, warn};
 
 mod runtime;
 
@@ -153,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
         .start();
 
     match config.transport {
-        Transport::StreamableHttp { address, port } => {
+        Transport::StreamableHttp { address, port, .. } => {
             if config.proxy.enabled {
                 let url = config.proxy.url(&address, &port);
                 let cancellation_token: CancellationToken = CancellationToken::new();
