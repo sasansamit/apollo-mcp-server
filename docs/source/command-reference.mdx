@@ -295,8 +295,10 @@ transport:
     - profile
 ```
 
-## Mapping rover dev options
+## Using `rover dev`
 
-You can use the [`rover dev`](/rover/commands/dev) command of Rover CLI v0.32 or later to run an Apollo MCP Server instance for local development.
+You can use the [`rover dev`](/rover/commands/dev) command of Rover CLI `v0.35` or later to run an Apollo MCP Server instance for local development alongside your local graph. Use the `--mcp` flag to start an MCP server and provide an optional configuration file.
 
-Running `rover dev --mcp` starts an MCP Server. An optional configuration file path can be provided to configure the MCP server via `rover dev --mcp <PATH/TO/CONFIG>`.
+```sh
+rover dev --mcp <PATH/TO/CONFIG>
+```
