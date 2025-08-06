@@ -190,17 +190,23 @@ apollo-mcp-server <path to the preceding config>
 
 The Apollo MCP server supports authorizing clients (e.g. LLMs) in accordance with [the MCP specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
 
-To set up auth in the MCP server, you will need:
+Depending on whether you are connecting internal agents (first-party) or external agents (third-party, such as Claude, ChatGPT, or other public AI assistants), the steps to configure authorization will differ.
+
+For internal / first-party agents, you will need:
+
 1. An [OAuth 2.1-compliant](https://oauth.net/2.1/) Identity Provider (for example, Auth0, Okta, Keycloak, are popular IdPs).
 1. An Apollo Router [configured to use JWT authentication](/graphos/routing/security/jwt).
+
+For external / third-party agents, in addition to the above, you will also need:
+
 1. A configuration file for the MCP server that [defines the `auth` settings](/apollo-mcp-server/command-reference#auth).
 
-### Example auth configuration with Auth0
+### Example: Auth configuration with Auth0 and third-party agents
 
-Here is an example of how to set up the MCP server with Auth0 as the Identity Provider.
+Here is an example of how to set up Apollo MCP Server and Apollo Router, with Auth0 as the Identity Provider for external/third-party access.
 
 1. [Set up an Auth0 API](https://auth0.com/docs/get-started/auth0-overview/set-up-apis). You'll need your Auth0 domain for the next step.
-1. Configure the Apollo Router to [use JWT authentication](/graphos/routing/security/jwt).
+1. Configure the Apollo Router to [use JWT authentication](/graphos/routing/security/jwt):
 
     This example router configuration enforces authentication on all requests and uses the JWKS endpoint provided by Auth0 to validate JWTs:
 
