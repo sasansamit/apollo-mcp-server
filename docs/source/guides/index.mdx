@@ -186,6 +186,56 @@ introspection:
 apollo-mcp-server <path to the preceding config>
 ```
 
+## Authorization
+
+The Apollo MCP server supports authorizing clients (e.g. LLMs) in accordance with [the MCP specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
+
+To set up auth in the MCP server, you will need:
+1. An [OAuth 2.1-compliant](https://oauth.net/2.1/) Identity Provider (for example, Auth0, Okta, Keycloak, are popular IdPs).
+1. An Apollo Router [configured to use JWT authentication](/graphos/routing/security/jwt).
+1. A configuration file for the MCP server that [defines the `auth` settings](/apollo-mcp-server/command-reference#auth).
+
+### Example auth configuration with Auth0
+
+Here is an example of how to set up the MCP server with Auth0 as the Identity Provider.
+
+1. [Set up an Auth0 API](https://auth0.com/docs/get-started/auth0-overview/set-up-apis). You'll need your Auth0 domain for the next step.
+1. Configure the Apollo Router to [use JWT authentication](/graphos/routing/security/jwt).
+
+    This example router configuration enforces authentication on all requests and uses the JWKS endpoint provided by Auth0 to validate JWTs:
+
+    ```yaml title="Router configuration for JWT authentication"
+    authorization:
+      require_authentication: true # Enforces authentication on all requests
+    authentication:
+      router:
+        jwt:
+          jwks:
+            - url: https://<AUTH0 DOMAIN>/.well-known/jwks.json
+    ```
+
+1. Configure the MCP server to use the same Auth0 instance for authentication.
+
+    This example MCP server configuration enforces authentication on all requests, delegating the actual login process to our previously configured Auth0 instance.
+
+    ```yaml title="Example MCP config for authentication"
+    transport:
+      type: streamable_http
+      address: "0.0.0.0"
+
+      auth:
+        servers:
+          - https://<AUTH0 DOMAIN>
+        audiences:
+          - <AUTH0 DEFAULT AUDIENCE>
+        resource: http://localhost:5000
+        scopes:
+          - read:users
+    ```
+
+    Refer to the [Authentication configuration section in the command reference](/apollo-mcp-server/command-reference#auth) for more details on the available `auth` options.
+
+
 ## Deploying the MCP server
 
 There are two ways to deploy and operate the MCP server.
