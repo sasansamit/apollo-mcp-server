@@ -206,7 +206,7 @@ For external / third-party agents, in addition to the above, you will also need:
 Here is an example of how to set up Apollo MCP Server and Apollo Router, with Auth0 as the Identity Provider for external/third-party access.
 
 1. [Set up an Auth0 API](https://auth0.com/docs/get-started/auth0-overview/set-up-apis). You'll need your Auth0 domain for the next step.
-1. Configure the Apollo Router to [use JWT authentication](/graphos/routing/security/jwt):
+2. Configure the Apollo Router to [use JWT authentication](/graphos/routing/security/jwt):
 
     This example router configuration enforces authentication on all requests and uses the JWKS endpoint provided by Auth0 to validate JWTs:
 
@@ -220,7 +220,7 @@ Here is an example of how to set up Apollo MCP Server and Apollo Router, with Au
             - url: https://<AUTH0 DOMAIN>/.well-known/jwks.json
     ```
 
-1. Configure the MCP server to use the same Auth0 instance for authentication.
+3. Configure the MCP server to use the same Auth0 instance for authentication.
 
     This example MCP server configuration enforces authentication on all requests, delegating the actual login process to our previously configured Auth0 instance.
 
