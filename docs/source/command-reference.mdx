@@ -250,6 +250,51 @@ The default value for `type` is `"stdio"`.
 | StreamableHTTP | `address` | `IpAddr`            | `127.0.0.1` | The IP address to bind to                                                                                                     |
 | StreamableHTTP | `port`    | `u16`               | `5000`      | The port to bind to                                                                                                           |
 
+
+#### Auth configuration
+
+These fields are under the top-level `transport` key, nested under the `auth` key.
+
+| Option                   | Type           | Default | Description                                                                                        |
+| :----------------------- | :------------- | :------ | :------------------------------------------------------------------------------------------------- |
+| `servers`                | `List<URL>`    |         | List of upstream delegated OAuth servers (must support OIDC metadata discovery endpoint)           |
+| `audiences`              | `List<string>` |         | List of accepted audiences from upstream signed JWTs                                               |
+| `resource`               | `string`       |         | The externally available URL pointing to this MCP server. Can be `localhost` when testing locally. |
+| `resource_documentation` | `string`       |         | Optional link to more documentation relating to this MCP server                                    |
+| `scopes`                 | `List<string>` |         | List of queryable OAuth scopes from the upstream OAuth servers                                     |
+
+Below is an example configuration using `StreamableHTTP` transport with authentication:
+
+```yaml title="mcp.yaml"
+transport:
+  type: streamable_http
+  auth:
+    # List of upstream delegated OAuth servers
+    # Note: These need to support the OIDC metadata discovery endpoint
+    servers:
+    - https://auth.example.com
+
+    # List of accepted audiences from upstream signed JWTs
+    # See: https://www.ory.sh/docs/hydra/guides/audiences
+    audiences:
+    - mcp.example.audience
+
+    # The externally available URL pointing to this MCP server. Can be `localhost`
+    # when testing locally.
+    # Note: Subpaths must be preserved here as well. So append `/mcp` if using
+    # Streamable HTTP or `/sse` is using SSE.
+    resource: https://hosted.mcp.server/mcp
+
+    # Optional link to more documentation relating to this MCP server.
+    resource_documentation: https://info.mcp.server
+
+    # List of queryable OAuth scopes from the upstream OAuth servers
+    scopes:
+    - read
+    - mcp
+    - profile
+```
+
 ### Mapping rover dev options
 
 You can use the [`rover dev`](/rover/commands/dev) command of Rover CLI v0.32 or later to run an Apollo MCP Server instance for local development.
