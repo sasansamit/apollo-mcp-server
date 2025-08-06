@@ -194,12 +194,12 @@ Depending on whether you are connecting internal agents (first-party) or externa
 
 For internal (first-party) agents, you need:
 
-1. An [OAuth 2.1-compliant](https://oauth.net/2.1/) Identity Provider (for example, your own in-house IdP or a third-party IdP such as Auth0, Okta, Keycloak, etc)
-2. An Apollo Router [configured to use JWT authentication](/graphos/routing/security/jwt)
+- An [OAuth 2.1-compliant](https://oauth.net/2.1/) Identity Provider (for example, your own in-house IdP or a third-party IdP such as Auth0, Okta, Keycloak, etc)
+- An Apollo Router [configured to use JWT authentication](/graphos/routing/security/jwt)
 
 For external (third-party) agents, in addition to the preceding items, you also need:
 
-3. A configuration file for the MCP server that [defines the `auth` settings](/apollo-mcp-server/command-reference#auth)
+- A configuration file for the MCP server that [defines the `auth` settings](/apollo-mcp-server/command-reference#auth)
 
 ### Example: Configure authentication with Auth0 and third-party agents
 
@@ -222,7 +222,7 @@ Here is an example of how to set up Apollo MCP Server and Apollo Router, with Au
 
 3. Configure the MCP server to use the same Auth0 instance for authentication.
 
-    This example MCP server configuration enforces authentication on all requests, delegating the actual login process to your previously-configured Auth0 instance.
+    This example MCP server configuration enforces authentication on all requests, delegating the actual login process to your previously-configured Auth0 instance:
 
     ```yaml title="Example MCP config for authentication"
     transport:
