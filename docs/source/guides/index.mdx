@@ -195,11 +195,11 @@ Depending on whether you are connecting internal agents (first-party) or externa
 For internal / first-party agents, you will need:
 
 1. An [OAuth 2.1-compliant](https://oauth.net/2.1/) Identity Provider (for example, your own in-house IdP or a third-party IdP such as Auth0, Okta, Keycloak, etc).
-1. An Apollo Router [configured to use JWT authentication](/graphos/routing/security/jwt).
+2. An Apollo Router [configured to use JWT authentication](/graphos/routing/security/jwt).
 
 For external / third-party agents, in addition to the above, you will also need:
 
-1. A configuration file for the MCP server that [defines the `auth` settings](/apollo-mcp-server/command-reference#auth).
+3. A configuration file for the MCP server that [defines the `auth` settings](/apollo-mcp-server/command-reference#auth).
 
 ### Example: Auth configuration with Auth0 and third-party agents
 
