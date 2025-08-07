@@ -4,6 +4,58 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.7.0] - 2025-08-04
+
+## 🚀 Features
+
+### feat: add mcp auth - @nicholascioli PR #210
+
+The MCP server can now be configured to act as an OAuth 2.1 resource server, following
+guidelines from the official MCP specification on Authorization / Authentication (see
+[the spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization)).
+
+To configure this new feature, a new `auth` section has been added to the SSE and
+Streamable HTTP transports. Below is an example configuration using Streamable HTTP:
+
+```yaml
+transport:
+  type: streamable_http
+  auth:
+    # List of upstream delegated OAuth servers
+    # Note: These need to support the OIDC metadata discovery endpoint
+    servers:
+    - https://auth.example.com
+
+    # List of accepted audiences from upstream signed JWTs
+    # See: https://www.ory.sh/docs/hydra/guides/audiences
+    audiences:
+    - mcp.example.audience
+
+    # The externally available URL pointing to this MCP server. Can be `localhost`
+    # when testing locally.
+    # Note: Subpaths must be preserved here as well. So append `/mcp` if using
+    # Streamable HTTP or `/sse` is using SSE.
+    resource: https://hosted.mcp.server/mcp
+
+    # Optional link to more documentation relating to this MCP server.
+    resource_documentation: https://info.mcp.server
+
+    # List of queryable OAuth scopes from the upstream OAuth servers
+    scopes:
+    - read
+    - mcp
+    - profile
+```
+
+## 🐛 Fixes
+
+### Setting input_schema properties to empty when operation has no args ([Issue #136](https://github.com/apollographql/apollo-mcp-server/issues/136)) ([PR #212](https://github.com/apollographql/apollo-mcp-server/pull/212))
+
+To support certain scenarios where a client fails on an omitted `properties` field within `input_schema`, setting the field to an empty map (`{}`) instead. While a missing `properties` field is allowed this will unblock
+certain users and allow them to use the MCP server.
+
+
+
 # [0.6.1] - 2025-07-29
 
 ## 🐛 Fixes
