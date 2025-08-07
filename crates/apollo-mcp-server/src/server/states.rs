@@ -16,7 +16,7 @@ mod starting;
 
 use configuring::Configuring;
 use operations_configured::OperationsConfigured;
-pub use running::Running;
+use running::Running;
 use schema_configured::SchemaConfigured;
 use starting::Starting;
 
