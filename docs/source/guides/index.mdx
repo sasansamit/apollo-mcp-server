@@ -186,62 +186,6 @@ introspection:
 apollo-mcp-server <path to the preceding config>
 ```
 
-## Set up authorization
-
-The Apollo MCP server supports authorizing clients (e.g. LLMs) in accordance with [the MCP specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
-
-Depending on whether you are connecting internal agents (first-party) or external agents (third-party, such as Claude, ChatGPT, or other public AI assistants), the steps to configure authorization will differ.
-
-For internal (first-party) agents, you need:
-
-- An [OAuth 2.1-compliant](https://oauth.net/2.1/) Identity Provider (for example, your own in-house IdP or a third-party IdP such as Auth0, Okta, Keycloak, etc)
-- An Apollo Router [configured to use JWT authentication](/graphos/routing/security/jwt)
-
-For external (third-party) agents, in addition to the preceding items, you also need:
-
-- A configuration file for the MCP server that [defines the `auth` settings](/apollo-mcp-server/command-reference#auth)
-
-### Example: Configure authentication with Auth0 and third-party agents
-
-Here is an example of how to set up Apollo MCP Server and Apollo Router, with Auth0 as the Identity Provider for external/third-party access.
-
-1. [Set up an Auth0 API](https://auth0.com/docs/get-started/auth0-overview/set-up-apis). You need your Auth0 domain for the next step.
-2. Configure the Apollo Router to [use JWT authentication](/graphos/routing/security/jwt):
-
-    This example router configuration enforces authentication on all requests and uses the JWKS endpoint provided by Auth0 to validate JWTs:
-
-    ```yaml title="Router configuration for JWT authentication"
-    authorization:
-      require_authentication: true # Enforces authentication on all requests
-    authentication:
-      router:
-        jwt:
-          jwks:
-            - url: https://<AUTH0 DOMAIN>/.well-known/jwks.json
-    ```
-
-3. Configure the MCP server to use the same Auth0 instance for authentication.
-
-    This example MCP server configuration enforces authentication on all requests, delegating the actual login process to your previously-configured Auth0 instance:
-
-    ```yaml title="Example MCP config for authentication"
-    transport:
-      type: streamable_http
-      address: "0.0.0.0"
-
-      auth:
-        servers:
-          - https://<AUTH0 DOMAIN>
-        audiences:
-          - <AUTH0 DEFAULT AUDIENCE>
-        resource: http://localhost:5000
-        scopes:
-          - read:users
-    ```
-
-    Refer to the [Authentication configuration section in the command reference](/apollo-mcp-server/command-reference#auth) for more details on the available `auth` options.
-
-
 ## Deploying the MCP server
 
 There are two ways to deploy and operate the MCP server.
