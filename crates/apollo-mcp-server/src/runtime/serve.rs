@@ -59,7 +59,9 @@ impl Serve {
                 serve_sse(auth, address, port, server_handler, cancellation_token).await?;
             }
             Transport::Stdio => {
-                let service = serve_stdio(server_handler).await.map_err(|e| ServerError::McpInitializeError(e.into()))?;
+                let service = serve_stdio(server_handler)
+                    .await
+                    .map_err(|e| ServerError::McpInitializeError(e.into()))?;
                 service.waiting().await.map_err(ServerError::StartupError)?;
             }
         }
