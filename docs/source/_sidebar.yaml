@@ -14,7 +14,7 @@ items:
       - label: "Guides"
         href: "./guides"
       - label: "Authorization"
-        href: "./auth"
+        href: "./guides/auth"
   - label: "Command Reference"
     href: "./command-reference"
   - label: "Best Practices"
