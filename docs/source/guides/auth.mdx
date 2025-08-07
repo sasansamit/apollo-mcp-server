@@ -2,19 +2,7 @@
 title: Authorization with Apollo MCP Server
 ---
 
-<ExperimentalFeature>
-
-This feature is [experimental](/graphos/resources/feature-launch-stages#experimental). Your questions and feedback are highly valued—don't hesitate to get in touch with your Apollo contact or post in the [Apollo Community MCP Server Category](https://community.apollographql.com/c/mcp-server/41).
-
-</ExperimentalFeature>
-
-## Set up authorization
-
-<PlanRequired plans={["Developer", "Standard", "Enterprise"]}>
-
-Authentication and authorization are required to use Apollo MCP Server with GraphOS. This allows you to control which AI clients can access your graph and what operations they can perform.
-
-</PlanRequired>
+<PlanRequired plans={["Developer", "Standard", "Enterprise"]}/>
 
 The Apollo MCP server supports authorizing clients (e.g. LLMs) in accordance with [the MCP specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
 
@@ -84,7 +72,7 @@ Configure the MCP server to use the Auth0 instance for authentication.
 
 The Apollo MCP Server repo comes with an example graph and a Space Devs schema. You'll use this example graph to test the authentication setup.
 
-#### Defining authorization and authentication rules in the router
+#### Define authorization and authentication rules in the router
 
 1. In the `graphql/TheSpaceDevs` directory, create a new file called `router.yaml`.
 1. Paste the following configuration, replacing `<AUTH0 DOMAIN>` with your Auth0 domain:
@@ -107,13 +95,7 @@ The Apollo MCP Server repo comes with an example graph and a Space Devs schema. 
   
     This router configuration enforces authentication on all requests and uses the JWKS endpoint provided by Auth0 to validate JWTs:
 
-#### Retrieving your GraphOS license credentials for auth
-
-<PlanRequired plans={["Developer", "Standard", "Enterprise"]}>
-
-Authentication and authorization are required to use Apollo MCP Server with GraphOS. This allows you to control which AI clients can access your graph and what operations they can perform.
-
-</PlanRequired>
+#### Retrieve your GraphOS license credentials for auth
 
 1. Navigate to [GraphOS Studio](https://studio.apollographql.com/) and log in.
 1. If you have an existing graph, retrieve its graph ref and API key from the **Settings** page.
@@ -161,7 +143,7 @@ Authentication and authorization are required to use Apollo MCP Server with Grap
 
 1. You should see an `UNAUTHENTICATED` error, which means the router is enforcing authentication. Great! Now you can proceed to test the authentication with an MCP client.
 
-### Making requests with MCP Inspector
+### Make requests with MCP Inspector
 
 1. Start MCP Inspector by running:
 
