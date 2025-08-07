@@ -204,7 +204,6 @@ dependencies = [
  "apollo-federation",
  "apollo-mcp-registry",
  "apollo-schema-index",
- "async-trait",
  "axum",
  "axum-extra",
  "bon",
