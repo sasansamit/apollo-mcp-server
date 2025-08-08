@@ -46,7 +46,10 @@ In this guide, we'll walk through setting up the Apollo MCP server with Auth0 as
 #### Create the Auth0 API
 
 1. In your dashboard, navigate to **Applications** -> **APIs**. 
-1. Click **Create API** and fill in the fields necessary. Note the `Identifier` value you choose. This will be used in the MCP server configuration later on as the `audience` property.
+1. Click **Create API** .
+1. Give it a friendly name like `MCP Auth API`.
+1. For the **Identifier** field, Auth0 recommends using a URL. This identifier will be used in the MCP server configuration later on as the `audience` property. For this guide, you can use `http://localhost:5000/mcp-example`.
+1. Leave the defaults for the rest of the fields and hit **Create**.
 1. Navigate to your dashboard **Settings**.
     1. Under **General** -> **API Authorization Settings**, set the **Default Audience** to the `Identifier` you chose.
     1. Navigate to the **Advanced** tab.
@@ -61,7 +64,9 @@ The Auth0 Connection is the method clients will use to authenticate. This guide 
 1. In your dashboard, navigate to **Authentication** -> **Database**.
 1. Create the default **Username-Password-Authentication** connection. Click the **Try Connection** button to test it out.
 1. Copy the **Connection Identifier** at the top of the page, you need it for the next step. It should start with something like `con_`.
-1. Follow the steps [in the Auth0 documentation](https://auth0.com/docs/connections/database/promote-connection-to-domain-level) to promote the connection to domain-level. The documentation includes instructions for creating a Management API Access Token and running a cURL command to promote the connection.
+1. Navigate to **Applications** -> **APIs** -> **Auth0 Management API**.
+1. Click on the **API Explorer** tab. Copy the token value, you also need it for the next step.
+1. Run the cURL command below to promote the connection to domain-level, replacing `CONNECTION_ID` and `MGMT_API_ACCESS_TOKEN` with the values you copied earlier.
 
     ```sh
     curl --request PATCH \
@@ -82,7 +87,7 @@ Configure the MCP server to use the Auth0 instance for authentication.
 1. In the `graphql/TheSpaceDevs` directory, open up the `config.yaml` file.
 1. Add the following `auth` configuration under the `transport` key:
 
-    ```yaml title="graphql/TheSpaceDevs/config.yaml"
+    ```yaml title="graphql/TheSpaceDevs/config.yaml" {3-10}
     transport:
       type: streamable_http
       auth:
@@ -95,7 +100,9 @@ Configure the MCP server to use the Auth0 instance for authentication.
           - read:users # Adjust scopes as needed
     ```
 
-    Replace the `<AUTH0 DOMAIN>` and `<AUTH0 DEFAULT AUDIENCE>` placeholders with your actual Auth0 domain and audience values. Remember that the `audience` should match the `Identifier` you set when creating the Auth0 API.
+1. Replace the `<AUTH0 DOMAIN>` with your own Auth0 domain. It should look something like `dev-123456.us.auth0.com`, where `dev-123456` is your Auth0 tenant ID.
+
+1. Replace the `<AUTH0 DEFAULT AUDIENCE>` with the matching `Identifier` you set when creating the Auth0 API. In this guide, you used `http://localhost:5000/mcp-example`
 
 Your MCP server is now configured to use Auth0 for authentication.
 
@@ -124,6 +131,8 @@ Configure your GraphOS Router to validate JWTs issued by Auth0. This involves se
       introspection: true
     ```
 
+    With this configuration, the router will require authentication for all requests. If no Authorization token is provided, the router will return an `UNAUTHENTICATED` error.
+
 #### Retrieve your GraphOS license credentials for auth
 
 You need a graph's credentials and a valid GraphOS plan to use the router's auth features.
@@ -131,9 +140,9 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
 1. Navigate to [GraphOS Studio](https://studio.apollographql.com/) and log in.
 1. Click **Add graph** and **Connect an existing graph**. 
 1. Give it a name and click **Next**.
-1. In the modal that appears, you'll see a command to run in your terminal. It will look something like this:
+1. In the modal that appears, you'll see a command that looks something like this:
 
-    ```sh showLineNumbers=false
+    ```sh showLineNumbers=false {2}
     APOLLO_KEY=<YOUR_APOLLO_KEY> \
     rover subgraph publish <YOUR_APOLLO_GRAPH_REF> \
     --schema ./products-schema.graphql \
@@ -141,7 +150,11 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
     --routing-url http://products.prod.svc.cluster.local:4001/graphql
     ```
 
+    You do not need to run this command.
+
 1. Retrieve the values for `YOUR_APOLLO_KEY` and `YOUR_APOLLO_GRAPH_REF`.
+
+#### Run the MCP Server and router
 
 1. Back in your terminal, in the root of the project directory, replace and run the following command to start the MCP Server and the router together:
 
@@ -154,7 +167,7 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
 
 1. Test the router by navigating to `http://localhost:4000` in your browser. You should see the Explorer, where you can run GraphQL queries against the router.
 
-1. Run the following operation: 
+1. Remember, the router is configured to require authentication on all requests. Any operations without a valid authorization token will fail. Run the operation: 
 
     ```graphql
     query GetAstronautsCurrentlyInSpace {
@@ -164,26 +177,12 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
           name
           timeInSpace
           lastFlight
-          agency {
-            name
-            abbrev
-            country {
-              name
-            }
-          }
-          nationality {
-            name
-            nationalityName
-          }
-          image {
-            thumbnail
-          }
         }
       }
     }
     ```
 
-1. You should see an `UNAUTHENTICATED` error, which means the router is enforcing authentication. Great! Now you can proceed to test the authentication with an MCP client.
+1. You should see an `UNAUTHENTICATED` error, which means the router is correctly enforcing authentication. Great! Now you can proceed to test the authentication with an MCP client.
 
 ### Step 4: Make requests with MCP Inspector
 
