@@ -67,12 +67,12 @@ The Auth0 Connection is the method clients use to authenticate. This guide uses 
 1. Copy the **Connection Identifier** at the top of the page, you need it for the next step. It should start with something like `con_`.
 1. Navigate to **Applications** -> **APIs** -> **Auth0 Management API**.
 1. Click the **API Explorer** tab. Copy the token value, you also need it for the next step.
-1. Run the following `curl` command to promote the connection to domain-level, replacing `CONNECTION_ID` and `MGMT_API_ACCESS_TOKEN` with the values you copied in the previous steps:
+1. Run the following `curl` command to promote the connection to domain-level, replacing `<CONNECTION ID>` and `<MGMT API ACCESS TOKEN>` with the values you copied in the previous steps:
 
    ```sh
    curl --request PATCH \
-     --url 'https://dev-p7nxaluy3f2ss4js.us.auth0.com/api/v2/connections/CONNECTION_ID' \
-     --header 'authorization: Bearer MGMT_API_ACCESS_TOKEN' \
+     --url 'https://<AUTH0 DOMAIN>/api/v2/connections/<CONNECTION ID>' \
+     --header 'authorization: Bearer <MGMT API ACCESS TOKEN>' \
      --header 'cache-control: no-cache' \
      --header 'content-type: application/json' \
      --data '{ "is_domain_connection": true }'
