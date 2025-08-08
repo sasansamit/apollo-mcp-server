@@ -4,24 +4,17 @@ title: Authorization with Apollo MCP Server
 
 <PlanRequired plans={["Developer", "Standard", "Enterprise"]}/>
 
-The Apollo MCP server supports authorizing clients (e.g. LLMs) in accordance with [the MCP specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
+The Apollo MCP server supports authorizing clients (e.g., LLMs) in accordance with [the MCP specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
 
 ## Implement authorization with Apollo MCP Server
 
-To implement authorization, you need:
-- An [OAuth 2.1-compliant](https://oauth.net/2.1/) Identity Provider (for example, your own in-house IdP or a third-party IdP such as Auth0, Okta, or Keycloak)
-- A GraphOS Router [configured to use JWT authentication](/graphos/routing/security/jwt)
-- Apollo MCP server [configured with `auth` settings](/apollo-mcp-server/command-reference#auth)
-
-The bulk of the setup is done in the Identity Provider. The MCP server and the GraphOS Router are then configured to use this IdP for authorization. 
-
-You need the following values from your IdP:
+To implement authorization, you need an [OAuth 2.1-compliant](https://oauth.net/2.1/) Identity Provider (for example, your own in-house IdP or a third-party IdP such as Auth0, Okta, or Keycloak). You need the following values from your IdP:
 
 - **URL**: The base URL of your Identity Provider, which is used to validate the JSON Web Tokens (JWTs) issued by it.
 - **Audience**: Identifies the intended recipient of the token, typically a resource server or API. Represented by the `aud` claim in the JWT.
 - **Scopes**: The scopes that the client will request. These scopes define the permissions granted to the client when it accesses the API.
 
-Then, you [configure the MCP server with `auth` settings](/apollo-mcp-server/command-reference#auth) and the [GraphOS Router for JWT authentication](/graphos/routing/security/jwt) using those values.
+Then, you [configure the MCP server with `auth` settings](/apollo-mcp-server/command-reference#auth) and the [GraphOS Router for JWT authentication](/graphos/routing/security/jwt) using those IdP values.
 
 ## Example: Auth0
 
@@ -101,7 +94,7 @@ Configure the MCP server to use the Auth0 instance for authentication.
         servers:
           - https://<AUTH0 DOMAIN> # Fill in your Auth0 domain
         audiences:
-          - <AUTH0 DEFAULT AUDIENCE> # Fill in your Identifier
+          - <AUTH0 DEFAULT AUDIENCE> # Fill in your Auth0 Identifier
         resource: http://127.0.0.1:5000/mcp
         scopes:
           - read:users # Adjust scopes as needed
