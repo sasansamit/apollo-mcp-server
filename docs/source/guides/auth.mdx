@@ -6,20 +6,24 @@ title: Authorization with Apollo MCP Server
 
 The Apollo MCP server supports authorizing clients (e.g. LLMs) in accordance with [the MCP specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
 
+## Implement authorization with Apollo MCP Server
+
 To implement authorization, you need:
 - An [OAuth 2.1-compliant](https://oauth.net/2.1/) Identity Provider (for example, your own in-house IdP or a third-party IdP such as Auth0, Okta, or Keycloak)
 - A GraphOS Router [configured to use JWT authentication](/graphos/routing/security/jwt)
 - Apollo MCP server [configured with `auth` settings](/apollo-mcp-server/command-reference#auth)
 
-The bulk of the setup is done in the Identity Provider. The MCP server and the GraphOS Router is then configured to use this Identity Provider for authorization. Check your Identity Provider's documentation for specific instructions. You need the following information from your Identity Provider:
+The bulk of the setup is done in the Identity Provider. The MCP server and the GraphOS Router are then configured to use this IdP for authorization. 
 
-- **URL**: The base URL of your Identity Provider, which is used to validate the JWTs issued by it.
-- **Audience**: The audience for which the JWTs are intended. This is typically the identifier of your API or application.
+You need the following from your IdP.
+
+- **URL**: The base URL of your Identity Provider, which is used to validate the JSON Web Tokens (JWTs) issued by it.
+- **Audience**: Identifies the intended recipient of the token, typically a resource server or API. Represented by the `aud` claim in the JWT.
 - **Scopes**: The scopes that the client will request. These scopes define the permissions granted to the client when it accesses the API.
 
-## Example: Auth0 and MCP Inspector
+## Example: Auth0
 
-In this guide, we'll walk through setting up the Apollo MCP server with Auth0 as the Identity Provider and using the MCP Inspector to test the authentication flow.
+In this guide, you'll use [Auth0](https://auth0.com/) as the Identity Provider.
 
 ### Pre-requisites
 
@@ -27,13 +31,13 @@ In this guide, we'll walk through setting up the Apollo MCP server with Auth0 as
 
     <PlanRequired plans={["Developer", "Standard", "Enterprise"]} />
 
-1. Clone the repo for our example project.
+1. Clone the repo for the example project.
 
     ```sh showLineNumbers=false
     git clone git@github.com:apollographql/apollo-mcp-server.git
     ```
 
-1. Install or update the Rover CLI. You need at least `v0.35`.
+1. Install or update the Rover CLI. You need at least v0.35.
 
     ```sh showLineNumbers=false
     curl -sSL https://rover.apollo.dev/download/latest | sh
@@ -46,10 +50,10 @@ In this guide, we'll walk through setting up the Apollo MCP server with Auth0 as
 #### Create the Auth0 API
 
 1. In your dashboard, navigate to **Applications** -> **APIs**. 
-1. Click **Create API** .
+1. Click **Create API**.
 1. Give it a friendly name like `MCP Auth API`.
 1. For the **Identifier** field, Auth0 recommends using a URL. This identifier will be used in the MCP server configuration later on as the `audience` property. For this guide, you can use `http://localhost:5000/mcp-example`.
-1. Leave the defaults for the rest of the fields and hit **Create**.
+1. Leave the defaults for the rest of the fields and click **Create**.
 1. Navigate to your dashboard **Settings**.
     1. Under **General** -> **API Authorization Settings**, set the **Default Audience** to the `Identifier` you chose.
     1. Navigate to the **Advanced** tab.
@@ -62,11 +66,11 @@ In this guide, we'll walk through setting up the Apollo MCP server with Auth0 as
 The Auth0 Connection is the method clients will use to authenticate. This guide uses the default **Username-Password-Authentication** connection, but you can use any connection that suits your needs (e.g., social logins, enterprise connections).
 
 1. In your dashboard, navigate to **Authentication** -> **Database**.
-1. Create the default **Username-Password-Authentication** connection. Click the **Try Connection** button to test it out.
+1. Create the default **Username-Password-Authentication** connection. Click the **Try Connection** button to test it.
 1. Copy the **Connection Identifier** at the top of the page, you need it for the next step. It should start with something like `con_`.
 1. Navigate to **Applications** -> **APIs** -> **Auth0 Management API**.
-1. Click on the **API Explorer** tab. Copy the token value, you also need it for the next step.
-1. Run the cURL command below to promote the connection to domain-level, replacing `CONNECTION_ID` and `MGMT_API_ACCESS_TOKEN` with the values you copied earlier.
+1. Click the **API Explorer** tab. Copy the token value, you also need it for the next step.
+1. Run the following curl command to promote the connection to domain-level, replacing `CONNECTION_ID` and `MGMT_API_ACCESS_TOKEN` with the values you copied earlier:
 
     ```sh
     curl --request PATCH \
@@ -83,13 +87,14 @@ Your Auth0 setup is now complete. You have an API with an audience and a connect
 
 Configure the MCP server to use the Auth0 instance for authentication.
 
-1. Open up the example repo you cloned earlier.
-1. In the `graphql/TheSpaceDevs` directory, open up the `config.yaml` file.
+1. Open the example repo you cloned earlier.
+1. In the `graphql/TheSpaceDevs` directory, open the `config.yaml` file.
 1. Add the following `auth` configuration under the `transport` key:
 
-    ```yaml title="graphql/TheSpaceDevs/config.yaml" {3-10}
+    ```yaml title="graphql/TheSpaceDevs/config.yaml"
     transport:
       type: streamable_http
+
       auth:
         servers:
           - https://<AUTH0 DOMAIN> # Fill in your Auth0 domain
@@ -102,7 +107,7 @@ Configure the MCP server to use the Auth0 instance for authentication.
 
 1. Replace the `<AUTH0 DOMAIN>` with your own Auth0 domain. It should look something like `dev-123456.us.auth0.com`, where `dev-123456` is your Auth0 tenant ID.
 
-1. Replace the `<AUTH0 DEFAULT AUDIENCE>` with the matching `Identifier` you set when creating the Auth0 API. In this guide, you used `http://localhost:5000/mcp-example`
+1. Replace the `<AUTH0 DEFAULT AUDIENCE>` with the matching `Identifier` you set when creating the Auth0 API. In this guide, you used `http://localhost:5000/mcp-example`.
 
 Your MCP server is now configured to use Auth0 for authentication.
 
@@ -131,14 +136,14 @@ Configure your GraphOS Router to validate JWTs issued by Auth0. This involves se
       introspection: true
     ```
 
-    With this configuration, the router will require authentication for all requests. If no Authorization token is provided, the router will return an `UNAUTHENTICATED` error.
+    With this configuration, the router requires authentication for all requests. If no Authorization token is provided, the router returns an `UNAUTHENTICATED` error.
 
 #### Retrieve your GraphOS license credentials for auth
 
-You need a graph's credentials and a valid GraphOS plan to use the router's auth features.
+You need a graph's credentials and a valid GraphOS plan to use the router's authentication features.
 
 1. Navigate to [GraphOS Studio](https://studio.apollographql.com/) and log in.
-1. Click **Add graph** and **Connect an existing graph**. 
+1. Click **Add graph** and **Connect an existing graph**.
 1. Give it a name and click **Next**.
 1. In the modal that appears, you'll see a command that looks something like this:
 
@@ -150,7 +155,7 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
     --routing-url http://products.prod.svc.cluster.local:4001/graphql
     ```
 
-    You do not need to run this command.
+    Note: You don't need to run this command.
 
 1. Retrieve the values for `YOUR_APOLLO_KEY` and `YOUR_APOLLO_GRAPH_REF`.
 
@@ -167,7 +172,7 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
 
 1. Test the router by navigating to `http://localhost:4000` in your browser. You should see the Explorer, where you can run GraphQL queries against the router.
 
-1. Remember, the router is configured to require authentication on all requests. Any operations without a valid authorization token will fail. Run the operation: 
+1. Remember, the router is configured to require authentication on all requests. Any operations without a valid Authorization token returns an `UNAUTHENTICATED` error. Run the operation: 
 
     ```graphql
     query GetAstronautsCurrentlyInSpace {
@@ -182,7 +187,7 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
     }
     ```
 
-1. You should see an `UNAUTHENTICATED` error, which means the router is correctly enforcing authentication. Great! Now you can proceed to test the authentication with an MCP client.
+1. You should see an `UNAUTHENTICATED` error, which means the router is correctly enforcing authentication.
 
 ### Step 4: Make requests with MCP Inspector
 
@@ -200,7 +205,7 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
 1. Once connected, the browser will redirect back to MCP Inspector.
 1. Click **List Tools** to see the available tools. 
 1. Select the `GetAstronautsCurrentlyInSpace` tool listed and click **Run Tool**.
-1. You should see the results of the query, which means the authentication is working correctly!
+1. You should see the results of the query, which means the authentication is working correctly.
 
 You can select the **Auth** tab in MCP Inspector to see the details of the authenticated user and the scopes granted.
 
