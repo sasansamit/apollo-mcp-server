@@ -10,7 +10,9 @@ items:
   - label: "Quickstart"
     href: "./quickstart"
   - label: "User Guide"
-    href: ./guides
+    href: "./guides"
+  - label: "Authorization"
+    href: "./guides/auth"
   - label: "Command Reference"
     href: "./command-reference"
   - label: "Best Practices"
