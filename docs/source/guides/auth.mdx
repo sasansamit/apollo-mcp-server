@@ -2,7 +2,11 @@
 title: Authorization with Apollo MCP Server
 ---
 
-<PlanRequired plans={["Developer", "Standard", "Enterprise"]}/>
+<Callout type="note">
+  To use the Authorization feature you'll need to have an Apollo account. We
+  offer Free, Developer, Standard, and Enterprise tiers - [learn
+  more](https://www.apollographql.com/pricing?referrer=docs-content)
+</Callout>
 
 The Apollo MCP server supports authorizing clients (e.g., LLMs) in accordance with [the MCP specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization).
 
@@ -24,19 +28,17 @@ This guide uses [Auth0](https://auth0.com/) as the Identity Provider.
 
 1. [Create an Apollo account](https://studio.apollographql.com/signup?referrer=docs-content).
 
-    <PlanRequired plans={["Developer", "Standard", "Enterprise"]} />
-
 1. Clone the repo for the example project.
 
-    ```sh showLineNumbers=false
-    git clone git@github.com:apollographql/apollo-mcp-server.git
-    ```
+   ```sh showLineNumbers=false
+   git clone git@github.com:apollographql/apollo-mcp-server.git
+   ```
 
 1. Install or update the Rover CLI. You need at least v0.35 or later.
 
-    ```sh showLineNumbers=false
-    curl -sSL https://rover.apollo.dev/download/latest | sh
-    ```
+   ```sh showLineNumbers=false
+   curl -sSL https://rover.apollo.dev/download/latest | sh
+   ```
 
 ### Step 1: Set up the Auth0 Identity Provider
 
@@ -50,15 +52,15 @@ This guide uses [Auth0](https://auth0.com/) as the Identity Provider.
 1. For the **Identifier** field, Auth0 recommends using a URL. This identifier is used in the MCP server configuration later as the `audience` property. For this guide, use `http://localhost:5000/mcp-example`.
 1. Leave the defaults for the rest of the fields and click **Create**.
 1. Navigate to your dashboard **Settings**.
-    1. Under **General** -> **API Authorization Settings**, set the **Default Audience** to the `Identifier` you chose.
-    1. Navigate to the **Advanced** tab.
-    1. Toggle on **OIDC Dynamic Application Registration** to enable [dynamic client registration](https://auth0.com/docs/get-started/applications/dynamic-client-registration#enable-dynamic-client-registration).
-    1. Toggle on **Enable Application Connections**.
-    1. Save your changes.
+   1. Under **General** -> **API Authorization Settings**, set the **Default Audience** to the `Identifier` you chose.
+   1. Navigate to the **Advanced** tab.
+   1. Toggle on **OIDC Dynamic Application Registration** to enable [dynamic client registration](https://auth0.com/docs/get-started/applications/dynamic-client-registration#enable-dynamic-client-registration).
+   1. Toggle on **Enable Application Connections**.
+   1. Save your changes.
 
 #### Create the Auth0 Connection
 
-The Auth0 Connection is the method clients use to authenticate. This guide uses the default **Username-Password-Authentication** connection. 
+The Auth0 Connection is the method clients use to authenticate. This guide uses the default **Username-Password-Authentication** connection.
 
 1. In your dashboard, navigate to **Authentication** -> **Database**.
 1. Create the default **Username-Password-Authentication** connection. Click the **Try Connection** button to test it.
@@ -67,14 +69,14 @@ The Auth0 Connection is the method clients use to authenticate. This guide uses 
 1. Click the **API Explorer** tab. Copy the token value, you also need it for the next step.
 1. Run the following `curl` command to promote the connection to domain-level, replacing `CONNECTION_ID` and `MGMT_API_ACCESS_TOKEN` with the values you copied in the previous steps:
 
-    ```sh
-    curl --request PATCH \
-      --url 'https://dev-p7nxaluy3f2ss4js.us.auth0.com/api/v2/connections/CONNECTION_ID' \
-      --header 'authorization: Bearer MGMT_API_ACCESS_TOKEN' \
-      --header 'cache-control: no-cache' \
-      --header 'content-type: application/json' \
-      --data '{ "is_domain_connection": true }'
-    ```
+   ```sh
+   curl --request PATCH \
+     --url 'https://dev-p7nxaluy3f2ss4js.us.auth0.com/api/v2/connections/CONNECTION_ID' \
+     --header 'authorization: Bearer MGMT_API_ACCESS_TOKEN' \
+     --header 'cache-control: no-cache' \
+     --header 'content-type: application/json' \
+     --data '{ "is_domain_connection": true }'
+   ```
 
 Your Auth0 setup is now complete. You have an API with an audience and a connection for authentication.
 
@@ -86,19 +88,19 @@ Configure the MCP server to use the Auth0 instance for authentication.
 1. In the `graphql/TheSpaceDevs` directory, open the `config.yaml` file.
 1. Add the following `auth` configuration under the `transport` key:
 
-    ```yaml title="graphql/TheSpaceDevs/config.yaml"
-    transport:
-      type: streamable_http
+   ```yaml title="graphql/TheSpaceDevs/config.yaml"
+   transport:
+     type: streamable_http
 
-      auth:
-        servers:
-          - https://<AUTH0 DOMAIN> # Fill in your Auth0 domain
-        audiences:
-          - <AUTH0 DEFAULT AUDIENCE> # Fill in your Auth0 Identifier
-        resource: http://127.0.0.1:5000/mcp
-        scopes:
-          - read:users # Adjust scopes as needed
-    ```
+     auth:
+       servers:
+         - https://<AUTH0 DOMAIN> # Fill in your Auth0 domain
+       audiences:
+         - <AUTH0 DEFAULT AUDIENCE> # Fill in your Auth0 Identifier
+       resource: http://127.0.0.1:5000/mcp
+       scopes:
+         - read:users # Adjust scopes as needed
+   ```
 
 1. Replace the `<AUTH0 DOMAIN>` with your own Auth0 domain. It should look something like `dev-123456.us.auth0.com`, where `dev-123456` is your Auth0 tenant ID.
 
@@ -115,23 +117,23 @@ Configure your GraphOS Router to validate JWTs issued by Auth0. This involves se
 1. In the `graphql/TheSpaceDevs` directory, create a new file called `router.yaml`.
 1. Paste the following configuration, replacing `<AUTH0 DOMAIN>` with your Auth0 domain:
 
-    ```yaml title="graphql/TheSpaceDevs/router.yaml"
-    authorization:
-      require_authentication: true # Enforces authentication on all requests
-    authentication:
-      router:
-        jwt:
-          jwks:
-            - url: https://<AUTH0 DOMAIN>/.well-known/jwks.json
-    homepage:
-      enabled: false
-    sandbox:
-      enabled: true
-    supergraph:
-      introspection: true
-    ```
+   ```yaml title="graphql/TheSpaceDevs/router.yaml"
+   authorization:
+     require_authentication: true # Enforces authentication on all requests
+   authentication:
+     router:
+       jwt:
+         jwks:
+           - url: https://<AUTH0 DOMAIN>/.well-known/jwks.json
+   homepage:
+     enabled: false
+   sandbox:
+     enabled: true
+   supergraph:
+     introspection: true
+   ```
 
-    With this configuration, the router requires authentication for all requests. If a request doesn't include an Authorization token, the router returns an `UNAUTHENTICATED` error. 
+   With this configuration, the router requires authentication for all requests. If a request doesn't include an Authorization token, the router returns an `UNAUTHENTICATED` error.
 
 #### Retrieve your GraphOS license credentials for auth
 
@@ -142,15 +144,15 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
 1. Give it a name and click **Next**.
 1. In the next modal, find the command that looks something like this:
 
-    ```sh showLineNumbers=false {2}
-    APOLLO_KEY=<YOUR_APOLLO_KEY> \
-    rover subgraph publish <YOUR_APOLLO_GRAPH_REF> \
-    --schema ./products-schema.graphql \
-    --name your-subgraph-name \
-    --routing-url http://products.prod.svc.cluster.local:4001/graphql
-    ```
+   ```sh showLineNumbers=false {2}
+   APOLLO_KEY=<YOUR_APOLLO_KEY> \
+   rover subgraph publish <YOUR_APOLLO_GRAPH_REF> \
+   --schema ./products-schema.graphql \
+   --name your-subgraph-name \
+   --routing-url http://products.prod.svc.cluster.local:4001/graphql
+   ```
 
-    Note: You don't need to run this command.
+   Note: You don't need to run this command.
 
 1. Retrieve the values for `YOUR_APOLLO_KEY` and `YOUR_APOLLO_GRAPH_REF`.
 
@@ -158,29 +160,29 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
 
 1. Back in your terminal, in the root of the project directory, replace and run the following command to start the MCP Server and the router together:
 
-    ```sh
-    APOLLO_GRAPH_REF=<YOUR_APOLLO_GRAPH_REF> APOLLO_KEY=<YOUR_APOLLO_KEY> \
-    rover dev --supergraph-config ./graphql/TheSpaceDevs/supergraph.yaml \
-    --router-config ./graphql/TheSpaceDevs/router.yaml \
-    --mcp ./graphql/TheSpaceDevs/config.yaml
-    ```
+   ```sh
+   APOLLO_GRAPH_REF=<YOUR_APOLLO_GRAPH_REF> APOLLO_KEY=<YOUR_APOLLO_KEY> \
+   rover dev --supergraph-config ./graphql/TheSpaceDevs/supergraph.yaml \
+   --router-config ./graphql/TheSpaceDevs/router.yaml \
+   --mcp ./graphql/TheSpaceDevs/config.yaml
+   ```
 
 1. Test the router by navigating to `http://localhost:4000` in your browser. You should see the Explorer, where you can run GraphQL queries against the router.
 
-1. Remember, the router is configured to require authentication on all requests. Any operations without a valid Authorization token returns an `UNAUTHENTICATED` error. Run the operation: 
+1. Remember, the router is configured to require authentication on all requests. Any operations without a valid Authorization token returns an `UNAUTHENTICATED` error. Run the operation:
 
-    ```graphql
-    query GetAstronautsCurrentlyInSpace {
-      astronauts(filters: { inSpace: true, search: "" }) {
-        results {
-          id
-          name
-          timeInSpace
-          lastFlight
-        }
-      }
-    }
-    ```
+   ```graphql
+   query GetAstronautsCurrentlyInSpace {
+     astronauts(filters: { inSpace: true, search: "" }) {
+       results {
+         id
+         name
+         timeInSpace
+         lastFlight
+       }
+     }
+   }
+   ```
 
 1. You should see an `UNAUTHENTICATED` error, which means the router is correctly enforcing authentication.
 
@@ -188,11 +190,11 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
 
 1. In a new terminal window, run the MCP Inspector:
 
-    ```sh
-    npx @modelcontextprotocol/inspector
-    ```
+   ```sh
+   npx @modelcontextprotocol/inspector
+   ```
 
-    The browser should open automatically with a proxy auth token.
+   The browser should open automatically with a proxy auth token.
 
 1. In the MCP Inspector, select `Streamable HTTP` as the Transport Type and enter `http://127.0.0.1:5000/mcp` as the URL.
 1. Click **Connect**. This triggers the OAuth flow, and you are redirected to the Auth0 login page.
@@ -222,10 +224,10 @@ Before continuing, you need to set up the Auth0 client to accept an additional c
 1. Select the client for **MCP Inspector**. If you have multiple entries, find the `client_id` value from the MCP Inspector.
 1. In the client's **Settings** -> **Application URIs**, copy and paste the existing callback URL. Then, remove the `/debug` suffix. Make sure the URLs are comma-separated. It should look something like this:
 
-    ```txt
-    http://localhost:6274/oauth/callback/debug,
-    http://localhost:6274/oauth/callback
-    ```
+   ```txt
+   http://localhost:6274/oauth/callback/debug,
+   http://localhost:6274/oauth/callback
+   ```
 
 1. Back in MCP Inspector, click **Connect**. You are now authenticated and can run tools as usual.
 
@@ -236,6 +238,7 @@ Before continuing, you need to set up the Auth0 client to accept an additional c
 ### Common Issues
 
 #### MCP Server Won't Start
+
 - **Error**: "Port 5000 is already in use"
   - Solution: Kill any existing processes using port 5000 or specify a different port with the `transport.port` option or `APOLLO_MCP_TRANSPORT__PORT` env variable
 - **Error**: "Failed to load supergraph configuration"
@@ -247,12 +250,14 @@ Before continuing, you need to set up the Auth0 client to accept an additional c
   - Solution: Verify that the file path for your config files is correct. You should run the `rover dev` command from the root of the example project directory and the file paths should be relative to that root.
 
 #### MCP Inspector Connection Issues
+
 - **Error**: "Failed to connect to server"
   - Solution: Ensure the MCP server is running (check terminal output)
   - Solution: Verify you're using the correct URL (`http://127.0.0.1:5000/mcp`)
   - Solution: Check if your firewall is blocking the connection
 
 ### Infinite loop during OAuth flow
+
 - **Issue**: After logging in to Auth0, MCP Inspector keeps refreshing and doesn't complete the OAuth flow
   - Solution: In MCP Inspector, open the **Authentication** panel in the sidebar. Clear out any values in the **Header Name** and **Bearer Token** fields. Then try connecting again.
   - Solution: In MCP Inspector, select **Clear OAuth State** and try connecting again.
@@ -260,6 +265,7 @@ Before continuing, you need to set up the Auth0 client to accept an additional c
 ### Getting Help
 
 If you're still having issues:
+
 1. Check the [Apollo MCP Server GitHub issues](https://github.com/apollographql/apollo-mcp-server/issues).
 2. Join the [Apollo Community MCP Server Category](https://community.apollographql.com/c/mcp-server/41).
 3. Contact your Apollo representative for direct support.
