@@ -166,6 +166,40 @@ You can enable the following introspection tools:
 
 The MCP client can use these tools to provide schema information to the model and its context window, and allow the model to execute GraphQL operations based on that schema.
 
+### Minification
+
+Both the `introspect` and `search` tools support minification of their results through the `minify` option. These options help optimize context window usage for AI models.
+
+- **Reduces context window usage**: Minified GraphQL SDL takes up significantly less space in the AI model's context window, allowing for more complex schemas or additional context
+- **Uses compact notation**: Type definitions use prefixed compact syntax and common scalar types are shortened
+- **Preserves functionality**: All essential type information is retained, just in a more compact format
+- **Includes legend in tool descriptions**: When minify is enabled, the tool descriptions automatically include a legend explaining the notation
+
+**Minification format:**
+
+- **Type prefixes**: `T=type`, `I=input`, `E=enum`, `U=union`, `F=interface`
+- **Scalar abbreviations**: `s=String`, `i=Int`, `f=Float`, `b=Boolean`, `d=ID`
+- **Type modifiers**: `!=required`, `[]=list`, `<>=implements`
+
+Example comparison:
+
+**Regular output:**
+
+```graphql
+type User {
+  id: ID!
+  name: String
+  email: String!
+  posts: [Post]
+}
+```
+
+**Minified output:**
+
+```
+T:User:id:d!,name:s,email:s!,posts:[Post]
+```
+
 <Tip>
 
 Use a [contract variant](/graphos/platform/schema-management/delivery/contracts/overview) so you can control the parts of your graph that AI can introspect. [Learn more](/apollo-mcp-server/best-practices#use-contract-variants-to-control-ai-access-to-graphs)
@@ -178,6 +212,12 @@ introspection:
     enabled: true
   introspect:
     enabled: true
+    minify: true
+  search:
+    enabled: true
+    minify: true
+    index_memory_bytes: 50000000
+    leaf_depth: 1
   validate:
     enabled: true
 ```
