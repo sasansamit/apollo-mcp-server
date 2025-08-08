@@ -203,3 +203,40 @@ You need a graph's credentials and a valid GraphOS plan to use the router's auth
 1. You should see the results of the query, which means the authentication is working correctly.
 
 You can select the **Auth** tab in MCP Inspector to see the details of the authenticated user and the scopes granted.
+
+## Troubleshooting
+
+### Common Issues
+
+#### MCP Server Won't Start
+- **Error**: "Port 5000 is already in use"
+  - Solution: Kill any existing processes using port 5000 or specify a different port with the `transport.port` option or `APOLLO_MCP_TRANSPORT__PORT` env variable
+- **Error**: "Failed to load supergraph configuration"
+  - Solution: Verify you're running the command from the repo root directory
+  - Solution: Check that the path to `supergraph.yaml` is correct
+- **Error**: "License violation"
+  - Solution: Ensure that the `rover dev` command includes valid `APOLLO_KEY` and `APOLLO_GRAPH_REF` values and that your plan supports authentication features.
+- **Error**: "What URL is your subgraph running on?" question in terminal
+  - Solution: Verify that the file path for your config files is correct. You should run the `rover dev` command from the root of the example project directory and the file paths should be relative to that root.
+
+#### MCP Inspector Connection Issues
+- **Error**: "Failed to connect to server"
+  - Solution: Ensure the MCP server is running (check terminal output)
+  - Solution: Verify you're using the correct URL (`http://127.0.0.1:5000/mcp`)
+  - Solution: Check if your firewall is blocking the connection
+
+### Infinite loop during OAuth flow
+- **Issue**: After logging in to Auth0, MCP Inspector keeps refreshing and doesn't complete the OAuth flow
+  - Solution: In MCP Inspector, open the **Authentication** panel in the sidebar. Clear out any values in the **Header Name** and **Bearer Token** fields. Then try connecting again.
+  - Solution: In MCP Inspector, select **Clear OAuth State** and try connecting again.
+
+### Getting Help
+
+If you're still having issues:
+1. Check the [Apollo MCP Server GitHub issues](https://github.com/apollographql/apollo-mcp-server/issues)
+2. Join the [Apollo Community MCP Server Category](https://community.apollographql.com/c/mcp-server/41)
+3. Contact your Apollo representative for direct support
+
+## Next Steps
+
+When you are ready, [deploy the MCP server](/apollo-mcp-server/guides#deploying-the-mcp-server).
