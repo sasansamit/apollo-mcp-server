@@ -208,13 +208,21 @@ impl ServerHandler for Running {
                     .await
             }
             EXECUTE_TOOL_NAME => {
+                let mut headers = self.headers.clone();
+                if let Some(axum_parts) = context.extensions.get::<axum::http::request::Parts>() {
+                    // Forward the mcp-session-id header if present
+                    if let Some(session_id) = axum_parts.headers.get("mcp-session-id") {
+                        headers.insert("mcp-session-id", session_id.clone());
+                    }
+                }
+                
                 self.execute_tool
                     .as_ref()
                     .ok_or(tool_not_found(&request.name))?
                     .execute(graphql::Request {
                         input: Value::from(request.arguments.clone()),
                         endpoint: &self.endpoint,
-                        headers: self.headers.clone(),
+                        headers,
                     })
                     .await
             }
@@ -230,9 +238,15 @@ impl ServerHandler for Running {
                 // if found
                 let mut headers = self.headers.clone();
                 if let Some(axum_parts) = context.extensions.get::<axum::http::request::Parts>()
-                    && let Some(token) = axum_parts.extensions.get::<ValidToken>()
                 {
-                    headers.typed_insert(token.deref().clone());
+                    if let Some(token) = axum_parts.extensions.get::<ValidToken>() {
+                        headers.typed_insert(token.deref().clone());
+                    }
+                    
+                    // Also forward the mcp-session-id header if present
+                    if let Some(session_id) = axum_parts.headers.get("mcp-session-id") {
+                        headers.insert("mcp-session-id", session_id.clone());
+                    }
                 }
 
                 let graphql_request = graphql::Request {
