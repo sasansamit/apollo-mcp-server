@@ -123,7 +123,6 @@ mod test {
 
     impl Executable for TestExecutableWithoutPersistedQueryId {
         fn persisted_query_id(&self) -> Option<String> {
-            // Some("4f059505-fe13-4043-819a-461dd82dd5ed".to_string())
             None
         }
 
