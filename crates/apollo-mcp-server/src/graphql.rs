@@ -244,7 +244,7 @@ mod test {
             .match_body(expected_request_body.as_str())
             .with_status(200)
             .with_header("content-type", "application/json")
-            .with_body(json!({ "variables": null,  }).to_string())
+            .with_body(json!({ "data": {},  }).to_string())
             .expect(1)
             .create_async()
             .await;
