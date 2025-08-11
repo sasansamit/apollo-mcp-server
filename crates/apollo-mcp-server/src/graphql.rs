@@ -110,3 +110,249 @@ pub trait Executable {
             })
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::errors::McpError;
+    use crate::graphql::{Executable, OperationDetails, Request};
+    use http::{HeaderMap, HeaderValue};
+    use serde_json::{Map, Value, json};
+    use url::Url;
+
+    struct TestExecutableWithoutPersistedQueryId;
+
+    impl Executable for TestExecutableWithoutPersistedQueryId {
+        fn persisted_query_id(&self) -> Option<String> {
+            None
+        }
+
+        fn operation(&self, _input: Value) -> Result<OperationDetails, McpError> {
+            Ok(OperationDetails {
+                query: "query MockOp { mockOp { id } }".to_string(),
+                operation_name: Some("mock_operation".to_string()),
+            })
+        }
+
+        fn variables(&self, _input: Value) -> Result<Value, McpError> {
+            let json = r#"{ "arg1": "foobar" }"#;
+            let parsed_json = serde_json::from_str(json).expect("Failed to parse json");
+            let json_map: Map<String, Value> = match parsed_json {
+                Value::Object(map) => map,
+                _ => panic!("Expected a JSON object, but received a different type"),
+            };
+            Ok(Value::from(json_map))
+        }
+
+        fn headers(&self, _default_headers: &HeaderMap<HeaderValue>) -> HeaderMap<HeaderValue> {
+            HeaderMap::new()
+        }
+    }
+
+    struct TestExecutableWithPersistedQueryId;
+
+    impl Executable for TestExecutableWithPersistedQueryId {
+        fn persisted_query_id(&self) -> Option<String> {
+            Some("4f059505-fe13-4043-819a-461dd82dd5ed".to_string())
+        }
+
+        fn operation(&self, _input: Value) -> Result<OperationDetails, McpError> {
+            Ok(OperationDetails {
+                query: "query MockOp { mockOp { id } }".to_string(),
+                operation_name: Some("mock_operation".to_string()),
+            })
+        }
+
+        fn variables(&self, _input: Value) -> Result<Value, McpError> {
+            Ok(Value::String("mock_variables".to_string()))
+        }
+
+        fn headers(&self, _default_headers: &HeaderMap<HeaderValue>) -> HeaderMap<HeaderValue> {
+            HeaderMap::new()
+        }
+    }
+
+    #[tokio::test]
+    async fn calls_graphql_endpoint_with_expected_body_without_pq_extensions() {
+        // given
+        let mut server = mockito::Server::new_async().await;
+        let url = Url::parse(server.url().as_str()).unwrap();
+        let mock_request = Request {
+            input: json!({}),
+            endpoint: &url,
+            headers: HeaderMap::new(),
+        };
+        let expected_request_body = json!({
+            "variables": { "arg1": "foobar" },
+            "query": "query MockOp { mockOp { id } }",
+            "extensions": {
+                "clientLibrary": {
+                    "name":"mcp",
+                    "version":"0.7.0"
+                }
+            },
+            "operationName":"mock_operation"
+        })
+        .to_string();
+
+        let mock = server
+            .mock("POST", "/")
+            .match_body(expected_request_body.as_str())
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(json!({ "data": {}  }).to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        // when
+        let test_executable = TestExecutableWithoutPersistedQueryId {};
+        let result = test_executable.execute(mock_request).await.unwrap();
+
+        // then
+        mock.assert(); // verify that the mock http server route was invoked
+        assert!(!result.content.is_empty());
+        assert!(!result.is_error.unwrap());
+    }
+
+    #[tokio::test]
+    async fn calls_graphql_endpoint_with_expected_pq_extensions_in_request_body() {
+        // given
+        let mut server = mockito::Server::new_async().await;
+        let url = Url::parse(server.url().as_str()).unwrap();
+        let mock_request = Request {
+            input: json!({}),
+            endpoint: &url,
+            headers: HeaderMap::new(),
+        };
+        let expected_request_body = json!({
+            "variables": "mock_variables",
+            "extensions": {
+                "persistedQuery": {
+                    "version": 1,
+                    "sha256Hash": "4f059505-fe13-4043-819a-461dd82dd5ed",
+                },
+                "clientLibrary": {
+                    "name":"mcp",
+                    "version":"0.7.0"
+                }
+            },
+        })
+        .to_string();
+
+        let mock = server
+            .mock("POST", "/")
+            .match_body(expected_request_body.as_str())
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(json!({ "data": {},  }).to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        // when
+        let test_executable = TestExecutableWithPersistedQueryId {};
+        let result = test_executable.execute(mock_request).await.unwrap();
+
+        // then
+        mock.assert(); // verify that the mock http server route was invoked
+        assert!(!result.content.is_empty());
+        assert!(!result.is_error.unwrap());
+    }
+
+    #[tokio::test]
+    async fn results_in_mcp_error_when_gql_server_cannot_be_reached() {
+        // given
+        let url = Url::parse("http://localhost/no-server").unwrap();
+        let mock_request = Request {
+            input: json!({}),
+            endpoint: &url,
+            headers: HeaderMap::new(),
+        };
+
+        // when
+        let test_executable = TestExecutableWithPersistedQueryId {};
+        let result = test_executable.execute(mock_request).await;
+
+        // then
+        match result {
+            Err(e) => {
+                assert!(
+                    e.message
+                        .to_string()
+                        .starts_with("Failed to send GraphQL request")
+                );
+            }
+            _ => {
+                panic!("Expected MCP error");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn results_in_mcp_error_when_json_body_cannot_be_parsed() {
+        // given
+        let mut server = mockito::Server::new_async().await;
+        let url = Url::parse(server.url().as_str()).unwrap();
+        let mock_request = Request {
+            input: json!({}),
+            endpoint: &url,
+            headers: HeaderMap::new(),
+        };
+
+        server
+            .mock("POST", "/")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body("{ \"invalid_json\": 'foo' }")
+            .expect(1)
+            .create_async()
+            .await;
+
+        // when
+        let test_executable = TestExecutableWithPersistedQueryId {};
+        let result = test_executable.execute(mock_request).await;
+
+        // then
+        match result {
+            Err(e) => {
+                assert!(
+                    e.message
+                        .to_string()
+                        .starts_with("Failed to read GraphQL response body")
+                );
+            }
+            _ => {
+                panic!("Expected MCP error");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn gql_response_error_are_found_in_call_tool_result() {
+        // given
+        let mut server = mockito::Server::new_async().await;
+        let url = Url::parse(server.url().as_str()).unwrap();
+        let mock_request = Request {
+            input: json!({}),
+            endpoint: &url,
+            headers: HeaderMap::new(),
+        };
+
+        server
+            .mock("POST", "/")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(json!({ "data": null, "errors": ["an error"] }).to_string())
+            .expect(1)
+            .create_async()
+            .await;
+
+        // when
+        let test_executable = TestExecutableWithPersistedQueryId {};
+        let result = test_executable.execute(mock_request).await.unwrap();
+
+        // then
+        assert!(result.is_error.is_some());
+        assert!(result.is_error.unwrap());
+    }
+}
