@@ -42,10 +42,51 @@ pub(super) trait ValidateToken {
         #[derive(Clone, Debug, Serialize, Deserialize)]
         pub struct Claims {
             /// The intended audience of this token.
-            pub aud: String,
+            /// Can be either a single string or an array of strings per JWT spec. (https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3)
+            #[serde(deserialize_with = "deserialize_audience")]
+            pub aud: Vec<String>,
 
             /// The user who owns this token
             pub sub: String,
+        }
+
+        /// Custom deserializer to handle both single string and array of strings for audience claim
+        fn deserialize_audience<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            use serde::de::{SeqAccess, Visitor};
+            use std::fmt;
+
+            struct AudienceVisitor;
+
+            impl<'de> Visitor<'de> for AudienceVisitor {
+                type Value = Vec<String>;
+
+                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("a string or array of strings")
+                }
+
+                fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+                where
+                    E: serde::de::Error,
+                {
+                    Ok(vec![value.to_string()])
+                }
+
+                fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+                where
+                    A: SeqAccess<'de>,
+                {
+                    let mut audiences = Vec::new();
+                    while let Some(aud) = seq.next_element()? {
+                        audiences.push(aud);
+                    }
+                    Ok(audiences)
+                }
+            }
+
+            deserializer.deserialize_any(AudienceVisitor)
         }
 
         let jwt = token.token();
@@ -312,6 +353,106 @@ mod test {
 
         let test_validator = TestTokenValidator {
             audiences: vec![audience],
+            key_pair: (key_id, jwk),
+            servers: vec![server],
+        };
+
+        assert_eq!(test_validator.validate(jwt).await, None);
+
+        logs_assert(|lines: &[&str]| {
+            lines
+                .iter()
+                .filter(|line| line.contains("WARN"))
+                .any(|line| line.contains("InvalidAudience"))
+                .then_some(())
+                .ok_or("Expected warning for validation failure".to_string())
+        });
+    }
+
+    #[tokio::test]
+    async fn it_validates_jwt_with_array_audience() {
+        use serde_json::json;
+
+        let key_id = "some-example-id".to_string();
+        let (encode_key, decode_key) = create_key("DEADBEEF");
+        let jwk = Jwk {
+            alg: KeyAlgorithm::HS512,
+            decoding_key: decode_key,
+        };
+
+        let audience = "test-audience".to_string();
+        let in_the_future = chrono::Utc::now().timestamp() + 1000;
+
+        let header = {
+            let mut h = Header::new(Algorithm::HS512);
+            h.kid = Some(key_id.clone());
+            h
+        };
+
+        let claims = json!({
+            "aud": ["test-audience", "another-audience"],
+            "exp": in_the_future,
+            "sub": "test user"
+        });
+
+        let token = encode(&header, &claims, &encode_key).expect("encode JWT");
+        let jwt = Authorization::bearer(&token).expect("create bearer token");
+
+        let server =
+            Url::from_str("https://auth.example.com").expect("should parse a valid example server");
+
+        let test_validator = TestTokenValidator {
+            audiences: vec![audience],
+            key_pair: (key_id, jwk),
+            servers: vec![server],
+        };
+
+        assert_eq!(
+            test_validator
+                .validate(jwt)
+                .await
+                .expect("valid token")
+                .0
+                .token(),
+            token
+        );
+    }
+
+    #[traced_test]
+    #[tokio::test]
+    async fn it_rejects_array_audience_with_no_matches() {
+        use serde_json::json;
+
+        let key_id = "some-example-id".to_string();
+        let (encode_key, decode_key) = create_key("DEADBEEF");
+        let jwk = Jwk {
+            alg: KeyAlgorithm::HS512,
+            decoding_key: decode_key,
+        };
+
+        let expected_audience = "expected-audience".to_string();
+        let in_the_future = chrono::Utc::now().timestamp() + 1000;
+
+        let header = {
+            let mut h = Header::new(Algorithm::HS512);
+            h.kid = Some(key_id.clone());
+            h
+        };
+
+        let claims = json!({
+            "aud": ["wrong-audience-1", "wrong-audience-2"],
+            "exp": in_the_future,
+            "sub": "test user"
+        });
+
+        let token = encode(&header, &claims, &encode_key).expect("encode JWT");
+        let jwt = Authorization::bearer(&token).expect("create bearer token");
+
+        let server =
+            Url::from_str("https://auth.example.com").expect("should parse a valid example server");
+
+        let test_validator = TestTokenValidator {
+            audiences: vec![expected_audience],
             key_pair: (key_id, jwk),
             servers: vec![server],
         };
