@@ -64,10 +64,10 @@ The Auth0 Connection is the method clients use to authenticate. This guide uses 
 
 1. In your Auth0 dashboard, navigate to **Authentication** -> **Database**.
 1. Create the default **Username-Password-Authentication** connection. Click the **Try Connection** button to test it and set up a username and password for later.
-1. Back on your Auth0 dashboard, copy the **Connection Identifier** at the top of the page. You'll need it soon. It should start with something like `con_`.
+1. Back on your Auth0 dashboard, note the **Connection Identifier** at the top of the page. It should start with something like `con_`. Copy it into a scratch file. We'll refer to it later as `<CONNECTION ID>`.
 1. Navigate to **Applications** -> **APIs** -> **Auth0 Management API**.
-1. Copy the **Identifier** for this API. It should look something like `dev-123456.us.auth0.com`, where `dev-123456` is your Auth0 tenant ID.
-1. Click the **API Explorer** tab. Copy the token value. You also need it for the next command.
+1. Copy the domain name from the **Identifier** for this API into your scratch file. It should look something like `dev-123456.us.auth0.com`, where `dev-123456` is your Auth0 tenant ID. We'll refer to it as `<AUTH0 DOMAIN>`.
+1. Click the **API Explorer** tab. Copy the token value into your scratch file. We call it `<MGMT API ACCESS TOKEN>` in this guide.
 1. Run the following `curl` command to promote the connection to domain-level, replacing `<CONNECTION ID>`, `<AUTH0 DOMAIN>`, and `<MGMT API ACCESS TOKEN>` with the values you copied in the previous steps:
 
    ```sh
