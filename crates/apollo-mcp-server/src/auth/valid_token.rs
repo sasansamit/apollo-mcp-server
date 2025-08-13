@@ -50,43 +50,21 @@ pub(super) trait ValidateToken {
             pub sub: String,
         }
 
-        /// Custom deserializer to handle both single string and array of strings for audience claim
         fn deserialize_audience<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
         where
             D: serde::Deserializer<'de>,
         {
-            use serde::de::{SeqAccess, Visitor};
-            use std::fmt;
-
-            struct AudienceVisitor;
-
-            impl<'de> Visitor<'de> for AudienceVisitor {
-                type Value = Vec<String>;
-
-                fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                    formatter.write_str("a string or array of strings")
-                }
-
-                fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-                where
-                    E: serde::de::Error,
-                {
-                    Ok(vec![value.to_string()])
-                }
-
-                fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-                where
-                    A: SeqAccess<'de>,
-                {
-                    let mut audiences = Vec::new();
-                    while let Some(aud) = seq.next_element()? {
-                        audiences.push(aud);
-                    }
-                    Ok(audiences)
-                }
+            #[derive(Deserialize)]
+            #[serde(untagged)]
+            enum Audience {
+                Single(String),
+                Multiple(Vec<String>),
             }
 
-            deserializer.deserialize_any(AudienceVisitor)
+            Ok(match Audience::deserialize(deserializer)? {
+                Audience::Single(s) => vec![s],
+                Audience::Multiple(v) => v,
+            })
         }
 
         let jwt = token.token();
