@@ -234,8 +234,6 @@ impl ServerHandler for Running {
                     .await
             }
             _ => {
-                // Optionally extract the validated token and propagate it to upstream servers
-                // if found
                 let mut headers = self.headers.clone();
                 if let Some(axum_parts) = context.extensions.get::<axum::http::request::Parts>() {
                     // Optionally extract the validated token and propagate it to upstream servers if present
