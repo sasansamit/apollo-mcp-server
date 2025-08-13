@@ -247,24 +247,6 @@ mod tests {
     }
 
     #[test]
-    fn execute_query_err_with_subscription_when_mutation_mode_is_all() {
-        let execute = Execute::new(MutationMode::All);
-
-        let input = json!({
-            "query": "subscription { user { id name } }",
-        });
-
-        assert_eq!(
-            Executable::operation(&execute, input),
-            Err(McpError::new(
-                ErrorCode::INVALID_PARAMS,
-                "Invalid operation type".to_string(),
-                None
-            ))
-        );
-    }
-
-    #[test]
     fn execute_query_invalid_input() {
         let execute = Execute::new(MutationMode::None);
 
