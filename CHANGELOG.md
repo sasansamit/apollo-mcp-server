@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.7.1] - 2025-08-13
+
+## 🚀 Features
+
+### feat: Pass `remote-mcp` mcp-session-id header along to GraphQL request - @damassi PR #236
+
+This adds support for passing the `mcp-session-id` header through from `remote-mcp` via the MCP client config. This header [originates from the underlying `@modelcontextprotocol/sdk` library](https://github.com/modelcontextprotocol/typescript-sdk/blob/a1608a6513d18eb965266286904760f830de96fe/src/client/streamableHttp.ts#L182), invoked from `remote-mcp`.
+
+With this change it is possible to correlate requests from MCP clients through to the final GraphQL server destination.
+
+## 🐛 Fixes
+
+### fix: Valid token fails validation with multiple audiences - @DaleSeo PR #244
+
+Valid tokens are failing validation with the following error when the JWT tokens contain an audience claim as an array.
+
+```
+JSON error: invalid type: sequence, expected a string at line 1 column 97
+```
+
+According to [RFC 7519 Section 4.1.3](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1.3), the audience claim can be either a single string or an array of strings. However, our implementation assumes it will always be a string, which is causing this JSON parsing error.
+This fix updates the `Claims` struct to use `Vec<String>` instead of `String` for the `aud` field, along with a custom deserializer to handle both string and array formats.
+
+### fix: Add custom deserializer to handle APOLLO_UPLINK_ENDPOINTS environment variable parsing - @swcollard PR #220
+
+The APOLLO_UPLINK_ENDPOINTS environment variables has historically been a comma separated list of URL strings.
+The move to yaml configuration allows us to more directly define the endpoints as a Vec.
+This fix introduces a custom deserializer for the `apollo_uplink_endpoints` config field that can handle both the environment variable comma separated string, and the yaml-based list.
+
 # [0.7.0] - 2025-08-04
 
 ## 🚀 Features
@@ -24,12 +53,12 @@ transport:
     # List of upstream delegated OAuth servers
     # Note: These need to support the OIDC metadata discovery endpoint
     servers:
-    - https://auth.example.com
+      - https://auth.example.com
 
     # List of accepted audiences from upstream signed JWTs
     # See: https://www.ory.sh/docs/hydra/guides/audiences
     audiences:
-    - mcp.example.audience
+      - mcp.example.audience
 
     # The externally available URL pointing to this MCP server. Can be `localhost`
     # when testing locally.
@@ -42,9 +71,9 @@ transport:
 
     # List of queryable OAuth scopes from the upstream OAuth servers
     scopes:
-    - read
-    - mcp
-    - profile
+      - read
+      - mcp
+      - profile
 ```
 
 ## 🐛 Fixes
@@ -53,8 +82,6 @@ transport:
 
 To support certain scenarios where a client fails on an omitted `properties` field within `input_schema`, setting the field to an empty map (`{}`) instead. While a missing `properties` field is allowed this will unblock
 certain users and allow them to use the MCP server.
-
-
 
 # [0.6.1] - 2025-07-29
 
