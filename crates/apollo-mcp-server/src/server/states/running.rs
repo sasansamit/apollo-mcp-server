@@ -238,6 +238,7 @@ impl ServerHandler for Running {
                 // if found
                 let mut headers = self.headers.clone();
                 if let Some(axum_parts) = context.extensions.get::<axum::http::request::Parts>() {
+                    // Optionally extract the validated token and propagate it to upstream servers if present
                     if let Some(token) = axum_parts.extensions.get::<ValidToken>() {
                         headers.typed_insert(token.deref().clone());
                     }
