@@ -124,4 +124,136 @@ mod test {
             Ok(())
         });
     }
+
+    #[test]
+    fn it_merges_env_and_file_with_uplink_endpoints() {
+        let config = "
+            endpoint: http://from_file:4000/
+        ";
+
+        figment::Jail::expect_with(move |jail| {
+            let path = "config.yaml";
+
+            jail.create_file(path, config)?;
+            jail.set_env(
+                "APOLLO_UPLINK_ENDPOINTS",
+                "http://from_env:4000/,http://from_env2:4000/",
+            );
+
+            let config = read_config(path)?;
+
+            insta::assert_debug_snapshot!(config, @r#"
+            Config {
+                custom_scalars: None,
+                endpoint: Endpoint(
+                    Url {
+                        scheme: "http",
+                        cannot_be_a_base: false,
+                        username: "",
+                        password: None,
+                        host: Some(
+                            Domain(
+                                "from_file",
+                            ),
+                        ),
+                        port: Some(
+                            4000,
+                        ),
+                        path: "/",
+                        query: None,
+                        fragment: None,
+                    },
+                ),
+                graphos: GraphOSConfig {
+                    apollo_key: None,
+                    apollo_graph_ref: None,
+                    apollo_registry_url: None,
+                    apollo_uplink_endpoints: [
+                        Url {
+                            scheme: "http",
+                            cannot_be_a_base: false,
+                            username: "",
+                            password: None,
+                            host: Some(
+                                Domain(
+                                    "from_env",
+                                ),
+                            ),
+                            port: Some(
+                                4000,
+                            ),
+                            path: "/",
+                            query: None,
+                            fragment: None,
+                        },
+                        Url {
+                            scheme: "http",
+                            cannot_be_a_base: false,
+                            username: "",
+                            password: None,
+                            host: Some(
+                                Domain(
+                                    "from_env2",
+                                ),
+                            ),
+                            port: Some(
+                                4000,
+                            ),
+                            path: "/",
+                            query: None,
+                            fragment: None,
+                        },
+                    ],
+                },
+                headers: {},
+                health_check: HealthCheckConfig {
+                    enabled: false,
+                    path: "/health",
+                    readiness: ReadinessConfig {
+                        interval: ReadinessIntervalConfig {
+                            sampling: 5s,
+                            unready: None,
+                        },
+                        allowed: 100,
+                    },
+                },
+                introspection: Introspection {
+                    execute: ExecuteConfig {
+                        enabled: false,
+                    },
+                    introspect: IntrospectConfig {
+                        enabled: false,
+                        minify: false,
+                    },
+                    search: SearchConfig {
+                        enabled: false,
+                        index_memory_bytes: 50000000,
+                        leaf_depth: 1,
+                        minify: false,
+                    },
+                    validate: ValidateConfig {
+                        enabled: false,
+                    },
+                },
+                logging: Logging {
+                    level: Level(
+                        Info,
+                    ),
+                    path: None,
+                    rotation: Hourly,
+                },
+                operations: Infer,
+                overrides: Overrides {
+                    disable_type_description: false,
+                    disable_schema_description: false,
+                    enable_explorer: false,
+                    mutation_mode: None,
+                },
+                schema: Uplink,
+                transport: Stdio,
+            }
+            "#);
+            Ok(())
+        });
+    }
 }

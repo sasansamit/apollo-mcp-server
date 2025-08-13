@@ -6,18 +6,48 @@ use apollo_mcp_registry::{
 };
 use apollo_mcp_server::errors::ServerError;
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::de::Error;
+use serde::{Deserialize, Deserializer};
 use url::Url;
+
+#[cfg(test)]
+use serde::Serialize;
 
 const APOLLO_GRAPH_REF_ENV: &str = "APOLLO_GRAPH_REF";
 const APOLLO_KEY_ENV: &str = "APOLLO_KEY";
 
+fn apollo_uplink_endpoints_deserializer<'de, D>(deserializer: D) -> Result<Vec<Url>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum UrlListOrString {
+        List(Vec<Url>),
+        String(String),
+    }
+
+    match UrlListOrString::deserialize(deserializer)? {
+        UrlListOrString::List(urls) => Ok(urls),
+        UrlListOrString::String(s) => s
+            .split(',')
+            .map(|v| {
+                Url::parse(v.trim()).map_err(|e| {
+                    D::Error::custom(format!("Could not parse uplink endpoint URL: {e}"))
+                })
+            })
+            .collect(),
+    }
+}
+
 /// Credentials to use with GraphOS
 #[derive(Debug, Deserialize, Default, JsonSchema)]
+#[cfg_attr(test, derive(Serialize))]
 #[serde(default)]
 pub struct GraphOSConfig {
     /// The apollo key
     #[schemars(with = "Option<String>")]
+    #[cfg_attr(test, serde(skip_serializing))]
     apollo_key: Option<SecretString>,
 
     /// The graph reference
@@ -27,6 +57,7 @@ pub struct GraphOSConfig {
     apollo_registry_url: Option<Url>,
 
     /// List of uplink URL overrides
+    #[serde(deserialize_with = "apollo_uplink_endpoints_deserializer")]
     apollo_uplink_endpoints: Vec<Url>,
 }
 
