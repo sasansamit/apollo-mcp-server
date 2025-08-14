@@ -11,15 +11,40 @@ on:
   workflow_dispatch:
 
 jobs:
-  check:
-    name: Run checks
+  verify-changeset:
+    name: Verify Changeset
     runs-on: ubuntu-24.04
     permissions:
       pull-requests: write
       contents: read
     steps:
+      - uses: actions/github-script@v7
+        id: filter
+        env:
+          IGNORE_DIRS: ".github/workflows/,.cargo/,.direnv/,.vscode/"
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              { owner: context.repo.owner, repo: context.repo.repo, pull_number: pr.number, per_page: 100 }
+            );
+            
+            const ignore = process.env.IGNORE_DIRS.split(',').map(s => s.trim()).filter(Boolean);
+            
+            const onlyIgnored = files.length > 0 && files.every(f =>
+              ignore.some(prefix => f.filename.startsWith(prefix))
+            );
+            
+            core.info(`Changed files:\n${files.map(f => `${f.status}\t${f.filename}`).join('\n')}`);
+            core.setOutput('enforce', onlyIgnored ? 'false' : 'true');
+            
+            if (onlyIgnored) {
+              core.notice(`Skipping enforcement: all changes are in ignored paths: ${ignore.join(', ')}`);
+            }
       - name: Verify changeset included
         uses: actions/github-script@v7
+        if: steps.filter.outputs.enforce == 'true'
         with:
           script: |
             const dir = '.changesets/';
