@@ -13,6 +13,8 @@ on:
       - '.cargo/**'
       - '.direnv/**'
       - '.vscode/**'
+      - 'Cargo.*'
+      - 'crates/**/Cargo.*'
   workflow_dispatch:
 
 jobs:
