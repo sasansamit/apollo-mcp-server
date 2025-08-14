@@ -9,6 +9,8 @@ items:
     href: "."
   - label: "Quickstart"
     href: "./quickstart"
+  - label: "Install"
+    href: "./install"
   - label: "User Guide"
     href: "./guides"
   - label: "Authorization"
