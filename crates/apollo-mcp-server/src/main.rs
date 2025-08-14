@@ -44,7 +44,9 @@ async fn main() -> anyhow::Result<()> {
 
     // WorkerGuard is not used but needed to be at least defined or else the guard
     // is cleaned up too early and file appender logging does not work
-    let _guard = Logging::setup(&config)?;
+    //let _logging_guard = Logging::setup(&config)?;
+
+    let _tracing_guard = apollo_mcp_server::trace::init_tracing_subscriber()?;
 
     info!(
         "Apollo MCP Server v{} // (c) Apollo Graph, Inc. // Licensed under MIT",

@@ -41,8 +41,21 @@ tracing.workspace = true
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tokio-util = "0.7.15"
-tower-http = { version = "0.6.6", features = ["cors"] }
+tower-http = { version = "0.6.6", features = ["cors", "trace"] }
 url.workspace = true
+opentelemetry = "0.30.0"
+opentelemetry_sdk = "0.30.0"
+opentelemetry-otlp = "0.30.0"
+opentelemetry-resource-detectors = "0.9.0"
+opentelemetry-appender-log = "0.30.0"
+reqwest-tracing = "0.5.8"
+reqwest-middleware = "0.4.2"
+axum-tracing-opentelemetry = "0.29.0"
+opentelemetry-semantic-conventions = "0.30.0"
+tracing-core.workspace = true
+tracing-opentelemetry = "0.31.0"
+opentelemetry-stdout = "0.30.0"
+init-tracing-opentelemetry = "0.30.0"
 
 [dev-dependencies]
 chrono = { version = "0.4.41", default-features = false, features = ["now"] }

@@ -1,7 +1,10 @@
 //! Execute GraphQL operations from an MCP tool
 
 use crate::errors::McpError;
+use opentelemetry::trace::FutureExt;
 use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest_middleware::ClientBuilder;
+use reqwest_tracing::TracingMiddleware;
 use rmcp::model::{CallToolResult, Content, ErrorCode};
 use serde_json::{Map, Value};
 use url::Url;
@@ -74,11 +77,17 @@ pub trait Executable {
             }
         }
 
-        reqwest::Client::new()
+        let client = ClientBuilder::new(reqwest::Client::new())
+            // Insert the tracing middleware
+            .with(TracingMiddleware::default())
+            .build();
+
+        client
             .post(request.endpoint.as_str())
             .headers(self.headers(&request.headers))
             .body(Value::Object(request_body).to_string())
             .send()
+            .with_current_context()
             .await
             .map_err(|reqwest_error| {
                 McpError::new(

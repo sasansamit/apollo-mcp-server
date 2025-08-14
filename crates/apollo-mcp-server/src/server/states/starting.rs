@@ -2,6 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use apollo_compiler::{Name, Schema, ast::OperationType, validation::Valid};
 use axum::{Router, extract::Query, http::StatusCode, response::Json, routing::get};
+use axum_tracing_opentelemetry::middleware::{OtelAxumLayer, OtelInResponseLayer};
 use rmcp::transport::StreamableHttpService;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::{
@@ -177,7 +178,11 @@ impl Starting {
                     Default::default(),
                 );
                 let mut router =
-                    with_auth!(axum::Router::new().nest_service("/mcp", service), auth);
+                    with_auth!(axum::Router::new().nest_service("/mcp", service), auth)
+                        // include trace context as header into the response
+                        .layer(OtelInResponseLayer)
+                        //start OpenTelemetry trace on incoming request
+                        .layer(OtelAxumLayer::default());
 
                 // Add health check endpoint if configured
                 if let Some(health_check) = health_check.filter(|h| h.config().enabled) {
