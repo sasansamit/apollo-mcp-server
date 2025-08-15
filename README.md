@@ -29,13 +29,13 @@ Follow the [quickstart tutorial](https://www.apollographql.com/docs/apollo-mcp-s
 Full usage of Apollo MCP Server is documented on the [user guide](https://www.apollographql.com/docs/apollo-mcp-server/guides). There are a few items that are ncessary for this server to function. Specifically, the following things must be configured:
 
 1. A graph for the MCP server to sit in front of.
-1. Definitions for the GraphQL operations that should be exposed as MCP tools.
-1. A configuration file describing how the MCP server should run.
-1. A connection to an MCP client, such as an LLM or [MCP inspector](https://modelcontextprotocol.io/legacy/tools/inspector).
+2. Definitions for the GraphQL operations that should be exposed as MCP tools.
+3. A configuration file describing how the MCP server should run.
+4. A connection to an MCP client, such as an LLM or [MCP inspector](https://modelcontextprotocol.io/legacy/tools/inspector).
 
 These are all described on the user guide. Specific configuration options for the configuration file are documented in the [command reference](https://www.apollographql.com/docs/apollo-mcp-server/command-reference).
 
-## Contribute
+## Contributions
 
 Checkout the [contributor guidelines](https://github.com/apollographql/apollo-mcp-server/blob/main/CONTRIBUTING.md) for more information.
 
