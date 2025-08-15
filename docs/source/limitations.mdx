@@ -16,9 +16,9 @@ Apollo MCP Server currently passes through OAuth tokens received from MCP client
 
 This behavior violates the [MCP Authorization specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization), which states:
 
-> "If the MCP server makes requests to upstream APIs, it may act as an OAuth client to them. The access token used at the upstream API is a separate token, issued by the upstream authorization server. The MCP server **MUST NOT** pass through the token it received from the MCP client."
+> "If the MCP server makes requests to upstream APIs, it may act as an OAuth client to them. The access token used at the upstream API is a separate token, issued by the upstream authorization server. The MCP server MUST NOT pass through the token it received from the MCP client."
 
-**Rationale**: 
+#### Rationale 
 
 The decision to pass through tokens stems from practical enterprise requirements that conflict with the MCP specification:
 
@@ -27,16 +27,20 @@ The decision to pass through tokens stems from practical enterprise requirements
 - **Multi-tenant applications**: Upstream APIs frequently need to read the Authorization header to identify the tenant and apply appropriate data filtering.
 - **User context propagation**: The MCP specification lacks clear guidance on how user/session/identity information should reach upstream APIs when they need to perform their own authorization logic.
 
-**Security Implications**: 
+#### Security implications
+
 - Token passthrough can lead to confused deputy vulnerabilities.
 - Upstream APIs might incorrectly trust tokens as if they were validated by the MCP server.
 - Tokens intended for the MCP server audience might be inappropriately used with different services.
 - However, if upstream APIs enforce proper audience (`aud` claim) validation, they should reject inappropriately scoped tokens.
 
-**Recommended Workaround**: 
+#### Recommended workaround
+
 - Use the MCP server only with GraphQL APIs that accept the same OAuth tokens and audiences
 - Ensure your OAuth authorization server issues tokens with appropriate audience claims for both the MCP server and upstream APIs
 - Verify that your upstream APIs properly validate token audiences
 - Consider the security implications in your threat model, especially regarding OAuth trust boundaries
 
-**Future Plans**: We plan to address this limitation in a future release by implementing proper token exchange or separate authentication flows for upstream APIs, while still supporting the enterprise requirement for user identity propagation.
+#### Future plans
+
+We plan to address this limitation in a future release by implementing proper token exchange or separate authentication flows for upstream APIs, while still supporting the enterprise requirement for user identity propagation.
