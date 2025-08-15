@@ -1,12 +1,5 @@
 name: Verify Changeset
 on:
-  push:
-    # don't run on tags, run on commits
-    # https://github.com/orgs/community/discussions/25615
-    tags-ignore:
-      - "**"
-    branches:
-      - main
   pull_request:
     paths-ignore:
       - '.github/**'
