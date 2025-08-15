@@ -8,11 +8,11 @@ This feature is [experimental](/graphos/resources/feature-launch-stages#experime
 
 </ExperimentalFeature>
 
-## Known Limitations
+## Known limitations
 
-### OAuth Token Passthrough
+### OAuth token passthrough
 
-**Current Implementation**: The Apollo MCP Server currently passes through OAuth tokens received from MCP clients directly to upstream GraphQL APIs.
+**Current Implementation**: Apollo MCP Server currently passes through OAuth tokens received from MCP clients directly to upstream GraphQL APIs.
 
 **MCP Specification Violation**: This behavior violates the [MCP Authorization specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization), which states:
 
@@ -29,8 +29,8 @@ The decision to pass through tokens stems from practical enterprise requirements
 
 **Security Implications**: 
 - Token passthrough can lead to confused deputy vulnerabilities
-- Upstream APIs may incorrectly trust tokens as if they were validated by the MCP server
-- Tokens intended for the MCP server audience may be inappropriately used with different services
+- Upstream APIs might incorrectly trust tokens as if they were validated by the MCP server
+- Tokens intended for the MCP server audience might be inappropriately used with different services
 - However, if upstream APIs enforce proper audience (`aud` claim) validation, they should reject inappropriately scoped tokens
 
 **Recommended Workaround**: 
