@@ -2,6 +2,12 @@
 <a href="https://www.apollographql.com/"><img src="https://raw.githubusercontent.com/apollographql/apollo-client-devtools/main/assets/apollo-wordmark.svg" height="100" alt="Apollo Client"></a>
 </div>
 
+![version](https://img.shields.io/github/v/release/apollographql/apollo-mcp-server)
+![ci workflow status](https://img.shields.io/github/actions/workflow/status/apollographql/apollo-mcp-server/ci.yml)
+![release binaries workflow status](https://img.shields.io/github/actions/workflow/status/apollographql/apollo-mcp-server/release-bins.yml?label=release%20binaries)
+![release container workflow status](https://img.shields.io/github/actions/workflow/status/apollographql/apollo-mcp-server/release-container.yml?label=release%20container)
+![license](https://img.shields.io/github/license/apollographql/apollo-mcp-server)
+
 # Apollo MCP Server
 
 Apollo MCP Server is a [Model Context Protocol](https://modelcontextprotocol.io/) server that exposes GraphQL operations as MCP tools. It provides a standard way for AI models to access and orchestrate your APIs running with Apollo.
@@ -28,6 +34,10 @@ Full usage of Apollo MCP Server is documented on the [user guide](https://www.ap
 1. A connection to an MCP client, such as an LLM or [MCP inspector](https://modelcontextprotocol.io/legacy/tools/inspector).
 
 These are all described on the user guide. Specific configuration options for the configuration file are documented in the [command reference](https://www.apollographql.com/docs/apollo-mcp-server/command-reference).
+
+## Contribute
+
+Checkout the [contributor guidelines](https://github.com/apollographql/apollo-mcp-server/blob/main/CONTRIBUTING.md) for more information.
 
 ## Licensing
 
