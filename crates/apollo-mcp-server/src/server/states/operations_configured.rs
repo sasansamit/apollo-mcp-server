@@ -2,11 +2,10 @@ use apollo_compiler::{Schema, validation::Valid};
 use tracing::debug;
 
 use crate::{errors::ServerError, operations::RawOperation, server::states::Starting};
-
-use super::Config;
+use crate::server_config::ServerConfig;
 
 pub(super) struct OperationsConfigured {
-    pub(super) config: Config,
+    pub(super) config: ServerConfig,
     pub(super) operations: Vec<RawOperation>,
 }
 
