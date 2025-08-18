@@ -1,9 +1,9 @@
 use apollo_compiler::{Schema, validation::Valid};
 use tracing::debug;
 
-use crate::{errors::ServerError, operations::RawOperation};
-use crate::server_config::ServerConfig;
 use super::{OperationsConfigured, SchemaConfigured};
+use crate::server_config::ServerConfig;
+use crate::{errors::ServerError, operations::RawOperation};
 
 pub(super) struct Configuring {
     pub(super) config: ServerConfig,

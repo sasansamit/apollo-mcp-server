@@ -14,17 +14,20 @@ mod running;
 mod schema_configured;
 mod starting;
 
+use crate::server_handler::McpServerHandler;
 use configuring::Configuring;
 use operations_configured::OperationsConfigured;
 use running::Running;
 use schema_configured::SchemaConfigured;
 use starting::Starting;
-use crate::server_handler::McpServerHandler;
 
 pub(super) struct StateMachine {}
 
 impl StateMachine {
-    pub(crate) async fn start<T: McpServerHandler>(self, server: Server<T>) -> Result<(), ServerError> {
+    pub(crate) async fn start<T: McpServerHandler + Clone>(
+        self,
+        server: Server<T>,
+    ) -> Result<(), ServerError> {
         let schema_stream = server
             .schema_source
             .into_stream()
@@ -93,15 +96,13 @@ impl StateMachine {
                 },
             };
             if let State::Starting(starting) = state {
-                server
-                    .server_handler
-                    .write()
-                    .await
-                    .configure(&starting.config, starting.schema.clone())?;
-                state = starting
-                    .start(Arc::clone(&server.server_handler))
-                    .await
-                    .into();
+                // server
+                //     .server_handler
+                //     .write()
+                //     .await
+                //     .configure(&starting.config, starting.schema.clone())
+                //     .await?;
+                state = starting.start(server.server_handler.clone()).await.into();
             }
             if matches!(&state, State::Error(_) | State::Stopping) {
                 break;

@@ -16,6 +16,8 @@ use rmcp::{RoleServer, ServiceExt};
 use serde_json::json;
 use std::io::Error;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, error, info, trace};
 
@@ -153,7 +155,7 @@ async fn serve_sse(
                 error!(error = %e, "mcp shutdown with error");
             }
         }
-            .instrument(tracing::info_span!("mcp-server", bind_address = %server.config.bind)),
+        .instrument(tracing::info_span!("mcp-server", bind_address = %server.config.bind)),
     );
 
     server.with_service(move || server_handler.clone());

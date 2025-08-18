@@ -1,9 +1,9 @@
 use crate::custom_scalar_map::CustomScalarMap;
+use crate::health::HealthCheckConfig;
 use crate::operations::MutationMode;
 use bon::bon;
 use http::header::CONTENT_TYPE;
 use http::{HeaderMap, HeaderValue};
-use crate::health::HealthCheckConfig;
 
 /// Common configuration options for the server
 pub struct ServerConfig {

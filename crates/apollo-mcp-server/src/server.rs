@@ -1,10 +1,10 @@
-use std::net::{IpAddr, Ipv4Addr};
-use std::sync::Arc;
 use apollo_mcp_registry::uplink::schema::SchemaSource;
 use bon::bon;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use schemars::JsonSchema;
 use serde::Deserialize;
+use std::net::{IpAddr, Ipv4Addr};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -26,7 +26,7 @@ use states::StateMachine;
 pub struct Server<T: McpServerHandler> {
     schema_source: SchemaSource,
     operation_source: OperationSource,
-    server_handler: Arc<RwLock<T>>,
+    server_handler: T,
     cancellation_token: CancellationToken,
     server_config: ServerConfig,
 }
@@ -83,12 +83,12 @@ impl Transport {
 }
 
 #[bon]
-impl<T: McpServerHandler> Server<T> {
+impl<T: McpServerHandler + Clone> Server<T> {
     #[builder]
     pub fn new(
         schema_source: SchemaSource,
         operation_source: OperationSource,
-        server_handler: Arc<RwLock<T>>,
+        server_handler: T,
         cancellation_token: CancellationToken,
         server_config: ServerConfig,
     ) -> Self {
@@ -97,7 +97,7 @@ impl<T: McpServerHandler> Server<T> {
             operation_source,
             server_handler,
             cancellation_token,
-            server_config
+            server_config,
         }
     }
 

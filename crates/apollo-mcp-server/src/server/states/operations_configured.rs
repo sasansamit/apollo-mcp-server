@@ -1,8 +1,8 @@
 use apollo_compiler::{Schema, validation::Valid};
 use tracing::debug;
 
-use crate::{errors::ServerError, operations::RawOperation, server::states::Starting};
 use crate::server_config::ServerConfig;
+use crate::{errors::ServerError, operations::RawOperation, server::states::Starting};
 
 pub(super) struct OperationsConfigured {
     pub(super) config: ServerConfig,

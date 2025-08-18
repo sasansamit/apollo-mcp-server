@@ -6,7 +6,7 @@ use tracing::{debug, error};
 
 use super::Running;
 use crate::server_config::ServerConfig;
-use crate::server_handler::{McpServerHandler};
+use crate::server_handler::McpServerHandler;
 use crate::{errors::ServerError, operations::RawOperation};
 
 pub(super) struct Starting {
@@ -18,7 +18,7 @@ pub(super) struct Starting {
 impl Starting {
     pub(super) async fn start<T: McpServerHandler>(
         self,
-        server_handler: Arc<RwLock<T>>,
+        mut server_handler: T,
     ) -> Result<Running<T>, ServerError> {
         let operations: Vec<_> = self
             .operations
@@ -46,9 +46,9 @@ impl Starting {
         );
 
         server_handler
-            .write()
-            .await
-            .configure(&self.config, self.schema.clone())?;
+            .configure(&self.config, self.schema.clone())
+            .await?;
+        server_handler.set_operations(operations).await;
         let schema = Arc::new(Mutex::new(self.schema));
 
         let running = Running {

@@ -8,6 +8,7 @@ use crate::introspection::tools::introspect::{INTROSPECT_TOOL_NAME, Introspect};
 use crate::introspection::tools::search::{SEARCH_TOOL_NAME, Search};
 use crate::introspection::tools::validate::{VALIDATE_TOOL_NAME, Validate};
 use crate::operations::{MutationMode, Operation};
+use crate::server_config::ServerConfig;
 use apollo_compiler::ast::OperationType;
 use apollo_compiler::validation::Valid;
 use apollo_compiler::{Name, Schema};
@@ -17,7 +18,7 @@ use rmcp::model::{
     CallToolRequestParam, CallToolResult, ErrorCode, Implementation, InitializeRequestParam,
     InitializeResult, ListToolsResult, PaginatedRequestParam, ServerCapabilities, ServerInfo,
 };
-use rmcp::service::RequestContext;
+use rmcp::service::{RequestContext, ServiceRole};
 use rmcp::{Peer, RoleServer, ServerHandler, ServiceError};
 use serde_json::Value;
 use std::ops::Deref;
@@ -25,25 +26,31 @@ use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error};
 use url::Url;
-use crate::server_config::ServerConfig;
 
 pub trait McpServerHandler: ServerHandler {
-    fn configure(&mut self, config: &ServerConfig, schema: Valid<Schema>) -> Result<(), ServerError>;
-    fn operations(&self) -> Arc<Mutex<Vec<Operation>>>;
-    fn headers(&self) -> HeaderMap;
-    fn endpoint(&self) -> Url;
-    fn execute_tool(&self) -> Option<Execute>;
-    fn introspect_tool(&self) -> Option<Introspect>;
-    fn search_tool(&self) -> Option<Search>;
-    fn explorer_tool(&self) -> Option<Explorer>;
-    fn validate_tool(&self) -> Option<Validate>;
-    fn peers(&self) -> Arc<RwLock<Vec<Peer<RoleServer>>>>;
-    fn notify_tool_list_changed(&self, peers: Arc<RwLock<Vec<Peer<RoleServer>>>>) -> impl Future<Output = ()>;
+    async fn configure(
+        &mut self,
+        config: &ServerConfig,
+        schema: Valid<Schema>,
+    ) -> Result<(), ServerError>;
+    async fn operations(&self) -> Vec<Operation>;
+    async fn set_operations(&mut self, ops: Vec<Operation>);
+    async fn headers(&self) -> HeaderMap;
+    async fn endpoint(&self) -> Url;
+    async fn execute_tool(&self) -> Option<Execute>;
+    async fn introspect_tool(&self) -> Option<Introspect>;
+    async fn search_tool(&self) -> Option<Search>;
+    async fn explorer_tool(&self) -> Option<Explorer>;
+    async fn validate_tool(&self) -> Option<Validate>;
+    async fn peers(&self) -> Vec<Peer<RoleServer>>;
+    fn notify_tool_list_changed(
+        &mut self,
+        peers: Vec<Peer<RoleServer>>,
+    ) -> impl Future<Output = ()>;
 }
 
-#[derive(Clone)]
-pub struct ApolloMcpServerHandler {
-    pub(super) operations: Arc<Mutex<Vec<Operation>>>,
+struct ApolloMcpState {
+    pub(super) operations: Vec<Operation>,
     pub(super) headers: HeaderMap,
     pub(super) endpoint: Url,
     pub(super) execute_tool: Option<Execute>,
@@ -51,30 +58,36 @@ pub struct ApolloMcpServerHandler {
     pub(super) search_tool: Option<Search>,
     pub(super) explorer_tool: Option<Explorer>,
     pub(super) validate_tool: Option<Validate>,
-    pub(super) peers: Arc<RwLock<Vec<Peer<RoleServer>>>>,
+    pub(super) peers: Vec<Peer<RoleServer>>,
 }
 
+#[derive(Clone)]
+pub struct ApolloMcpServerHandler(Arc<RwLock<ApolloMcpState>>);
+
 impl ApolloMcpServerHandler {
-    pub fn new(
-        headers: HeaderMap,
-        endpoint: Url
-    ) -> ApolloMcpServerHandler {
-        Self {
-            operations: Arc::new(Mutex::new(Vec::new())),
-            headers,
-            endpoint,
-            execute_tool: None,
-            introspect_tool: None,
-            search_tool: None,
-            explorer_tool: None,
-            validate_tool: None,
-            peers: Arc::new(RwLock::new(Vec::new())),
-        }
+    pub fn new(headers: HeaderMap, endpoint: Url) -> ApolloMcpServerHandler {
+        Self(
+            Arc::new(
+                RwLock::new(
+                    ApolloMcpState {
+                            operations: Vec::new(),
+                            headers,
+                            endpoint,
+                            execute_tool: None,
+                            introspect_tool: None,
+                            search_tool: None,
+                            explorer_tool: None,
+                            validate_tool: None,
+                            peers: Vec::new(),
+                        }
+                )
+            )
+        )
     }
 }
 
 impl McpServerHandler for ApolloMcpServerHandler {
-    fn configure(
+    async fn configure(
         &mut self,
         config: &ServerConfig,
         schema: Valid<Schema>,
@@ -103,11 +116,12 @@ impl McpServerHandler for ApolloMcpServerHandler {
             .flatten();
 
         let schema = Arc::new(Mutex::new(schema));
-        self.execute_tool = config
+        let mut guard = self.0.write().await;
+        guard.execute_tool = config
             .execute_enabled
             .then(|| Execute::new(config.mutation_mode));
 
-        self.introspect_tool = config.introspect_enabled.then(|| {
+        guard.introspect_tool = config.introspect_enabled.then(|| {
             Introspect::new(
                 schema.clone(),
                 root_query_type,
@@ -115,11 +129,11 @@ impl McpServerHandler for ApolloMcpServerHandler {
                 config.introspect_minify,
             )
         });
-        self.validate_tool = config
+        guard.validate_tool = config
             .validate_enabled
             .then(|| Validate::new(schema.clone()));
 
-        self.search_tool = if config.search_enabled {
+        guard.search_tool = if config.search_enabled {
             Some(Search::new(
                 schema.clone(),
                 matches!(config.mutation_mode, MutationMode::All),
@@ -131,51 +145,55 @@ impl McpServerHandler for ApolloMcpServerHandler {
             None
         };
 
-        self.explorer_tool = config.explorer_graph_ref.clone().map(Explorer::new);
+        guard.explorer_tool = config.explorer_graph_ref.clone().map(Explorer::new);
 
-        self.peers = Arc::new(RwLock::new(Vec::new()));
+        guard.peers = Vec::new();
 
         Ok(())
     }
 
-    fn operations(&self) -> Arc<Mutex<Vec<Operation>>> {
-        Arc::clone(&self.operations)
+    async fn operations(&self) -> Vec<Operation> {
+        self.0.read().await.operations.clone()
     }
 
-    fn headers(&self) -> HeaderMap {
-        self.headers.clone()
+    async fn set_operations(&mut self, ops: Vec<Operation>) {
+        let mut guard = self.0.write().await;
+        guard.operations = ops;
     }
 
-    fn endpoint(&self) -> Url {
-        self.endpoint.clone()
+    async fn headers(&self) -> HeaderMap {
+        self.0.read().await.headers.clone()
     }
 
-    fn execute_tool(&self) -> Option<Execute> {
-        self.execute_tool.clone()
+    async fn endpoint(&self) -> Url {
+        self.0.read().await.endpoint.clone()
     }
 
-    fn introspect_tool(&self) -> Option<Introspect> {
-        self.introspect_tool.clone()
+    async fn execute_tool(&self) -> Option<Execute> {
+        self.0.read().await.execute_tool.clone()
     }
 
-    fn search_tool(&self) -> Option<Search> {
-        self.search_tool.clone()
+    async fn introspect_tool(&self) -> Option<Introspect> {
+        self.0.read().await.introspect_tool.clone()
     }
 
-    fn explorer_tool(&self) -> Option<Explorer> {
-        self.explorer_tool.clone()
+    async fn search_tool(&self) -> Option<Search> {
+        self.0.read().await.search_tool.clone()
     }
 
-    fn validate_tool(&self) -> Option<Validate> {
-        self.validate_tool.clone()
+    async fn explorer_tool(&self) -> Option<Explorer> {
+        self.0.read().await.explorer_tool.clone()
     }
 
-    fn peers(&self) -> Arc<RwLock<Vec<Peer<RoleServer>>>> {
-        Arc::clone(&self.peers)
+    async fn validate_tool(&self) -> Option<Validate> {
+        self.0.read().await.validate_tool.clone()
     }
 
-    async fn notify_tool_list_changed(&self, peers: Arc<RwLock<Vec<Peer<RoleServer>>>>) {
-        let mut peers = peers.write().await;
+    async fn peers(&self) -> Vec<Peer<RoleServer>> {
+        self.0.read().await.peers.clone()
+    }
+
+    async fn notify_tool_list_changed(&mut self, peers: Vec<Peer<RoleServer>>) {
         if !peers.is_empty() {
             debug!(
                 "Operations changed, notifying {} peers of tool change",
@@ -197,7 +215,8 @@ impl McpServerHandler for ApolloMcpServerHandler {
                 }
             }
         }
-        *peers = retained_peers;
+        let mut guard = self.0.write().await;
+        guard.peers = retained_peers;
     }
 }
 
@@ -208,8 +227,8 @@ impl ServerHandler for ApolloMcpServerHandler {
         context: RequestContext<RoleServer>,
     ) -> Result<InitializeResult, McpError> {
         // TODO: how to remove these?
-        let mut peers = self.peers.write().await;
-        peers.push(context.peer);
+        let mut guard = self.0.write().await;
+        guard.peers.push(context.peer);
         Ok(self.get_info())
     }
 
@@ -218,41 +237,42 @@ impl ServerHandler for ApolloMcpServerHandler {
         request: CallToolRequestParam,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, McpError> {
+        let guard = self.0.read().await;
         let result = match request.name.as_ref() {
             INTROSPECT_TOOL_NAME => {
-                self.introspect_tool
+                guard.introspect_tool
                     .as_ref()
                     .ok_or(tool_not_found(&request.name))?
                     .execute(convert_arguments(request)?)
                     .await
             }
             SEARCH_TOOL_NAME => {
-                self.search_tool
+                guard.search_tool
                     .as_ref()
                     .ok_or(tool_not_found(&request.name))?
                     .execute(convert_arguments(request)?)
                     .await
             }
             EXPLORER_TOOL_NAME => {
-                self.explorer_tool
+                guard.explorer_tool
                     .as_ref()
                     .ok_or(tool_not_found(&request.name))?
                     .execute(convert_arguments(request)?)
                     .await
             }
             EXECUTE_TOOL_NAME => {
-                self.execute_tool
+                guard.execute_tool
                     .as_ref()
                     .ok_or(tool_not_found(&request.name))?
                     .execute(graphql::Request {
                         input: Value::from(request.arguments.clone()),
-                        endpoint: &self.endpoint,
-                        headers: self.headers.clone(),
+                        endpoint: &guard.endpoint,
+                        headers: guard.headers.clone(),
                     })
                     .await
             }
             VALIDATE_TOOL_NAME => {
-                self.validate_tool
+                guard.validate_tool
                     .as_ref()
                     .ok_or(tool_not_found(&request.name))?
                     .execute(convert_arguments(request)?)
@@ -261,19 +281,17 @@ impl ServerHandler for ApolloMcpServerHandler {
             _ => {
                 // Optionally extract the validated token and propagate it to upstream servers
                 // if found
-                let mut headers = self.headers.clone();
+                let mut headers = guard.headers.clone();
                 if let Some(token) = context.extensions.get::<ValidToken>() {
                     headers.typed_insert(token.deref().clone());
                 }
 
                 let graphql_request = graphql::Request {
                     input: Value::from(request.arguments.clone()),
-                    endpoint: &self.endpoint,
+                    endpoint: &guard.endpoint,
                     headers,
                 };
-                self.operations
-                    .lock()
-                    .await
+                guard.operations
                     .iter()
                     .find(|op| op.as_ref().name == request.name)
                     .ok_or(tool_not_found(&request.name))?
@@ -295,19 +313,19 @@ impl ServerHandler for ApolloMcpServerHandler {
         _request: Option<PaginatedRequestParam>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
+        let guard = self.0.read().await;
         Ok(ListToolsResult {
             next_cursor: None,
-            tools: self
+            tools: guard
                 .operations
-                .lock()
-                .await
                 .iter()
-                .map(|op| op.as_ref().clone())
-                .chain(self.execute_tool.as_ref().iter().map(|e| e.tool.clone()))
-                .chain(self.introspect_tool.as_ref().iter().map(|e| e.tool.clone()))
-                .chain(self.search_tool.as_ref().iter().map(|e| e.tool.clone()))
-                .chain(self.explorer_tool.as_ref().iter().map(|e| e.tool.clone()))
-                .chain(self.validate_tool.as_ref().iter().map(|e| e.tool.clone()))
+                .cloned()
+                .map(Into::into)
+                .chain(guard.execute_tool.as_ref().iter().map(|e| e.tool.clone()))
+                .chain(guard.introspect_tool.as_ref().iter().map(|e| e.tool.clone()))
+                .chain(guard.search_tool.as_ref().iter().map(|e| e.tool.clone()))
+                .chain(guard.explorer_tool.as_ref().iter().map(|e| e.tool.clone()))
+                .chain(guard.validate_tool.as_ref().iter().map(|e| e.tool.clone()))
                 .collect(),
         })
     }
