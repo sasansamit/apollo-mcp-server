@@ -1,4 +1,3 @@
-use backon::{ExponentialBuilder, Retryable};
 use futures::Stream;
 use graphql_client::GraphQLQuery;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
@@ -136,6 +135,21 @@ async fn handle_poll_result(
     }
 
     Ok(Some(previous_updated_at.clone().into_values().collect()))
+}
+
+fn is_collection_error_transient(error: &CollectionError) -> bool {
+    match error {
+        CollectionError::Request(req_err) => {
+            // Check if the underlying reqwest error is transient
+            req_err.is_connect()
+                || req_err.is_timeout()
+                || req_err.is_request()
+                || req_err.status().is_some_and(|status| {
+                    status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+                })
+        }
+        _ => false,
+    }
 }
 
 #[derive(Clone)]
@@ -327,12 +341,24 @@ impl CollectionSource {
                     }
                 },
                 Err(err) => {
-                    if let Err(e) = sender.send(CollectionEvent::CollectionError(err)).await {
-                        tracing::debug!(
-                            "failed to send error to collection stream. This is likely to be because the server is shutting down: {e}"
+                    if is_collection_error_transient(&err) {
+                        // Log transient errors but don't send CollectionError to prevent server restart
+                        tracing::warn!(
+                            "Failed to fetch initial operation collection (transient error), will retry on next poll in {}s: {}",
+                            platform_api_config.poll_interval.as_secs(),
+                            err
                         );
+                    } else {
+                        tracing::error!(
+                            "Failed to fetch initial operation collection with permanent error: {err}"
+                        );
+                        if let Err(e) = sender.send(CollectionEvent::CollectionError(err)).await {
+                            tracing::debug!(
+                                "failed to send error to collection stream. This is likely to be because the server is shutting down: {e}"
+                            );
+                        }
+                        return;
                     }
-                    return;
                 }
             };
 
@@ -455,12 +481,24 @@ impl CollectionSource {
                     }
                 },
                 Err(err) => {
-                    if let Err(e) = sender.send(CollectionEvent::CollectionError(err)).await {
-                        tracing::debug!(
-                            "failed to send error to collection stream. This is likely to be because the server is shutting down: {e}"
+                    if is_collection_error_transient(&err) {
+                        // Log transient errors but don't send CollectionError to prevent server restart
+                        tracing::warn!(
+                            "Failed to fetch initial operation collection (transient error), will retry on next poll in {}s: {}",
+                            platform_api_config.poll_interval.as_secs(),
+                            err
                         );
+                    } else {
+                        tracing::error!(
+                            "Failed to fetch initial operation collection with permanent error: {err}"
+                        );
+                        if let Err(e) = sender.send(CollectionEvent::CollectionError(err)).await {
+                            tracing::debug!(
+                                "failed to send error to collection stream. This is likely to be because the server is shutting down: {e}"
+                            );
+                        }
+                        return;
                     }
-                    return;
                 }
             };
 
@@ -588,21 +626,6 @@ async fn poll_operation_collection_default(
     }
 }
 
-fn should_retry_error(error: &reqwest::Error) -> bool {
-    // Retry on network/connection errors
-    if error.is_connect() || error.is_timeout() || error.is_request() {
-        return true;
-    }
-
-    // Retry on server errors (5xx) and rate limiting (429)
-    if let Some(status) = error.status() {
-        return status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS;
-    }
-
-    // Don't retry on client errors (4xx) except 429, or other errors
-    false
-}
-
 async fn graphql_request<Query>(
     request_body: &graphql_client::QueryBody<Query::Variables>,
     platform_api_config: &PlatformApiConfig,
@@ -611,41 +634,32 @@ where
     Query: graphql_client::GraphQLQuery,
     <Query as graphql_client::GraphQLQuery>::ResponseData: std::fmt::Debug,
 {
-    let headers = HeaderMap::from_iter(vec![
-        (
-            HeaderName::from_static("apollographql-client-name"),
-            HeaderValue::from_static("apollo-mcp-server"),
-        ),
-        (
-            HeaderName::from_static("apollographql-client-version"),
-            HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
-        ),
-        (
-            HeaderName::from_static("x-api-key"),
-            HeaderValue::from_str(platform_api_config.apollo_key.expose_secret())
-                .map_err(CollectionError::HeaderValue)?,
-        ),
-    ]);
+    let res = reqwest::Client::new()
+        .post(platform_api_config.registry_url.clone())
+        .headers(HeaderMap::from_iter(vec![
+            (
+                HeaderName::from_static("apollographql-client-name"),
+                HeaderValue::from_static("apollo-mcp-server"),
+            ),
+            (
+                HeaderName::from_static("apollographql-client-version"),
+                HeaderValue::from_static(env!("CARGO_PKG_VERSION")),
+            ),
+            (
+                HeaderName::from_static("x-api-key"),
+                HeaderValue::from_str(platform_api_config.apollo_key.expose_secret())
+                    .map_err(CollectionError::HeaderValue)?,
+            ),
+        ]))
+        .timeout(platform_api_config.timeout)
+        .json(request_body)
+        .send()
+        .await
+        .map_err(CollectionError::Request)?;
 
-    (|| async {
-        let res = reqwest::Client::new()
-            .post(platform_api_config.registry_url.clone())
-            .headers(headers.clone())
-            .timeout(platform_api_config.timeout)
-            .json(request_body)
-            .send()
-            .await?;
-
-        res.json::<graphql_client::Response<Query::ResponseData>>()
-            .await
-    })
-    .retry(ExponentialBuilder::default())
-    .when(should_retry_error)
-    .notify(|err, dur| {
-        tracing::warn!("GraphQL request failed, retrying in {:?}: {}", dur, err);
-    })
-    .await
-    .map_err(CollectionError::Request)?
-    .data
-    .ok_or(CollectionError::Response("missing data".to_string()))
+    let response_body: graphql_client::Response<Query::ResponseData> =
+        res.json().await.map_err(CollectionError::Request)?;
+    response_body
+        .data
+        .ok_or(CollectionError::Response("missing data".to_string()))
 }
