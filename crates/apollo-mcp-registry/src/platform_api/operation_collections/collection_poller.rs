@@ -1,10 +1,10 @@
+use backon::{ExponentialBuilder, Retryable};
 use futures::Stream;
 use graphql_client::GraphQLQuery;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use secrecy::ExposeSecret;
 use std::collections::HashMap;
 use std::pin::Pin;
-use std::time::Duration;
 use tokio::sync::mpsc::channel;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -588,12 +588,6 @@ async fn poll_operation_collection_default(
     }
 }
 
-/// Configuration for retry behavior
-const MAX_RETRY_ATTEMPTS: u32 = 3;
-const INITIAL_RETRY_DELAY: Duration = Duration::from_millis(500);
-const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
-
-/// Determines if an error should be retried
 fn should_retry_error(error: &reqwest::Error) -> bool {
     // Retry on network/connection errors
     if error.is_connect() || error.is_timeout() || error.is_request() {
@@ -617,7 +611,6 @@ where
     Query: graphql_client::GraphQLQuery,
     <Query as graphql_client::GraphQLQuery>::ResponseData: std::fmt::Debug,
 {
-    let client = reqwest::Client::new();
     let headers = HeaderMap::from_iter(vec![
         (
             HeaderName::from_static("apollographql-client-name"),
@@ -634,69 +627,25 @@ where
         ),
     ]);
 
-    let mut attempt = 0;
-    let mut delay = INITIAL_RETRY_DELAY;
-
-    loop {
-        let res = client
+    (|| async {
+        let res = reqwest::Client::new()
             .post(platform_api_config.registry_url.clone())
             .headers(headers.clone())
             .timeout(platform_api_config.timeout)
             .json(request_body)
             .send()
-            .await;
+            .await?;
 
-        match res {
-            Ok(response) => {
-                match response
-                    .json::<graphql_client::Response<Query::ResponseData>>()
-                    .await
-                {
-                    Ok(response_body) => {
-                        return response_body
-                            .data
-                            .ok_or(CollectionError::Response("missing data".to_string()));
-                    }
-                    Err(json_error) => {
-                        return Err(CollectionError::Request(json_error));
-                    }
-                }
-            }
-            Err(request_error) => {
-                attempt += 1;
-
-                // Check if we should retry this error and haven't exceeded max attempts
-                if should_retry_error(&request_error) && attempt <= MAX_RETRY_ATTEMPTS {
-                    tracing::warn!(
-                        "GraphQL request failed (attempt {}/{}), retrying in {:?}: {}",
-                        attempt,
-                        MAX_RETRY_ATTEMPTS,
-                        delay,
-                        request_error
-                    );
-
-                    // Wait before retrying
-                    tokio::time::sleep(delay).await;
-
-                    // Exponential backoff with jitter and max cap
-                    delay = std::cmp::min(delay * 2, MAX_RETRY_DELAY);
-                } else {
-                    // Either not retryable or exceeded max attempts
-                    if attempt > MAX_RETRY_ATTEMPTS {
-                        tracing::error!(
-                            "GraphQL request failed after {} attempts: {}",
-                            MAX_RETRY_ATTEMPTS,
-                            request_error
-                        );
-                    } else {
-                        tracing::error!(
-                            "GraphQL request failed with non-retryable error: {}",
-                            request_error
-                        );
-                    }
-                    return Err(CollectionError::Request(request_error));
-                }
-            }
-        }
-    }
+        res.json::<graphql_client::Response<Query::ResponseData>>()
+            .await
+    })
+    .retry(ExponentialBuilder::default())
+    .when(should_retry_error)
+    .notify(|err, dur| {
+        tracing::warn!("GraphQL request failed, retrying in {:?}: {}", dur, err);
+    })
+    .await
+    .map_err(CollectionError::Request)?
+    .data
+    .ok_or(CollectionError::Response("missing data".to_string()))
 }
