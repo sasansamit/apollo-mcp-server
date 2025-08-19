@@ -12,12 +12,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use std::path::PathBuf;
 use tracing::Level;
-use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt::Layer;
 use tracing_subscriber::fmt::writer::BoxMakeWriter;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 use super::Config;
 
@@ -53,7 +51,7 @@ impl Default for Logging {
 }
 
 impl Logging {
-    pub fn setup(config: &Config) -> Result<Option<WorkerGuard>, anyhow::Error> {
+    pub fn env_filter(config: &Config) -> Result<EnvFilter, anyhow::Error> {
         let mut env_filter =
             EnvFilter::from_default_env().add_directive(config.logging.level.into());
 
@@ -62,14 +60,27 @@ impl Logging {
                 .add_directive("rmcp=warn".parse()?)
                 .add_directive("tantivy=warn".parse()?);
         }
+        Ok(env_filter)
+    }
 
+    pub fn logging_layer(
+        config: &Config,
+    ) -> Result<
+        Layer<
+            tracing_subscriber::Registry,
+            tracing_subscriber::fmt::format::DefaultFields,
+            tracing_subscriber::fmt::format::Format,
+            BoxMakeWriter,
+        >,
+        anyhow::Error,
+    > {
         macro_rules! log_error {
             () => {
                 |e| eprintln!("Failed to setup logging: {e:?}")
             };
         }
 
-        let (writer, guard, with_ansi) = match config.logging.path.clone() {
+        let (writer, _guard, with_ansi) = match config.logging.path.clone() {
             Some(path) => std::fs::create_dir_all(&path)
                 .map(|_| path)
                 .inspect_err(log_error!())
@@ -98,17 +109,10 @@ impl Logging {
             None => (BoxMakeWriter::new(std::io::stdout), None, true),
         };
 
-        tracing_subscriber::registry()
-            .with(env_filter)
-            .with(
-                tracing_subscriber::fmt::layer()
-                    .with_writer(writer)
-                    .with_ansi(with_ansi)
-                    .with_target(false),
-            )
-            .init();
-
-        Ok(guard)
+        Ok(tracing_subscriber::fmt::layer()
+            .with_writer(writer)
+            .with_ansi(with_ansi)
+            .with_target(false))
     }
 }
 

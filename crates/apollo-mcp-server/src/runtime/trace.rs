@@ -8,9 +8,10 @@ use opentelemetry_semantic_conventions::{
     SCHEMA_URL,
     attribute::{DEPLOYMENT_ENVIRONMENT_NAME, SERVICE_VERSION},
 };
-use tracing_core::Level;
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+use crate::runtime::{Config, logging::Logging};
 
 // Create a Resource that captures information about the entity for which telemetry is recorded.
 fn resource() -> Resource {
@@ -69,40 +70,33 @@ fn init_tracer_provider() -> Result<SdkTracerProvider, anyhow::Error> {
 }
 
 // Initialize tracing-subscriber and return OtelGuard for opentelemetry-related termination processing
-pub fn init_tracing_subscriber() -> Result<OtelGuard, anyhow::Error> {
+pub fn init_tracing_subscriber(config: &Config) -> Result<TelemetryGuard, anyhow::Error> {
     let tracer_provider = init_tracer_provider()?;
     let meter_provider = init_meter_provider()?;
+    let env_filter = Logging::env_filter(config)?;
+    let logging_layer = Logging::logging_layer(config)?;
 
     let tracer = tracer_provider.tracer("tracing-otel-subscriber");
 
     tracing_subscriber::registry()
-        // The global level filter prevents the exporter network stack
-        // from reentering the globally installed OpenTelemetryLayer with
-        // its own spans while exporting, as the libraries should not use
-        // tracing levels below DEBUG. If the OpenTelemetry layer needs to
-        // trace spans and events with higher verbosity levels, consider using
-        // per-layer filtering to target the telemetry layer specifically,
-        // e.g. by target matching.
-        .with(tracing_subscriber::filter::LevelFilter::from_level(
-            Level::INFO,
-        ))
-        .with(tracing_subscriber::fmt::layer())
+        .with(logging_layer)
+        .with(env_filter)
         .with(MetricsLayer::new(meter_provider.clone()))
         .with(OpenTelemetryLayer::new(tracer))
         .init();
 
-    Ok(OtelGuard {
+    Ok(TelemetryGuard {
         tracer_provider,
         meter_provider,
     })
 }
 
-pub struct OtelGuard {
+pub struct TelemetryGuard {
     tracer_provider: SdkTracerProvider,
     meter_provider: SdkMeterProvider,
 }
 
-impl Drop for OtelGuard {
+impl Drop for TelemetryGuard {
     fn drop(&mut self) {
         if let Err(err) = self.tracer_provider.shutdown() {
             eprintln!("{err:?}");

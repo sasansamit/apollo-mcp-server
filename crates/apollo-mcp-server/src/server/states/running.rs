@@ -171,6 +171,7 @@ impl Running {
 }
 
 impl ServerHandler for Running {
+    #[tracing::instrument(skip(self))]
     async fn initialize(
         &self,
         _request: InitializeRequestParam,
