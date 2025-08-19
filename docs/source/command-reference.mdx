@@ -237,7 +237,7 @@ The default value for `source` is `"uplink"`.
 
 #### Transport configuration
 
-These fields are under the top-level `transport` key and configure the MCP Server to run in different environments: stdio, Streamable HTTP, or SSE (deprecated).
+These fields are under the top-level `transport` key, to configure running the MCP Server in different environments - stdio, Streamable HTTP or SSE (deprecated).
 
 ```
 transport:
@@ -246,13 +246,13 @@ transport:
 
 The available fields depend on the value of the nested `type` key:
 
-##### STDIO (default)
+##### stdio (default)
 
 | Option    | Value               | Default Value | Description                                                                                                              |
 | :-------- | :------------------ | :------------ | :----------------------------------------------------------------------------------------------------------------------- |
 | `type`    | `"stdio"`           | \*             | Use standard IO for communication between the server and client                                                          |
 
-##### StreamableHTTP
+##### Streamable HTTP
 
 | Option    | Value               | Value Type    | Description                                                                                                              |
 | :-------- | :------------------ | :------------ | :----------------------------------------------------------------------------------------------------------------------- |
@@ -260,7 +260,7 @@ The available fields depend on the value of the nested `type` key:
 | `address` | `127.0.0.1` (default)         | `IpAddr`      | The IP address to bind to                                                                                                |
 | `port`    | `5000` (default)              | `u16`         | The port to bind to                                                                                                      |
 
-##### SSE (Depricated, use StreamableHTTP)
+##### SSE (Deprecated, use StreamableHTTP)
 
 | Option    | Value               | Value Type    | Description                                                                                                              |
 | :-------- | :------------------ | :------------ | :----------------------------------------------------------------------------------------------------------------------- |
