@@ -252,19 +252,19 @@ The available fields depend on the value of the nested `type` key:
 | :-------- | :------------------ | :------------ | :----------------------------------------------------------------------------------------------------------------------- |
 | `type`    | `"stdio"`           | \*             | Use standard IO for communication between the server and client                                                          |
 
-##### SSE
-
-| Option    | Value               | Value Type    | Description                                                                                                              |
-| :-------- | :------------------ | :------------ | :----------------------------------------------------------------------------------------------------------------------- |
-| `type`    | `"sse"`             |               | Host the MCP server on the supplied config, using SSE for communication. Deprecated in favor of `StreamableHTTP`         |
-| `address` | `127.0.0.1` (default)         | `IpAddr`      | The IP address to bind to                                                                                                |
-| `port`    | `5000` (default)              | `u16`         | The port to bind to                                                                                                      |
-
 ##### StreamableHTTP
 
 | Option    | Value               | Value Type    | Description                                                                                                              |
 | :-------- | :------------------ | :------------ | :----------------------------------------------------------------------------------------------------------------------- |
 | `type`    | `"streamable_http"` |               | Host the MCP server on the configuration, using streamable HTTP messages.                                                |
+| `address` | `127.0.0.1` (default)         | `IpAddr`      | The IP address to bind to                                                                                                |
+| `port`    | `5000` (default)              | `u16`         | The port to bind to                                                                                                      |
+
+##### SSE (Depricated, use StreamableHTTP)
+
+| Option    | Value               | Value Type    | Description                                                                                                              |
+| :-------- | :------------------ | :------------ | :----------------------------------------------------------------------------------------------------------------------- |
+| `type`    | `"sse"`             |               | Host the MCP server on the supplied config, using SSE for communication. Deprecated in favor of `StreamableHTTP`         |
 | `address` | `127.0.0.1` (default)         | `IpAddr`      | The IP address to bind to                                                                                                |
 | `port`    | `5000` (default)              | `u16`         | The port to bind to                                                                                                      |
 
