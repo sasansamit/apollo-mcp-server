@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use apollo_compiler::{Schema, validation::Valid};
 use headers::HeaderMapExt as _;
+use opentelemetry::Context;
+use opentelemetry::trace::FutureExt;
 use reqwest::header::HeaderMap;
 use rmcp::model::Implementation;
 use rmcp::{
@@ -180,6 +182,7 @@ impl ServerHandler for Running {
         Ok(self.get_info())
     }
 
+    #[tracing::instrument(skip(self, context), fields(tool_name = request.name.as_ref(), request_id = %context.id.clone()))]
     async fn call_tool(
         &self,
         request: CallToolRequestParam,
@@ -259,6 +262,7 @@ impl ServerHandler for Running {
                     .find(|op| op.as_ref().name == request.name)
                     .ok_or(tool_not_found(&request.name))?
                     .execute(graphql_request)
+                    .with_context(Context::current())
                     .await
             }
         };

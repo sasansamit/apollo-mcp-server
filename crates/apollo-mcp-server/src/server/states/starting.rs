@@ -12,6 +12,7 @@ use rmcp::{
 use serde_json::json;
 use tokio::sync::{Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
+use tower_http::trace::TraceLayer;
 use tracing::{Instrument as _, debug, error, info, trace};
 
 use crate::{
@@ -182,7 +183,17 @@ impl Starting {
                         // include trace context as header into the response
                         .layer(OtelInResponseLayer)
                         //start OpenTelemetry trace on incoming request
-                        .layer(OtelAxumLayer::default());
+                        .layer(OtelAxumLayer::default())
+                        // Add tower-http tracing layer for additional HTTP-level tracing
+                        .layer(TraceLayer::new_for_http().make_span_with(
+                            |request: &axum::http::Request<_>| {
+                                tracing::info_span!(
+                                    "http_request",
+                                    method = %request.method(),
+                                    uri = %request.uri(),
+                                )
+                            },
+                        ));
 
                 // Add health check endpoint if configured
                 if let Some(health_check) = health_check.filter(|h| h.config().enabled) {
