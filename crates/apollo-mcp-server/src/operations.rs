@@ -1044,24 +1044,35 @@ fn type_to_schema(
                 custom_scalar_map,
                 definitions,
             );
+            let items_schema = if list_type.is_non_null() {
+                inner_type_schema
+            } else {
+                Schema::Object(SchemaObject {
+                    subschemas: Some(Box::new(SubschemaValidation {
+                        one_of: Some(vec![
+                            inner_type_schema,
+                            Schema::Object(SchemaObject {
+                                instance_type: Some(SingleOrVec::Single(Box::new(
+                                    InstanceType::Null,
+                                ))),
+                                ..Default::default()
+                            }),
+                        ]),
+                        ..Default::default()
+                    })),
+                    ..Default::default()
+                })
+            };
+
             schema_factory(
                 None,
                 Some(InstanceType::Array),
                 None,
-                list_type.is_non_null().then(|| ArrayValidation {
-                    items: Some(SingleOrVec::Single(Box::new(inner_type_schema.clone()))),
+                Some(ArrayValidation {
+                    items: Some(SingleOrVec::Single(Box::new(items_schema))),
                     ..Default::default()
                 }),
-                (!list_type.is_non_null()).then(|| SubschemaValidation {
-                    one_of: Some(vec![
-                        inner_type_schema,
-                        Schema::Object(SchemaObject {
-                            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Null))),
-                            ..Default::default()
-                        }),
-                    ]),
-                    ..Default::default()
-                }),
+                None,
                 None,
             )
         }
@@ -1556,7 +1567,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1570,14 +1581,16 @@ mod tests {
                 "properties": Object {
                     "id": Object {
                         "type": String("array"),
-                        "oneOf": Array [
-                            Object {
-                                "type": String("string"),
-                            },
-                            Object {
-                                "type": String("null"),
-                            },
-                        ],
+                        "items": Object {
+                            "oneOf": Array [
+                                Object {
+                                    "type": String("string"),
+                                },
+                                Object {
+                                    "type": String("null"),
+                                },
+                            ],
+                        },
                     },
                 },
             },
@@ -1593,8 +1606,8 @@ mod tests {
                 },
             ),
         }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        "#);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "required": [
@@ -1603,18 +1616,20 @@ mod tests {
           "properties": {
             "id": {
               "type": "array",
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -1708,7 +1723,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1719,14 +1734,16 @@ mod tests {
                 "properties": Object {
                     "id": Object {
                         "type": String("array"),
-                        "oneOf": Array [
-                            Object {
-                                "type": String("string"),
-                            },
-                            Object {
-                                "type": String("null"),
-                            },
-                        ],
+                        "items": Object {
+                            "oneOf": Array [
+                                Object {
+                                    "type": String("string"),
+                                },
+                                Object {
+                                    "type": String("null"),
+                                },
+                            ],
+                        },
                     },
                 },
             },
@@ -1742,25 +1759,27 @@ mod tests {
                 },
             ),
         }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        "#);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
             "id": {
               "type": "array",
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -1848,7 +1867,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1859,22 +1878,26 @@ mod tests {
                 "properties": Object {
                     "id": Object {
                         "type": String("array"),
-                        "oneOf": Array [
-                            Object {
-                                "type": String("array"),
-                                "oneOf": Array [
-                                    Object {
-                                        "type": String("string"),
+                        "items": Object {
+                            "oneOf": Array [
+                                Object {
+                                    "type": String("array"),
+                                    "items": Object {
+                                        "oneOf": Array [
+                                            Object {
+                                                "type": String("string"),
+                                            },
+                                            Object {
+                                                "type": String("null"),
+                                            },
+                                        ],
                                     },
-                                    Object {
-                                        "type": String("null"),
-                                    },
-                                ],
-                            },
-                            Object {
-                                "type": String("null"),
-                            },
-                        ],
+                                },
+                                Object {
+                                    "type": String("null"),
+                                },
+                            ],
+                        },
                     },
                 },
             },
@@ -1890,33 +1913,37 @@ mod tests {
                 },
             ),
         }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        "#);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
             "id": {
               "type": "array",
-              "oneOf": [
-                {
-                  "type": "array",
-                  "oneOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "null"
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
