@@ -9,6 +9,11 @@
       matchPackageNames: ["*"],
     },
   ],
+  // Automating Nix upgrades is currently in beta and opt-in only.
+  // https://docs.renovatebot.com/modules/manager/nix/
+  nix: {
+    enabled: true,
+  }
   vulnerabilityAlerts: {
     enabled: true,
   },
