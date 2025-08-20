@@ -20,7 +20,10 @@ fn resource() -> Resource {
         .with_schema_url(
             [
                 KeyValue::new(SERVICE_VERSION, env!("CARGO_PKG_VERSION")),
-                KeyValue::new(DEPLOYMENT_ENVIRONMENT_NAME, "develop"),
+                KeyValue::new(
+                    DEPLOYMENT_ENVIRONMENT_NAME,
+                    std::env::var("ENVIRONMENT").unwrap_or_else(|_| "develop".to_string()),
+                ),
             ],
             SCHEMA_URL,
         )
@@ -38,14 +41,9 @@ fn init_meter_provider() -> Result<SdkMeterProvider, anyhow::Error> {
         .with_interval(std::time::Duration::from_secs(30))
         .build();
 
-    // For debugging in development
-    let stdout_reader =
-        PeriodicReader::builder(opentelemetry_stdout::MetricExporter::default()).build();
-
     let meter_provider = MeterProviderBuilder::default()
         .with_resource(resource())
         .with_reader(reader)
-        .with_reader(stdout_reader)
         .build();
 
     global::set_meter_provider(meter_provider.clone());
@@ -74,7 +72,7 @@ pub fn init_tracing_subscriber(config: &Config) -> Result<TelemetryGuard, anyhow
     let tracer_provider = init_tracer_provider()?;
     let meter_provider = init_meter_provider()?;
     let env_filter = Logging::env_filter(config)?;
-    let logging_layer = Logging::logging_layer(config)?;
+    let (logging_layer, logging_guard) = Logging::logging_layer(config)?;
 
     let tracer = tracer_provider.tracer("tracing-otel-subscriber");
 
@@ -88,12 +86,14 @@ pub fn init_tracing_subscriber(config: &Config) -> Result<TelemetryGuard, anyhow
     Ok(TelemetryGuard {
         tracer_provider,
         meter_provider,
+        logging_guard,
     })
 }
 
 pub struct TelemetryGuard {
     tracer_provider: SdkTracerProvider,
     meter_provider: SdkMeterProvider,
+    logging_guard: Option<tracing_appender::non_blocking::WorkerGuard>,
 }
 
 impl Drop for TelemetryGuard {
@@ -104,5 +104,6 @@ impl Drop for TelemetryGuard {
         if let Err(err) = self.meter_provider.shutdown() {
             eprintln!("{err:?}");
         }
+        self.logging_guard.take();
     }
 }

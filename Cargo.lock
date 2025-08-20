@@ -220,7 +220,6 @@ dependencies = [
  "headers",
  "http",
  "humantime-serde",
- "init-tracing-opentelemetry",
  "insta",
  "jsonwebtoken",
  "jwks",
@@ -1688,19 +1687,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "init-tracing-opentelemetry"
-version = "0.30.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "866e9f6c7c07c2b2735a8769ec8da9bd3adc56953674dab66dd3e833cb8a4b33"
-dependencies = [
- "opentelemetry",
- "opentelemetry_sdk",
- "thiserror 2.0.14",
- "tracing",
- "tracing-opentelemetry",
-]
-
-[[package]]
 name = "inlinable_string"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2406,8 +2392,6 @@ dependencies = [
  "rand 0.9.2",
  "serde_json",
  "thiserror 2.0.14",
- "tokio",
- "tokio-stream",
 ]
 
 [[package]]

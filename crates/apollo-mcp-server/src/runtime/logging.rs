@@ -66,12 +66,15 @@ impl Logging {
     pub fn logging_layer(
         config: &Config,
     ) -> Result<
-        Layer<
-            tracing_subscriber::Registry,
-            tracing_subscriber::fmt::format::DefaultFields,
-            tracing_subscriber::fmt::format::Format,
-            BoxMakeWriter,
-        >,
+        (
+            Layer<
+                tracing_subscriber::Registry,
+                tracing_subscriber::fmt::format::DefaultFields,
+                tracing_subscriber::fmt::format::Format,
+                BoxMakeWriter,
+            >,
+            Option<tracing_appender::non_blocking::WorkerGuard>,
+        ),
         anyhow::Error,
     > {
         macro_rules! log_error {
@@ -80,7 +83,7 @@ impl Logging {
             };
         }
 
-        let (writer, _guard, with_ansi) = match config.logging.path.clone() {
+        let (writer, guard, with_ansi) = match config.logging.path.clone() {
             Some(path) => std::fs::create_dir_all(&path)
                 .map(|_| path)
                 .inspect_err(log_error!())
@@ -109,10 +112,13 @@ impl Logging {
             None => (BoxMakeWriter::new(std::io::stdout), None, true),
         };
 
-        Ok(tracing_subscriber::fmt::layer()
-            .with_writer(writer)
-            .with_ansi(with_ansi)
-            .with_target(false))
+        Ok((
+            tracing_subscriber::fmt::layer()
+                .with_writer(writer)
+                .with_ansi(with_ansi)
+                .with_target(false),
+            guard,
+        ))
     }
 }
 
