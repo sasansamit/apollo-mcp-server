@@ -10,6 +10,9 @@ on:
       - 'Cargo.*'
       - 'crates/**/Cargo.*'
       - '*.md'
+    branches-ignore:
+      - main
+      - release/**
   workflow_dispatch:
 
 jobs:
