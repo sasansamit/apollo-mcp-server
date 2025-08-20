@@ -1,5 +1,8 @@
 {
-  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "github>apollographql/renovate-config-apollo-open-source:default.json5",
+    "github>Turbo87/renovate-config//rust/updateToolchain",
+  ]
   packageRules: [
     {
       enabled: false,
