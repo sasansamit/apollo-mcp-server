@@ -1,6 +1,9 @@
 name: Verify Changeset
 on:
   pull_request:
+    branches-ignore:
+      - main
+      - release/**
     paths-ignore:
       - '.github/**'
       - '.cargo/**'
@@ -10,9 +13,6 @@ on:
       - 'Cargo.*'
       - 'crates/**/Cargo.*'
       - '*.md'
-    branches-ignore:
-      - main
-      - release/**
   workflow_dispatch:
 
 jobs:
