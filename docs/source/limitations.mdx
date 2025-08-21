@@ -14,13 +14,9 @@ This feature is [experimental](/graphos/resources/feature-launch-stages#experime
 
 Apollo MCP Server currently passes through OAuth tokens received from MCP clients directly to upstream GraphQL APIs.
 
-This behavior violates the [MCP Authorization specification](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization), which states:
-
-> "If the MCP server makes requests to upstream APIs, it may act as an OAuth client to them. The access token used at the upstream API is a separate token, issued by the upstream authorization server. The MCP server MUST NOT pass through the token it received from the MCP client."
-
 #### Rationale 
 
-The decision to pass through tokens stems from practical enterprise requirements that conflict with the MCP specification:
+The decision to pass through tokens stems from practical enterprise requirements that may conflict with the MCP specification. For example: 
 
 - **Multi-user scenarios**: Enterprise GraphQL APIs often require direct user identity to perform granular access control and tenant isolation.
 - **Existing enterprise patterns**: Many organizations have GraphQL APIs that depend on the original Authorization header to identify users and apply existing identity-based access controls.
