@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.7.2] - 2025-08-19
+
+## 🚀 Features
+
+### Prevent server restarts while polling collections - @DaleSeo PR #261
+
+Right now, the MCP server restarts whenever there's a connectivity issue while polling collections from GraphOS. This causes the entire server to restart instead of handling the error gracefully.
+
+```
+Error: Failed to create operation: Error loading collection: error sending request for url (https://graphql.api.apollographql.com/api/graphql)
+Caused by:
+    Error loading collection: error sending request for url (https://graphql.api.apollographql.com/api/graphql)
+```
+
+This PR prevents server restarts by distinguishing between transient errors and permanent errors.
+
+## 🐛 Fixes
+
+### Keycloak OIDC discovery URL transformation - @DaleSeo PR #238
+
+The MCP server currently replaces the entire path when building OIDC discovery URLs. This causes authentication failures for identity providers like Keycloak, which have path-based realms in the URL. This PR updates the URL transformation logic to preserve the existing path from the OAuth server URL.
+
+### fix: build error, let expressions unstable in while - @ThoreKoritzius #263
+
+Fix unstable let expressions in while loop
+Replaced the unstable while let = expr syntax with a stable alternative, ensuring the code compiles on stable Rust without requiring nightly features.
+
+## 🛠 Maintenance
+
+### Address Security Vulnerabilities - @DaleSeo PR #264
+
+This PR addresses the security vulnerabilities and dependency issues tracked in Dependency Dashboard #41 (https://osv.dev/vulnerability/RUSTSEC-2024-0388).
+
+- Replaced the unmaintained `derivate` crate with the `educe` crate instead.
+- Updated the `tantivy` crate.
+
 # [0.7.1] - 2025-08-13
 
 ## 🚀 Features

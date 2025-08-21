@@ -360,9 +360,10 @@ impl SchemaIndex {
             // Start with the current type as a Path
             queue.push_back(PathNode::new(NamedType::new_unchecked(type_name)));
 
-            while let Some(current_path) = queue.pop_front()
-                && root_path_count < options.max_paths_per_type
-            {
+            while let Some(current_path) = queue.pop_front() {
+                if root_path_count >= options.max_paths_per_type {
+                    break;
+                }
                 let current_type = current_path.node_type.to_string();
                 visited.insert(current_type.clone());
 

@@ -40,7 +40,7 @@ graph LR
 
     %% Connections
     AI <-->|"Natural Language\nRequests"| MCPClient
-    MCPClient <-->|"MCP Protocol\n(stdio/SSE)"| MCPServer
+    MCPClient <-->|"MCP Protocol\n(stdio/Streamable HTTP)"| MCPServer
     MCPServer <-->|"GraphQL\nOperations"| GraphQL
     GraphQL <-->|"Data\nQueries"| Data
 
