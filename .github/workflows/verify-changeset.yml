@@ -1,6 +1,9 @@
 name: Verify Changeset
 on:
   pull_request:
+    branches-ignore:
+      - main
+      - release/**
     paths-ignore:
       - '.github/**'
       - '.cargo/**'
