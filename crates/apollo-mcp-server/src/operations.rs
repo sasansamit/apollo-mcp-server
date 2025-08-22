@@ -3316,4 +3316,226 @@ mod tests {
         }
         "#);
     }
+
+    #[test]
+    fn nullable_list_of_nullable_input_objects() {
+        let operation = Operation::from_document(
+            RawOperation {
+                source_text: "query QueryName($objects: [RealInputObject]) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+                source_path: None,
+            },
+            &SCHEMA,
+            None,
+            MutationMode::None,
+            false,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        let tool = Tool::from(operation);
+
+        insta::assert_debug_snapshot!(tool, @r##"
+        Tool {
+            name: "QueryName",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
+            input_schema: {
+                "type": String("object"),
+                "properties": Object {
+                    "objects": Object {
+                        "type": String("array"),
+                        "items": Object {
+                            "oneOf": Array [
+                                Object {
+                                    "$ref": String("#/definitions/RealInputObject"),
+                                },
+                                Object {
+                                    "type": String("null"),
+                                },
+                            ],
+                        },
+                    },
+                },
+                "definitions": Object {
+                    "RealInputObject": Object {
+                        "type": String("object"),
+                        "required": Array [
+                            String("required"),
+                        ],
+                        "properties": Object {
+                            "optional": Object {
+                                "description": String("optional is a input field that is optional"),
+                                "type": String("string"),
+                            },
+                            "required": Object {
+                                "description": String("required is a input field that is required"),
+                                "type": String("string"),
+                            },
+                        },
+                    },
+                },
+            },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
+        }
+        "##);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r##"
+        {
+          "type": "object",
+          "properties": {
+            "objects": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/RealInputObject"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "definitions": {
+            "RealInputObject": {
+              "type": "object",
+              "required": [
+                "required"
+              ],
+              "properties": {
+                "optional": {
+                  "description": "optional is a input field that is optional",
+                  "type": "string"
+                },
+                "required": {
+                  "description": "required is a input field that is required",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+        "##);
+    }
+
+    #[test]
+    fn non_nullable_list_of_non_nullable_input_objects() {
+        let operation = Operation::from_document(
+            RawOperation {
+                source_text: "query QueryName($objects: [RealInputObject!]!) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+                source_path: None,
+            },
+            &SCHEMA,
+            None,
+            MutationMode::None,
+            false,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        let tool = Tool::from(operation);
+
+        insta::assert_debug_snapshot!(tool, @r##"
+        Tool {
+            name: "QueryName",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
+            input_schema: {
+                "type": String("object"),
+                "required": Array [
+                    String("objects"),
+                ],
+                "properties": Object {
+                    "objects": Object {
+                        "type": String("array"),
+                        "items": Object {
+                            "$ref": String("#/definitions/RealInputObject"),
+                        },
+                    },
+                },
+                "definitions": Object {
+                    "RealInputObject": Object {
+                        "type": String("object"),
+                        "required": Array [
+                            String("required"),
+                        ],
+                        "properties": Object {
+                            "optional": Object {
+                                "description": String("optional is a input field that is optional"),
+                                "type": String("string"),
+                            },
+                            "required": Object {
+                                "description": String("required is a input field that is required"),
+                                "type": String("string"),
+                            },
+                        },
+                    },
+                },
+            },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
+        }
+        "##);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r##"
+        {
+          "type": "object",
+          "required": [
+            "objects"
+          ],
+          "properties": {
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/RealInputObject"
+              }
+            }
+          },
+          "definitions": {
+            "RealInputObject": {
+              "type": "object",
+              "required": [
+                "required"
+              ],
+              "properties": {
+                "optional": {
+                  "description": "optional is a input field that is optional",
+                  "type": "string"
+                },
+                "required": {
+                  "description": "required is a input field that is required",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+        "##);
+    }
 }
