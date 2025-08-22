@@ -94,33 +94,33 @@ mod tests {
     fn empty_file() {
         let result = CustomScalarMap::from_str("").err().unwrap();
 
-        insta::assert_debug_snapshot!(result, @r#"
-        CustomScalarConfig(
-            Error("EOF while parsing a value", line: 1, column: 0),
-        )
-        "#)
+        insta::assert_debug_snapshot!(result, @r###"
+            CustomScalarConfig(
+                Error("EOF while parsing a value", line: 1, column: 0),
+            )
+        "###)
     }
 
     #[test]
     fn only_spaces() {
         let result = CustomScalarMap::from_str("    ").err().unwrap();
 
-        insta::assert_debug_snapshot!(result, @r#"
-        CustomScalarConfig(
-            Error("EOF while parsing a value", line: 1, column: 4),
-        )
-        "#)
+        insta::assert_debug_snapshot!(result, @r###"
+            CustomScalarConfig(
+                Error("EOF while parsing a value", line: 1, column: 4),
+            )
+        "###)
     }
 
     #[test]
     fn invalid_json() {
         let result = CustomScalarMap::from_str("Hello: }").err().unwrap();
 
-        insta::assert_debug_snapshot!(result, @r#"
-        CustomScalarConfig(
-            Error("expected value", line: 1, column: 1),
-        )
-        "#)
+        insta::assert_debug_snapshot!(result, @r###"
+            CustomScalarConfig(
+                Error("expected value", line: 1, column: 1),
+            )
+        "###)
     }
 
     #[test]
@@ -135,13 +135,13 @@ mod tests {
         .err()
         .unwrap();
 
-        insta::assert_debug_snapshot!(result, @r#"
-        CustomScalarJsonSchema(
-            Object {
-                "test": Bool(true),
-            },
-        )
-        "#)
+        insta::assert_debug_snapshot!(result, @r###"
+            CustomScalarJsonSchema(
+                Object {
+                    "test": Bool(true),
+                },
+            )
+        "###)
     }
 
     #[test]
@@ -161,7 +161,7 @@ mod tests {
         .err()
         .unwrap();
 
-        insta::assert_debug_snapshot!(result, @r#"
+        insta::assert_debug_snapshot!(result, @r###"
         CustomScalarJsonSchema(
             Object {
                 "type": String("object"),
@@ -172,7 +172,7 @@ mod tests {
                 },
             },
         )
-        "#)
+        "###)
     }
 
     #[test]
