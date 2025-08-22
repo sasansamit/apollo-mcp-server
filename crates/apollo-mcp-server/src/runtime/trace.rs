@@ -58,7 +58,7 @@ fn init_tracer_provider() -> Result<SdkTracerProvider, anyhow::Error> {
         .build()?;
 
     let trace_provider = SdkTracerProvider::builder()
-        // If export trace to AWS X-Ray, you can use XrayIdGenerator
+        // TODO: Should this use session information to group spans to a request?
         .with_id_generator(RandomIdGenerator::default())
         .with_resource(resource())
         .with_batch_exporter(exporter)
@@ -106,6 +106,6 @@ impl Drop for TelemetryGuard {
         if let Err(err) = self.meter_provider.shutdown() {
             tracing::error!("{err:?}");
         }
-        self.logging_guard.take();
+        drop(self.logging_guard.take());
     }
 }
