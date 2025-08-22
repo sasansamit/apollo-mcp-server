@@ -22,7 +22,7 @@ fn resource() -> Resource {
                 KeyValue::new(SERVICE_VERSION, env!("CARGO_PKG_VERSION")),
                 KeyValue::new(
                     DEPLOYMENT_ENVIRONMENT_NAME,
-                    std::env::var("ENVIRONMENT").unwrap_or_else(|_| "develop".to_string()),
+                    std::env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()),
                 ),
             ],
             SCHEMA_URL,
