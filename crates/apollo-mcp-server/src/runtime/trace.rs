@@ -11,9 +11,9 @@ use opentelemetry_semantic_conventions::{
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::runtime::{Config, logging::Logging};
+use super::{Config, logging::Logging};
 
-// Create a Resource that captures information about the entity for which telemetry is recorded.
+/// Create a Resource that captures information about the entity for which telemetry is recorded.
 fn resource() -> Resource {
     Resource::builder()
         .with_service_name(env!("CARGO_PKG_NAME"))
@@ -30,7 +30,7 @@ fn resource() -> Resource {
         .build()
 }
 
-// Construct MeterProvider for MetricsLayer
+/// Construct MeterProvider for MetricsLayer
 fn init_meter_provider() -> Result<SdkMeterProvider, anyhow::Error> {
     let exporter = opentelemetry_otlp::MetricExporter::builder()
         .with_http()
@@ -51,7 +51,7 @@ fn init_meter_provider() -> Result<SdkMeterProvider, anyhow::Error> {
     Ok(meter_provider)
 }
 
-// Construct TracerProvider for OpenTelemetryLayer
+/// Construct TracerProvider for OpenTelemetryLayer
 fn init_tracer_provider() -> Result<SdkTracerProvider, anyhow::Error> {
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_http()
@@ -69,12 +69,12 @@ fn init_tracer_provider() -> Result<SdkTracerProvider, anyhow::Error> {
     Ok(trace_provider)
 }
 
-// Initialize tracing-subscriber and return OtelGuard for opentelemetry-related termination processing
+/// Initialize tracing-subscriber and return OtelGuard for opentelemetry-related termination processing
 pub fn init_tracing_subscriber(config: &Config) -> Result<TelemetryGuard, anyhow::Error> {
     let tracer_provider = init_tracer_provider()?;
     let meter_provider = init_meter_provider()?;
-    let env_filter = Logging::env_filter(config)?;
-    let (logging_layer, logging_guard) = Logging::logging_layer(config)?;
+    let env_filter = Logging::env_filter(&config.logging)?;
+    let (logging_layer, logging_guard) = Logging::logging_layer(&config.logging)?;
 
     let tracer = tracer_provider.tracer("tracing-otel-subscriber");
 
@@ -101,10 +101,10 @@ pub struct TelemetryGuard {
 impl Drop for TelemetryGuard {
     fn drop(&mut self) {
         if let Err(err) = self.tracer_provider.shutdown() {
-            eprintln!("{err:?}");
+            tracing::error!("{err:?}");
         }
         if let Err(err) = self.meter_provider.shutdown() {
-            eprintln!("{err:?}");
+            tracing::error!("{err:?}");
         }
         self.logging_guard.take();
     }
