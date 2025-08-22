@@ -1047,8 +1047,12 @@ fn type_to_schema(
             let items_schema = if list_type.is_non_null() {
                 inner_type_schema
             } else {
-                Schema::Object(SchemaObject {
-                    subschemas: Some(Box::new(SubschemaValidation {
+                schema_factory(
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(SubschemaValidation {
                         one_of: Some(vec![
                             inner_type_schema,
                             Schema::Object(SchemaObject {
@@ -1059,9 +1063,9 @@ fn type_to_schema(
                             }),
                         ]),
                         ..Default::default()
-                    })),
-                    ..Default::default()
-                })
+                    }),
+                    None,
+                )
             };
 
             schema_factory(
