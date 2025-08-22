@@ -50,6 +50,16 @@ impl Default for Logging {
     }
 }
 
+type LoggingLayerResult = (
+    Layer<
+        tracing_subscriber::Registry,
+        tracing_subscriber::fmt::format::DefaultFields,
+        tracing_subscriber::fmt::format::Format,
+        BoxMakeWriter,
+    >,
+    Option<tracing_appender::non_blocking::WorkerGuard>,
+);
+
 impl Logging {
     pub fn env_filter(config: &Config) -> Result<EnvFilter, anyhow::Error> {
         let mut env_filter =
@@ -63,20 +73,7 @@ impl Logging {
         Ok(env_filter)
     }
 
-    pub fn logging_layer(
-        config: &Config,
-    ) -> Result<
-        (
-            Layer<
-                tracing_subscriber::Registry,
-                tracing_subscriber::fmt::format::DefaultFields,
-                tracing_subscriber::fmt::format::Format,
-                BoxMakeWriter,
-            >,
-            Option<tracing_appender::non_blocking::WorkerGuard>,
-        ),
-        anyhow::Error,
-    > {
+    pub fn logging_layer(config: &Config) -> Result<LoggingLayerResult, anyhow::Error> {
         macro_rules! log_error {
             () => {
                 |e| eprintln!("Failed to setup logging: {e:?}")

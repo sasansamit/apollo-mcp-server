@@ -64,6 +64,8 @@ fn init_tracer_provider() -> Result<SdkTracerProvider, anyhow::Error> {
         .with_batch_exporter(exporter)
         .build();
 
+    global::set_tracer_provider(trace_provider.clone());
+
     Ok(trace_provider)
 }
 

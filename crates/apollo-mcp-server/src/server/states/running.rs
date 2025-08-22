@@ -276,6 +276,7 @@ impl ServerHandler for Running {
         result
     }
 
+    #[tracing::instrument(skip_all)]
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParam>,
