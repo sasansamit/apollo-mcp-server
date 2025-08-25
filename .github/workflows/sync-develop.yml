@@ -97,7 +97,7 @@ jobs:
             ${{ steps.meta.outputs.body }}
 
             Merge status: ${{ steps.prep.outputs.merge_status == '0' && 'clean ✅' || 'conflicts ❗' }}
-          labels: ${{ steps.prep.outputs.merge_status != '0' && 'back-merge,automation,conflicts' || 'back-merge,automation' }}
+          labels: ${{ steps.prep.outputs.merge_status == '0' && 'back-merge,automation' || 'back-merge,automation,conflicts' }}
 
       # Comment back on the ORIGINAL merged PR with a link to the sync PR
       - name: Comment on source PR with sync PR link
