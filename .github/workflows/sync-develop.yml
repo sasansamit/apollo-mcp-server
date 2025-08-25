@@ -4,6 +4,23 @@ on:
   pull_request:
     types: [closed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      head_branch:
+        description: "Branch to merge FROM (default: main)."
+        required: false
+        default: "main"
+      base_branch:
+        description: "Branch to merge INTO (default: develop)."
+        required: false
+        default: "develop"
+      source_pr_number:
+        description: "If testing, the PR number to comment on (optional)."
+        required: false
+      test_mode:
+        description: "Bypass PR/push guards for manual testing"
+        required: false
+        default: "true"
 
 permissions:
   contents: write
@@ -17,8 +34,20 @@ concurrency:
 jobs:
   open-sync-pr:
     if: |
-      github.actor != 'github-actions[bot]' && (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+      github.actor != 'github-actions[bot]' && (
+        (
+            github.event_name == 'pull_request' && github.event.pull_request.merged == true
+        ) || (
+            github.event_name == 'workflow_dispatch' && (inputs.test_mode == 'true')
+        )
+      )
     runs-on: ubuntu-latest
+
+    env:
+      # Use inputs for dispatch (testing), defaults for normal triggers
+      HEAD_BRANCH: ${{ (github.event_name == 'workflow_dispatch' && inputs.head_branch) || 'main' }}
+      BASE_BRANCH: ${{ (github.event_name == 'workflow_dispatch' && inputs.base_branch) || 'develop' }}
+      SOURCE_PR: ${{ (github.event_name == 'pull_request' && github.event.pull_request.number) || inputs.source_pr_number || '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -29,15 +58,15 @@ jobs:
       - name: Compute branch/name metadata
         id: meta
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "branch=sync/main-into-develop-pr-${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
-            echo "title=Sync main → develop (PR #${{ github.event.pull_request.number }})" >> $GITHUB_OUTPUT
-            echo "body=Auto-opened after merging \`${{ github.event.pull_request.head.ref }}\` into \`main\`." >> $GITHUB_OUTPUT
+          if [ -n "${SOURCE_PR}" ]; then
+            echo "branch=sync/${HEAD_BRANCH}-into-${BASE_BRANCH}-pr-${SOURCE_PR}" >> $GITHUB_OUTPUT
+            echo "title=Sync ${HEAD_BRANCH} → ${BASE_BRANCH} (PR #${SOURCE_PR})" >> $GITHUB_OUTPUT
+            echo "body=Auto-opened to merge \`${HEAD_BRANCH}\` into \`${BASE_BRANCH}\`. Source PR: #${SOURCE_PR}." >> $GITHUB_OUTPUT
           else
-            shortsha=${GITHUB_SHA::7}
-            echo "branch=sync/main-into-develop-${shortsha}" >> $GITHUB_OUTPUT
-            echo "title=Sync main → develop (${shortsha})" >> $GITHUB_OUTPUT
-            echo "body=Auto-opened after push to \`main\` at \`${GITHUB_SHA}\`." >> $GITHUB_OUTPUT
+            short_sha=${GITHUB_SHA::7}
+            echo "branch=sync/${HEAD_BRANCH}-into-${BASE_BRANCH}-${short_sha}" >> $GITHUB_OUTPUT
+            echo "title=Sync ${HEAD_BRANCH} → ${BASE_BRANCH} (${short_sha})" >> $GITHUB_OUTPUT
+            echo "body=Auto-opened to merge \`${HEAD_BRANCH}\` into \`${BASE_BRANCH}\` at \`${GITHUB_SHA}\`." >> $GITHUB_OUTPUT
           fi
 
       # Short-lived sync branch from develop and merge main into it (do NOT rebase)
@@ -45,14 +74,14 @@ jobs:
       - name: Prepare sync branch
         id: prep
         run: |
-          git fetch origin develop main
-          git switch -c "${{ steps.meta.outputs.branch }}" origin/develop
+          git fetch origin "${BASE_BRANCH}" "${HEAD_BRANCH}"
+          git switch -c "${{ steps.meta.outputs.branch }}" "origin/${BASE_BRANCH}"
           set +e
-          git merge --no-ff origin/main
+          git merge --no-ff "origin/${HEAD_BRANCH}"
           rc=$?
           set -e
           git add -A || true
-          git commit -m "WIP: merge main into develop via ${{ steps.meta.outputs.branch }}" || true
+          git commit -m "WIP: merge ${HEAD_BRANCH} into ${BASE_BRANCH} via ${{ steps.meta.outputs.branch }}" || true
           git push origin HEAD
           echo "merge_status=$rc" >> "$GITHUB_OUTPUT"
 
@@ -62,7 +91,7 @@ jobs:
         uses: peter-evans/create-pull-request@v6
         with:
           branch: ${{ steps.meta.outputs.branch }}
-          base: develop
+          base: ${{ env.BASE_BRANCH }}
           title: ${{ steps.meta.outputs.title }}
           body:  |
             ${{ steps.meta.outputs.body }}
@@ -76,12 +105,12 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const sourcePrNumber = context.payload.pull_request.number;
+            const issue_number = Number(process.env.SOURCE_PR);
             const syncUrl = `${{ toJson(steps.syncpr.outputs['pull-request-url']) }}`.replace(/^"|"$/g, '');
-            const body = `Opened sync PR to merge **main → develop**: ${syncUrl}`;
+            const body = `Opened sync PR **${process.env.HEAD_BRANCH} → ${process.env.BASE_BRANCH}**: ${syncUrl}`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: sourcePrNumber,
+              issue_number,
               body,
             });
