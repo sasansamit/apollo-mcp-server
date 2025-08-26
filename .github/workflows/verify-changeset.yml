@@ -4,6 +4,8 @@ on:
     branches-ignore:
       - main
       - release/**
+      - conflict/*
+      - sync/*
     paths-ignore:
       - '.github/**'
       - '.cargo/**'
