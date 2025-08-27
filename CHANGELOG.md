@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.7.4] - 2025-08-27
+
+## 🐛 Fixes
+
+### fix: Add missing token propagation for execute tool - @DaleSeo PR #298
+
+The execute tool is not forwarding JWT authentication tokens to upstream GraphQL endpoints, causing authentication failures when using this tool with protected APIs. This PR adds missing token propagation for execute tool.
+
 # [0.7.3] - 2025-08-25
 
 ## 🐛 Fixes
