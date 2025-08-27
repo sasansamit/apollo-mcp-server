@@ -1,6 +1,11 @@
 name: Verify Changeset
 on:
   pull_request:
+    branches-ignore:
+      - main
+      - release/**
+      - conflict/*
+      - sync/*
     paths-ignore:
       - '.github/**'
       - '.cargo/**'
@@ -14,7 +19,7 @@ on:
 
 jobs:
   verify-changeset:
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changeset') }}
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changeset') && !startsWith(github.head_ref, 'sync/') && !startsWith(github.head_ref, 'conflict/') }}
     name: Verify
     runs-on: ubuntu-24.04
     permissions:
