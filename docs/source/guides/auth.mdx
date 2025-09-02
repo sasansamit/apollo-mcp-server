@@ -14,6 +14,6 @@ To implement authorization, you need an [OAuth 2.1-compliant](https://oauth.net/
 - **Audience**: Identifies the intended recipient of the token, typically a resource server or API. Represented by the `aud` claim in the JWT.
 - **Scopes**: The scopes that the client will request. These scopes define the permissions granted to the client when it accesses the API.
 
-Then, you [configure the MCP server with `auth` settings](/apollo-mcp-server/command-reference#auth) and the [GraphOS Router for JWT authentication](/graphos/routing/security/jwt) using those IdP values.
+Then, you [configure the MCP server with `auth` settings](/apollo-mcp-server/config-file#auth) and the [GraphOS Router for JWT authentication](/graphos/routing/security/jwt) using those IdP values.
 
 For an example of how to configure Apollo MCP Server with Auth0, see [Authorization with Auth0](/apollo-mcp-server/guides/auth-auth0).
