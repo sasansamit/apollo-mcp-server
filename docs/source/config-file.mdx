@@ -28,19 +28,19 @@ operations:
 
 All fields are optional.
 
-| Option           | Type                  | Default                  | Description                                                   |
-| :--------------- | :-------------------- | :----------------------- | :------------------------------------------------------------ |
-| `custom_scalars` | `FilePath`            |                          | Path to a custom scalar map                                   |
-| `endpoint`       | `URL`                 | `http://localhost:4000/` | The target GraphQL endpoint                                   |
-| `graphos`        | `GraphOS`             |                          | Apollo-specific credential overrides                          |
-| `headers`        | `Map<string, string>` | `{}`                     | List of hard-coded headers to include in all GraphQL requests |
-| `health_check`   | `HealthCheck`         |                          | Health check configuration                                    |
-| `introspection`  | `Introspection`       |                          | Introspection configuration                                   |
-| `logging`        | `Logging`             |                          | Logging configuration                                         |
-| `operations`     | `OperationSource`     |                          | Operations configuration                                      |
-| `overrides`      | `Overrides`           |                          | Overrides for server behavior                                 |
-| `schema`         | `SchemaSource`        |                          | Schema configuration                                          |
-| `transport`      | `Transport`           |                          | The type of server transport to use                           |
+| Option           | Type                  | Default                  | Description                                                      |
+| :--------------- | :-------------------- | :----------------------- | :--------------------------------------------------------------- |
+| `custom_scalars` | `FilePath`            |                          | Path to a [custom scalar map](/apollo-mcp-server/custom-scalars) |
+| `endpoint`       | `URL`                 | `http://localhost:4000/` | The target GraphQL endpoint                                      |
+| `graphos`        | `GraphOS`             |                          | Apollo-specific credential overrides                             |
+| `headers`        | `Map<string, string>` | `{}`                     | List of hard-coded headers to include in all GraphQL requests    |
+| `health_check`   | `HealthCheck`         |                          | Health check configuration                                       |
+| `introspection`  | `Introspection`       |                          | Introspection configuration                                      |
+| `logging`        | `Logging`             |                          | Logging configuration                                            |
+| `operations`     | `OperationSource`     |                          | Operations configuration                                         |
+| `overrides`      | `Overrides`           |                          | Overrides for server behavior                                    |
+| `schema`         | `SchemaSource`        |                          | Schema configuration                                             |
+| `transport`      | `Transport`           |                          | The type of server transport to use                              |
 
 ### GraphOS
 
