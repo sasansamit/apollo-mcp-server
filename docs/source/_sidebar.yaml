@@ -29,7 +29,7 @@ items:
       - label: "Health Checks"
         href: "./health-checks"
   - label: "Authorization"
-    href: "./guides/auth"
+    href: "./auth"
   - label: "Best Practices"
     href: "./best-practices"
   - label: "Licensing"
