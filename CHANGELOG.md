@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.7.5] - 2025-09-03
+
+## 🐛 Fixes
+
+### fix: Validate ExecutableDocument in validate tool - @swcollard PR #329
+
+Contains fixes for https://github.com/apollographql/apollo-mcp-server/issues/327
+
+The validate tool was parsing the operation passed in to it against the schema but it wasn't performing the validate function on the ExecutableDocument returned by the Parser. This led to cases where missing required arguments were not caught by the Tool.
+
+This change also updates the input schema to the execute tool to make it more clear to the LLM that it needs to provide a valid JSON object
+
+## 🛠 Maintenance
+
+### test: adding a basic manual e2e test for mcp server - @alocay PR #320
+
+Adding some basic e2e tests using [mcp-server-tester](https://github.com/steviec/mcp-server-tester). Currently, the tool does not always exit (ctrl+c is sometimes needed) so this should be run manually.
+
+### How to run tests?
+Added a script `run_tests.sh` (may need to run `chmod +x` to run it) to run tests. Basic usage found via `./run_tests.sh -h`. The script does the following:
+
+1. Builds test/config yaml paths and verifies the files exist.
+2. Checks if release `apollo-mcp-server` binary exists. If not, it builds the binary via `cargo build --release`.
+3. Reads in the template file (used by `mcp-server-tester`) and replaces all `<test-dir>` placeholders with the test directory value. Generates this test server config file and places it in a temp location.
+4. Invokes the `mcp-server-tester` via `npx`.
+5. On script exit the generated config is cleaned up.
+
+### Example run:
+To run the tests for `local-operations` simply run `./run_tests.sh local-operations`
+
+### Update snapshot format - @DaleSeo PR #313
+
+Updates all inline snapshots in the codebase to ensure they are consistent with the latest insta format.
+
+### Hardcoded version strings in tests - @DaleSeo PR #305
+
+The GraphQL tests have hardcoded version strings that we need to update manually each time we release a new version. Since this isn't included in the release checklist, it's easy to miss it and only notice the test failures later.
+
 # [0.7.4] - 2025-08-27
 
 ## 🐛 Fixes
