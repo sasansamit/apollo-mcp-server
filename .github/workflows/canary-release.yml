@@ -5,6 +5,15 @@ on:
     # https://github.com/orgs/community/discussions/25615
     tags-ignore:
       - "**"
+    paths-ignore:
+      - '.github/**'
+      - '.cargo/**'
+      - '.direnv/**'
+      - '.vscode/**'
+      - 'docs/**'
+      - 'Cargo.*'
+      - 'crates/**/Cargo.*'
+      - '*.md'
     branches:
       - develop
   workflow_dispatch:
@@ -30,8 +39,13 @@ jobs:
           DATE=$(date -u +%Y%m%dT%H%M%SZ)
           echo "version=canary-${DATE}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
-  release_container:
+  release_canary_container:
     needs: compute_canary_version
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     uses: ./.github/workflows/release-container.yml
     with:
       version: ${{ needs.compute_canary_version.outputs.version }}
