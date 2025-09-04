@@ -5,31 +5,15 @@ redirectFrom:
   - /apollo-mcp-server/command-reference
 ---
 
-### Example config file
+You can configure Apollo MCP Server using a configuration file. You can also [override configuration options using environment variables](#override-configuration-options-using-environment-variables).
 
-The following example file sets your endpoint to `localhost:4001`, configures transport over Streamable HTTP, provides a GraphOS key and graph reference,
-enables introspection, and provides two local MCP operations for the server to expose.
-
-```yaml config.yaml
-endpoint: http://localhost:4001/
-transport:
-  type: streamable_http
-graphos:
-  apollo_key: <YOUR_APOLLO_KEY>
-  apollo_graph_ref: <YOUR_APOLLO_GRAPH_REF>
-introspection:
-  introspect:
-    enabled: true
-operations:
-  source: local
-  paths:
-    - relative/path/to/your/operations/userDetails.graphql
-    - relative/path/to/your/operations/listing.graphql
-```
+See the [example config file](#example-config-file) for an example.
 
 ## Configuration options
 
 All fields are optional.
+
+### Top-level options
 
 | Option           | Type                  | Default                  | Description                                                      |
 | :--------------- | :-------------------- | :----------------------- | :--------------------------------------------------------------- |
@@ -58,7 +42,7 @@ These fields are under the top-level `graphos` key and define your GraphOS graph
 
 ### Health checks
 
-These fields are under the top-level `health_check` key.
+These fields are under the top-level `health_check` key. Learn more about [health checks](/apollo-mcp-server/health-checks).
 
 | Option                        | Type       | Default     | Description                                                                        |
 | :---------------------------- | :--------- | :---------- | :--------------------------------------------------------------------------------- |
@@ -108,7 +92,7 @@ These fields are under the top-level `logging` key.
 ### Operation source
 
 These fields are under the top-level `operations` key. The available fields depend on the value of the nested `source` key.
-The default value for `source` is `"infer"`.
+The default value for `source` is `"infer"`. Learn more about [defining tools as operations](/apollo-mcp-server/define-tools).
 
 | Source             | Option   | Type             | Default | Description                                                                                                                                             |
 | :----------------- | :------- | :--------------- | :------ | :------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -179,7 +163,7 @@ The available fields depend on the value of the nested `type` key:
 
 ### Auth
 
-These fields are under the top-level `transport` key, nested under the `auth` key.
+These fields are under the top-level `transport` key, nested under the `auth` key. Learn more about [authorization and authentication](/apollo-mcp-server/auth).
 
 | Option                   | Type           | Default | Description                                                                                        |
 | :----------------------- | :------------- | :------ | :------------------------------------------------------------------------------------------------- |
@@ -219,4 +203,40 @@ transport:
       - read
       - mcp
       - profile
+```
+
+## Example config file
+
+The following example file sets your endpoint to `localhost:4001`, configures transport over Streamable HTTP, enables introspection, and provides two local MCP operations for the server to expose.
+
+```yaml config.yaml
+endpoint: http://localhost:4001/
+transport:
+  type: streamable_http
+introspection:
+  introspect:
+    enabled: true
+operations:
+  source: local
+  paths:
+    - relative/path/to/your/operations/userDetails.graphql
+    - relative/path/to/your/operations/listing.graphql
+```
+
+## Override configuration options using environment variables
+
+You can override configuration options using environment variables. The environment variable name is the same as the option name, but with `APOLLO_MCP_` prefixed. You can use `__` to mark nested options.
+
+For example, to override the `introspection.execute.enabled` option, you can set the `APOLLO_MCP_INTROSPECTION__EXECUTE__ENABLED` environment variable.
+
+```sh
+APOLLO_MCP_INTROSPECTION__EXECUTE__ENABLED="true"
+```
+
+For list values, you can set the environment variable to a comma-separated list.
+
+For example, to override the `transport.auth.servers` option, you can set the `APOLLO_MCP_TRANSPORT__AUTH__SERVERS` environment variable to a comma-separated list.
+
+```sh
+APOLLO_MCP_TRANSPORT__AUTH__SERVERS='[server_url_1,server_url_2]'
 ```
