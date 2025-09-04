@@ -220,3 +220,21 @@ transport:
       - mcp
       - profile
 ```
+
+## Overriding configuration options using environment variables
+
+You can override configuration options using environment variables. The environment variable name is the same as the option name, but with `APOLLO_MCP_` prefixed. You can use `__` to mark nested options.
+
+For example, to override the `introspection.execute.enabled` option, you can set the `APOLLO_MCP_INTROSPECTION__EXECUTE__ENABLED` environment variable.
+
+```sh
+APOLLO_MCP_INTROSPECTION__EXECUTE__ENABLED=true
+```
+
+For list values, you can set the environment variable to a comma-separated list.
+
+For example, to override the `transport.auth.servers` option, you can set the ` APOLLO_MCP_TRANSPORT__AUTH__SERVERS` environment variable to a comma-separated list.
+
+```sh
+APOLLO_MCP_TRANSPORT__AUTH__SERVERS='[server_url_1,server_url_2]'
+```
