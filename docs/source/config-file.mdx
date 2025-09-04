@@ -207,16 +207,12 @@ transport:
 
 ## Example config file
 
-The following example file sets your endpoint to `localhost:4001`, configures transport over Streamable HTTP, provides a GraphOS key and graph reference,
-enables introspection, and provides two local MCP operations for the server to expose.
+The following example file sets your endpoint to `localhost:4001`, configures transport over Streamable HTTP, enables introspection, and provides two local MCP operations for the server to expose.
 
 ```yaml config.yaml
 endpoint: http://localhost:4001/
 transport:
   type: streamable_http
-graphos:
-  apollo_key: <YOUR_APOLLO_KEY>
-  apollo_graph_ref: <YOUR_APOLLO_GRAPH_REF>
 introspection:
   introspect:
     enabled: true
