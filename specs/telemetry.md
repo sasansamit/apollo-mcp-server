@@ -76,3 +76,6 @@
   - Use established tokenizers (tiktoken for OpenAI models, similar for others)
   - Store results separately from real-time metrics
   - Actual token counts will vary by model and tokenizer
+
+### Configuration Metrics
+- Probably useful only for Apollo
