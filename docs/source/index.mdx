@@ -1,13 +1,15 @@
 ---
 title: Apollo MCP Server
 subtitle: Enable graph-based API orchestration with AI
+redirectFrom:
+    - /apollo-mcp-server/user-guide
 ---
 
-<ExperimentalFeature>
+<PreviewFeature>
 
-This feature is [experimental](/graphos/resources/feature-launch-stages#experimental). Your questions and feedback are highly valued—don't hesitate to get in touch with your Apollo contact or post in the [Apollo Community MCP Server Category](https://community.apollographql.com/c/mcp-server/41).
+This feature is in [preview](/graphos/resources/feature-launch-stages#preview). Your questions and feedback are highly valued—don't hesitate to get in touch with your Apollo contact or post in the [Apollo Community MCP Server Category](https://community.apollographql.com/c/mcp-server/41).
 
-</ExperimentalFeature>
+</PreviewFeature>
 
 Apollo MCP Server provides a standard way for AI models to access and orchestrate your APIs running with Apollo.
 
@@ -40,7 +42,7 @@ graph LR
 
     %% Connections
     AI <-->|"Natural Language\nRequests"| MCPClient
-    MCPClient <-->|"MCP Protocol\n(stdio/SSE)"| MCPServer
+    MCPClient <-->|"MCP Protocol\n(stdio/Streamable HTTP)"| MCPServer
     MCPServer <-->|"GraphQL\nOperations"| GraphQL
     GraphQL <-->|"Data\nQueries"| Data
 
@@ -130,4 +132,4 @@ With Apollo MCP Server, these GraphQL advantages become immediately accessible t
 
 ## Getting started
 
-Ready to connect AI to your GraphQL API? Follow our [5-minute quickstart](/apollo-mcp-server/quickstart) to see Apollo MCP Server in action, or explore the [user guide](/apollo-mcp-server/guides) for detailed configuration options.
+Ready to connect AI to your GraphQL API? Follow our [5-minute quickstart](/apollo-mcp-server/quickstart) to see Apollo MCP Server in action, or explore the [config file reference](/apollo-mcp-server/config-file) for detailed configuration options.

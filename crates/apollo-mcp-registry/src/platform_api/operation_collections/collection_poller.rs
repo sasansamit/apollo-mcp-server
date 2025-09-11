@@ -137,6 +137,21 @@ async fn handle_poll_result(
     Ok(Some(previous_updated_at.clone().into_values().collect()))
 }
 
+fn is_collection_error_transient(error: &CollectionError) -> bool {
+    match error {
+        CollectionError::Request(req_err) => {
+            // Check if the underlying reqwest error is transient
+            req_err.is_connect()
+                || req_err.is_timeout()
+                || req_err.is_request()
+                || req_err.status().is_some_and(|status| {
+                    status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+                })
+        }
+        _ => false,
+    }
+}
+
 #[derive(Clone)]
 pub struct OperationData {
     id: String,
@@ -326,12 +341,24 @@ impl CollectionSource {
                     }
                 },
                 Err(err) => {
-                    if let Err(e) = sender.send(CollectionEvent::CollectionError(err)).await {
-                        tracing::debug!(
-                            "failed to send error to collection stream. This is likely to be because the server is shutting down: {e}"
+                    if is_collection_error_transient(&err) {
+                        // Log transient errors but don't send CollectionError to prevent server restart
+                        tracing::warn!(
+                            "Failed to fetch initial operation collection (transient error), will retry on next poll in {}s: {}",
+                            platform_api_config.poll_interval.as_secs(),
+                            err
                         );
+                    } else {
+                        tracing::error!(
+                            "Failed to fetch initial operation collection with permanent error: {err}"
+                        );
+                        if let Err(e) = sender.send(CollectionEvent::CollectionError(err)).await {
+                            tracing::debug!(
+                                "failed to send error to collection stream. This is likely to be because the server is shutting down: {e}"
+                            );
+                        }
+                        return;
                     }
-                    return;
                 }
             };
 
@@ -454,12 +481,24 @@ impl CollectionSource {
                     }
                 },
                 Err(err) => {
-                    if let Err(e) = sender.send(CollectionEvent::CollectionError(err)).await {
-                        tracing::debug!(
-                            "failed to send error to collection stream. This is likely to be because the server is shutting down: {e}"
+                    if is_collection_error_transient(&err) {
+                        // Log transient errors but don't send CollectionError to prevent server restart
+                        tracing::warn!(
+                            "Failed to fetch initial operation collection (transient error), will retry on next poll in {}s: {}",
+                            platform_api_config.poll_interval.as_secs(),
+                            err
                         );
+                    } else {
+                        tracing::error!(
+                            "Failed to fetch initial operation collection with permanent error: {err}"
+                        );
+                        if let Err(e) = sender.send(CollectionEvent::CollectionError(err)).await {
+                            tracing::debug!(
+                                "failed to send error to collection stream. This is likely to be because the server is shutting down: {e}"
+                            );
+                        }
+                        return;
                     }
-                    return;
                 }
             };
 

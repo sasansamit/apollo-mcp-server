@@ -11,9 +11,9 @@ use std::time::Duration;
 use crate::uplink::UplinkConfig;
 use crate::uplink::schema::schema_stream::SupergraphSdlQuery;
 use crate::uplink::stream_from_uplink;
-use derivative::Derivative;
 use derive_more::Display;
 use derive_more::From;
+use educe::Educe;
 use event::Event;
 use event::Event::{NoMoreSchema, UpdateSchema};
 use futures::prelude::*;
@@ -40,8 +40,8 @@ impl FromStr for SchemaState {
 type SchemaStream = Pin<Box<dyn Stream<Item = String> + Send>>;
 
 /// The user supplied schema. Either a static string or a stream for hot reloading.
-#[derive(From, Display, Derivative)]
-#[derivative(Debug)]
+#[derive(From, Display, Educe)]
+#[educe(Debug)]
 #[non_exhaustive]
 pub enum SchemaSource {
     /// A static schema.
@@ -50,7 +50,7 @@ pub enum SchemaSource {
 
     /// A stream of schema.
     #[display("Stream")]
-    Stream(#[derivative(Debug = "ignore")] SchemaStream),
+    Stream(#[educe(Debug(ignore))] SchemaStream),
 
     /// A YAML file that may be watched for changes.
     #[display("File")]
@@ -179,12 +179,6 @@ impl SchemaSource {
             .chain(stream::iter(vec![NoMoreSchema]))
             .boxed()
     }
-}
-
-#[derive(thiserror::Error, Debug)]
-enum FetcherError {
-    #[error("failed to build http client")]
-    InitializationError(#[from] reqwest::Error),
 }
 
 // Encapsulates fetching the schema from the first viable url.

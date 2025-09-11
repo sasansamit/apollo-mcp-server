@@ -52,6 +52,7 @@ pub(super) struct Running {
     pub(super) mutation_mode: MutationMode,
     pub(super) disable_type_description: bool,
     pub(super) disable_schema_description: bool,
+    pub(super) disable_auth_token_passthrough: bool,
     pub(super) health_check: Option<HealthCheck>,
 }
 
@@ -210,6 +211,13 @@ impl ServerHandler for Running {
             EXECUTE_TOOL_NAME => {
                 let mut headers = self.headers.clone();
                 if let Some(axum_parts) = context.extensions.get::<axum::http::request::Parts>() {
+                    // Optionally extract the validated token and propagate it to upstream servers if present
+                    if !self.disable_auth_token_passthrough
+                        && let Some(token) = axum_parts.extensions.get::<ValidToken>()
+                    {
+                        headers.typed_insert(token.deref().clone());
+                    }
+
                     // Forward the mcp-session-id header if present
                     if let Some(session_id) = axum_parts.headers.get("mcp-session-id") {
                         headers.insert("mcp-session-id", session_id.clone());
@@ -237,7 +245,9 @@ impl ServerHandler for Running {
                 let mut headers = self.headers.clone();
                 if let Some(axum_parts) = context.extensions.get::<axum::http::request::Parts>() {
                     // Optionally extract the validated token and propagate it to upstream servers if present
-                    if let Some(token) = axum_parts.extensions.get::<ValidToken>() {
+                    if !self.disable_auth_token_passthrough
+                        && let Some(token) = axum_parts.extensions.get::<ValidToken>()
+                    {
                         headers.typed_insert(token.deref().clone());
                     }
 
@@ -350,6 +360,7 @@ mod tests {
             mutation_mode: MutationMode::None,
             disable_type_description: false,
             disable_schema_description: false,
+            disable_auth_token_passthrough: false,
             health_check: None,
         };
 

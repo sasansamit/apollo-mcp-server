@@ -490,12 +490,11 @@ pub fn variable_description_overrides(
                 let comment = last_offset
                     .map(|start_offset| &source_text[start_offset..source_span.offset()]);
 
-                if let Some(description) = comment.filter(|d| !d.is_empty() && d.contains('#')) {
-                    if let Some(description) =
+                if let Some(description) = comment.filter(|d| !d.is_empty() && d.contains('#'))
+                    && let Some(description) =
                         extract_and_format_comments(Some(description.to_string()))
-                    {
-                        argument_overrides_map.insert(v.name.to_string(), description);
-                    }
+                {
+                    argument_overrides_map.insert(v.name.to_string(), description);
                 }
 
                 last_offset = Some(source_span.end_offset());
@@ -731,16 +730,15 @@ impl Operation {
 }
 
 fn ensure_properties_exists(json_object: &mut Value) {
-    if let Some(obj_type) = json_object.get("type") {
-        if obj_type == "object" {
-            if let Some(obj_map) = json_object.as_object_mut() {
-                let props = obj_map
-                    .entry("properties")
-                    .or_insert_with(|| Value::Object(serde_json::Map::new()));
-                if !props.is_object() {
-                    *props = Value::Object(serde_json::Map::new());
-                }
-            }
+    if let Some(obj_type) = json_object.get("type")
+        && obj_type == "object"
+        && let Some(obj_map) = json_object.as_object_mut()
+    {
+        let props = obj_map
+            .entry("properties")
+            .or_insert_with(|| Value::Object(serde_json::Map::new()));
+        if !props.is_object() {
+            *props = Value::Object(serde_json::Map::new());
         }
     }
 }
@@ -1044,24 +1042,39 @@ fn type_to_schema(
                 custom_scalar_map,
                 definitions,
             );
+            let items_schema = if list_type.is_non_null() {
+                inner_type_schema
+            } else {
+                schema_factory(
+                    None,
+                    None,
+                    None,
+                    None,
+                    Some(SubschemaValidation {
+                        one_of: Some(vec![
+                            inner_type_schema,
+                            Schema::Object(SchemaObject {
+                                instance_type: Some(SingleOrVec::Single(Box::new(
+                                    InstanceType::Null,
+                                ))),
+                                ..Default::default()
+                            }),
+                        ]),
+                        ..Default::default()
+                    }),
+                    None,
+                )
+            };
+
             schema_factory(
                 None,
                 Some(InstanceType::Array),
                 None,
-                list_type.is_non_null().then(|| ArrayValidation {
-                    items: Some(SingleOrVec::Single(Box::new(inner_type_schema.clone()))),
+                Some(ArrayValidation {
+                    items: Some(SingleOrVec::Single(Box::new(items_schema))),
                     ..Default::default()
                 }),
-                (!list_type.is_non_null()).then(|| SubschemaValidation {
-                    one_of: Some(vec![
-                        inner_type_schema,
-                        Schema::Object(SchemaObject {
-                            instance_type: Some(SingleOrVec::Single(Box::new(InstanceType::Null))),
-                            ..Default::default()
-                        }),
-                    ]),
-                    ..Default::default()
-                }),
+                None,
                 None,
             )
         }
@@ -1272,7 +1285,7 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        insta::assert_debug_snapshot!(operation, @r###"
+        insta::assert_debug_snapshot!(operation, @r#"
         Operation {
             tool: Tool {
                 name: "MutationName",
@@ -1304,7 +1317,7 @@ mod tests {
             },
             operation_name: "MutationName",
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -1326,7 +1339,7 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        insta::assert_debug_snapshot!(operation, @r###"
+        insta::assert_debug_snapshot!(operation, @r#"
         Operation {
             tool: Tool {
                 name: "MutationName",
@@ -1358,7 +1371,7 @@ mod tests {
             },
             operation_name: "MutationName",
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -1381,7 +1394,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1403,7 +1416,7 @@ mod tests {
                 },
             ),
         }
-        "###);
+        "#);
         insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
@@ -1432,7 +1445,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1458,8 +1471,8 @@ mod tests {
                 },
             ),
         }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        "#);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
@@ -1468,7 +1481,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -1491,7 +1504,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1520,8 +1533,8 @@ mod tests {
                 },
             ),
         }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        "#);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "required": [
@@ -1533,7 +1546,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -1556,7 +1569,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1570,14 +1583,16 @@ mod tests {
                 "properties": Object {
                     "id": Object {
                         "type": String("array"),
-                        "oneOf": Array [
-                            Object {
-                                "type": String("string"),
-                            },
-                            Object {
-                                "type": String("null"),
-                            },
-                        ],
+                        "items": Object {
+                            "oneOf": Array [
+                                Object {
+                                    "type": String("string"),
+                                },
+                                Object {
+                                    "type": String("null"),
+                                },
+                            ],
+                        },
                     },
                 },
             },
@@ -1593,8 +1608,8 @@ mod tests {
                 },
             ),
         }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        "#);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "required": [
@@ -1603,18 +1618,20 @@ mod tests {
           "properties": {
             "id": {
               "type": "array",
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -1637,7 +1654,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1669,8 +1686,8 @@ mod tests {
                 },
             ),
         }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        "#);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "required": [
@@ -1685,7 +1702,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -1708,7 +1725,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1719,14 +1736,16 @@ mod tests {
                 "properties": Object {
                     "id": Object {
                         "type": String("array"),
-                        "oneOf": Array [
-                            Object {
-                                "type": String("string"),
-                            },
-                            Object {
-                                "type": String("null"),
-                            },
-                        ],
+                        "items": Object {
+                            "oneOf": Array [
+                                Object {
+                                    "type": String("string"),
+                                },
+                                Object {
+                                    "type": String("null"),
+                                },
+                            ],
+                        },
                     },
                 },
             },
@@ -1742,25 +1761,27 @@ mod tests {
                 },
             ),
         }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        "#);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
             "id": {
               "type": "array",
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -1783,7 +1804,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1812,8 +1833,8 @@ mod tests {
                 },
             ),
         }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        "#);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
@@ -1825,7 +1846,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -1848,7 +1869,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1859,22 +1880,26 @@ mod tests {
                 "properties": Object {
                     "id": Object {
                         "type": String("array"),
-                        "oneOf": Array [
-                            Object {
-                                "type": String("array"),
-                                "oneOf": Array [
-                                    Object {
-                                        "type": String("string"),
+                        "items": Object {
+                            "oneOf": Array [
+                                Object {
+                                    "type": String("array"),
+                                    "items": Object {
+                                        "oneOf": Array [
+                                            Object {
+                                                "type": String("string"),
+                                            },
+                                            Object {
+                                                "type": String("null"),
+                                            },
+                                        ],
                                     },
-                                    Object {
-                                        "type": String("null"),
-                                    },
-                                ],
-                            },
-                            Object {
-                                "type": String("null"),
-                            },
-                        ],
+                                },
+                                Object {
+                                    "type": String("null"),
+                                },
+                            ],
+                        },
                     },
                 },
             },
@@ -1890,33 +1915,37 @@ mod tests {
                 },
             ),
         }
-        "###);
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        "#);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
             "id": {
               "type": "array",
-              "oneOf": [
-                {
-                  "type": "array",
-                  "oneOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "null"
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
-                  ]
-                },
-                {
-                  "type": "null"
-                }
-              ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -1939,7 +1968,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r##"
         Tool {
             name: "QueryName",
             description: Some(
@@ -1983,7 +2012,7 @@ mod tests {
                 },
             ),
         }
-        "###);
+        "##);
     }
 
     #[test]
@@ -2006,7 +2035,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r##"
         Tool {
             name: "QueryName",
             description: Some(
@@ -2045,7 +2074,7 @@ mod tests {
                 },
             ),
         }
-        "###);
+        "##);
     }
 
     #[test]
@@ -2064,7 +2093,7 @@ mod tests {
             false,
             false,
         );
-        insta::assert_debug_snapshot!(operation, @r###"
+        insta::assert_debug_snapshot!(operation, @r#"
         Err(
             TooManyOperations {
                 source_path: Some(
@@ -2073,7 +2102,7 @@ mod tests {
                 count: 2,
             },
         )
-        "###);
+        "#);
     }
 
     #[test]
@@ -2123,7 +2152,7 @@ mod tests {
             false,
             false,
         );
-        insta::assert_debug_snapshot!(operation, @r###"
+        insta::assert_debug_snapshot!(operation, @r#"
         Err(
             NoOperations {
                 source_path: Some(
@@ -2131,7 +2160,7 @@ mod tests {
                 ),
             },
         )
-        "###);
+        "#);
     }
 
     #[test]
@@ -2150,13 +2179,13 @@ mod tests {
             false,
             false,
         );
-        insta::assert_debug_snapshot!(operation, @r###"
+        insta::assert_debug_snapshot!(operation, @r"
         Err(
             NoOperations {
                 source_path: None,
             },
         )
-        "###);
+        ");
     }
 
     #[test]
@@ -2190,7 +2219,7 @@ mod tests {
                 .ok_or("Expected warning about unknown type in logs".to_string())
         });
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -2214,7 +2243,7 @@ mod tests {
                 },
             ),
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -2248,7 +2277,7 @@ mod tests {
                 .ok_or("Expected warning about custom scalar without map in logs".to_string())
         });
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r##"
         Tool {
             name: "QueryName",
             description: Some(
@@ -2279,7 +2308,7 @@ mod tests {
                 },
             ),
         }
-        "###);
+        "##);
     }
 
     #[test]
@@ -2317,7 +2346,7 @@ mod tests {
                 .ok_or("Expected warning about custom scalar missing in logs".to_string())
         });
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r##"
         Tool {
             name: "QueryName",
             description: Some(
@@ -2348,7 +2377,7 @@ mod tests {
                 },
             ),
         }
-        "###);
+        "##);
     }
 
     #[test]
@@ -2374,7 +2403,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r##"
         Tool {
             name: "QueryName",
             description: Some(
@@ -2406,7 +2435,7 @@ mod tests {
                 },
             ),
         }
-        "###);
+        "##);
     }
 
     #[test]
@@ -2557,7 +2586,7 @@ mod tests {
 
         insta::assert_snapshot!(
             operation.tool.description.unwrap(),
-            @r###"
+            @r#"
         Get a list of A
         The returned value is an array of type `A`
         ---
@@ -2609,7 +2638,7 @@ mod tests {
         type Z {
           zzz: Int
         }
-        "###
+        "#
         );
     }
 
@@ -2644,7 +2673,7 @@ mod tests {
 
         insta::assert_snapshot!(
             operation.tool.description.unwrap(),
-            @r###"Overridden tool #description"###
+            @"Overridden tool #description"
         );
     }
 
@@ -2677,7 +2706,7 @@ mod tests {
 
         insta::assert_snapshot!(
             operation.tool.description.unwrap(),
-            @r###"The returned value is optional and has type `String`"###
+            @"The returned value is optional and has type `String`"
         );
     }
 
@@ -2702,11 +2731,11 @@ mod tests {
 
         insta::assert_snapshot!(
             operation.tool.description.unwrap(),
-            @r###"
-                The returned value is optional and has type `String`
-                ---
-                The returned value is optional and has type `RealEnum`
-            "###
+            @r"
+        The returned value is optional and has type `String`
+        ---
+        The returned value is optional and has type `RealEnum`
+        "
         );
     }
 
@@ -2731,15 +2760,16 @@ mod tests {
 
         insta::assert_snapshot!(
             operation.tool.description.unwrap(),
-            @r###"
-                """the description for the enum"""
-                enum RealEnum {
-                  """ENUM_VALUE_1 is a value"""
-                  ENUM_VALUE_1
-                  """ENUM_VALUE_2 is a value"""
-                  ENUM_VALUE_2
-                }
-            "###
+            @r#"
+        ---
+        """the description for the enum"""
+        enum RealEnum {
+          """ENUM_VALUE_1 is a value"""
+          ENUM_VALUE_1
+          """ENUM_VALUE_2 is a value"""
+          ENUM_VALUE_2
+        }
+        "#
         );
     }
 
@@ -2764,7 +2794,7 @@ mod tests {
 
         insta::assert_snapshot!(
             operation.tool.description.unwrap(),
-            @r###""###
+            @""
         );
     }
 
@@ -2811,7 +2841,7 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        insta::assert_debug_snapshot!(operation.tool, @r###"
+        insta::assert_debug_snapshot!(operation.tool, @r##"
         Tool {
             name: "Test",
             description: Some(
@@ -2854,7 +2884,7 @@ mod tests {
                 },
             ),
         }
-        "###);
+        "##);
     }
 
     #[test]
@@ -2880,7 +2910,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_debug_snapshot!(tool, @r###"
+        insta::assert_debug_snapshot!(tool, @r#"
         Tool {
             name: "QueryName",
             description: Some(
@@ -2906,7 +2936,7 @@ mod tests {
                 },
             ),
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -2930,7 +2960,7 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
@@ -2940,7 +2970,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -3000,7 +3030,7 @@ mod tests {
             .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
@@ -3014,7 +3044,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -3076,7 +3106,7 @@ mod tests {
             .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
@@ -3086,7 +3116,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -3109,7 +3139,7 @@ mod tests {
             .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
@@ -3119,7 +3149,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -3142,7 +3172,7 @@ mod tests {
             .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
@@ -3152,7 +3182,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -3175,7 +3205,7 @@ mod tests {
             .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
@@ -3189,7 +3219,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -3240,7 +3270,7 @@ mod tests {
             .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {
@@ -3254,7 +3284,7 @@ mod tests {
             }
           }
         }
-        "###);
+        "#);
     }
 
     #[test]
@@ -3277,11 +3307,233 @@ mod tests {
         .unwrap();
         let tool = Tool::from(operation);
 
-        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r###"
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r#"
         {
           "type": "object",
           "properties": {}
         }
-        "###);
+        "#);
+    }
+
+    #[test]
+    fn nullable_list_of_nullable_input_objects() {
+        let operation = Operation::from_document(
+            RawOperation {
+                source_text: "query QueryName($objects: [RealInputObject]) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+                source_path: None,
+            },
+            &SCHEMA,
+            None,
+            MutationMode::None,
+            false,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        let tool = Tool::from(operation);
+
+        insta::assert_debug_snapshot!(tool, @r##"
+        Tool {
+            name: "QueryName",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
+            input_schema: {
+                "type": String("object"),
+                "properties": Object {
+                    "objects": Object {
+                        "type": String("array"),
+                        "items": Object {
+                            "oneOf": Array [
+                                Object {
+                                    "$ref": String("#/definitions/RealInputObject"),
+                                },
+                                Object {
+                                    "type": String("null"),
+                                },
+                            ],
+                        },
+                    },
+                },
+                "definitions": Object {
+                    "RealInputObject": Object {
+                        "type": String("object"),
+                        "required": Array [
+                            String("required"),
+                        ],
+                        "properties": Object {
+                            "optional": Object {
+                                "description": String("optional is a input field that is optional"),
+                                "type": String("string"),
+                            },
+                            "required": Object {
+                                "description": String("required is a input field that is required"),
+                                "type": String("string"),
+                            },
+                        },
+                    },
+                },
+            },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
+        }
+        "##);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r##"
+        {
+          "type": "object",
+          "properties": {
+            "objects": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/RealInputObject"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "definitions": {
+            "RealInputObject": {
+              "type": "object",
+              "required": [
+                "required"
+              ],
+              "properties": {
+                "optional": {
+                  "description": "optional is a input field that is optional",
+                  "type": "string"
+                },
+                "required": {
+                  "description": "required is a input field that is required",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+        "##);
+    }
+
+    #[test]
+    fn non_nullable_list_of_non_nullable_input_objects() {
+        let operation = Operation::from_document(
+            RawOperation {
+                source_text: "query QueryName($objects: [RealInputObject!]!) { id }".to_string(),
+                persisted_query_id: None,
+                headers: None,
+                variables: None,
+                source_path: None,
+            },
+            &SCHEMA,
+            None,
+            MutationMode::None,
+            false,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+        let tool = Tool::from(operation);
+
+        insta::assert_debug_snapshot!(tool, @r##"
+        Tool {
+            name: "QueryName",
+            description: Some(
+                "The returned value is optional and has type `String`",
+            ),
+            input_schema: {
+                "type": String("object"),
+                "required": Array [
+                    String("objects"),
+                ],
+                "properties": Object {
+                    "objects": Object {
+                        "type": String("array"),
+                        "items": Object {
+                            "$ref": String("#/definitions/RealInputObject"),
+                        },
+                    },
+                },
+                "definitions": Object {
+                    "RealInputObject": Object {
+                        "type": String("object"),
+                        "required": Array [
+                            String("required"),
+                        ],
+                        "properties": Object {
+                            "optional": Object {
+                                "description": String("optional is a input field that is optional"),
+                                "type": String("string"),
+                            },
+                            "required": Object {
+                                "description": String("required is a input field that is required"),
+                                "type": String("string"),
+                            },
+                        },
+                    },
+                },
+            },
+            annotations: Some(
+                ToolAnnotations {
+                    title: None,
+                    read_only_hint: Some(
+                        true,
+                    ),
+                    destructive_hint: None,
+                    idempotent_hint: None,
+                    open_world_hint: None,
+                },
+            ),
+        }
+        "##);
+        insta::assert_snapshot!(serde_json::to_string_pretty(&serde_json::json!(tool.input_schema)).unwrap(), @r##"
+        {
+          "type": "object",
+          "required": [
+            "objects"
+          ],
+          "properties": {
+            "objects": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/RealInputObject"
+              }
+            }
+          },
+          "definitions": {
+            "RealInputObject": {
+              "type": "object",
+              "required": [
+                "required"
+              ],
+              "properties": {
+                "optional": {
+                  "description": "optional is a input field that is optional",
+                  "type": "string"
+                },
+                "required": {
+                  "description": "required is a input field that is required",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+        "##);
     }
 }

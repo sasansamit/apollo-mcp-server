@@ -4,6 +4,98 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.7.5] - 2025-09-03
+
+## 🐛 Fixes
+
+### fix: Validate ExecutableDocument in validate tool - @swcollard PR #329
+
+Contains fixes for https://github.com/apollographql/apollo-mcp-server/issues/327
+
+The validate tool was parsing the operation passed in to it against the schema but it wasn't performing the validate function on the ExecutableDocument returned by the Parser. This led to cases where missing required arguments were not caught by the Tool.
+
+This change also updates the input schema to the execute tool to make it more clear to the LLM that it needs to provide a valid JSON object
+
+## 🛠 Maintenance
+
+### test: adding a basic manual e2e test for mcp server - @alocay PR #320
+
+Adding some basic e2e tests using [mcp-server-tester](https://github.com/steviec/mcp-server-tester). Currently, the tool does not always exit (ctrl+c is sometimes needed) so this should be run manually.
+
+### How to run tests?
+Added a script `run_tests.sh` (may need to run `chmod +x` to run it) to run tests. Basic usage found via `./run_tests.sh -h`. The script does the following:
+
+1. Builds test/config yaml paths and verifies the files exist.
+2. Checks if release `apollo-mcp-server` binary exists. If not, it builds the binary via `cargo build --release`.
+3. Reads in the template file (used by `mcp-server-tester`) and replaces all `<test-dir>` placeholders with the test directory value. Generates this test server config file and places it in a temp location.
+4. Invokes the `mcp-server-tester` via `npx`.
+5. On script exit the generated config is cleaned up.
+
+### Example run:
+To run the tests for `local-operations` simply run `./run_tests.sh local-operations`
+
+### Update snapshot format - @DaleSeo PR #313
+
+Updates all inline snapshots in the codebase to ensure they are consistent with the latest insta format.
+
+### Hardcoded version strings in tests - @DaleSeo PR #305
+
+The GraphQL tests have hardcoded version strings that we need to update manually each time we release a new version. Since this isn't included in the release checklist, it's easy to miss it and only notice the test failures later.
+
+# [0.7.4] - 2025-08-27
+
+## 🐛 Fixes
+
+### fix: Add missing token propagation for execute tool - @DaleSeo PR #298
+
+The execute tool is not forwarding JWT authentication tokens to upstream GraphQL endpoints, causing authentication failures when using this tool with protected APIs. This PR adds missing token propagation for execute tool.
+
+# [0.7.3] - 2025-08-25
+
+## 🐛 Fixes
+
+### fix: generate openAI-compatible json schemas for list types - @DaleSeo PR #272
+
+The MCP server is generating JSON schemas that don't match OpenAI's function calling specification. It puts `oneOf` at the array level instead of using `items` to define the JSON schemas for the GraphQL list types. While some other LLMs are more flexible about this, it technically violates the [JSON Schema specification](https://json-schema.org/understanding-json-schema/reference/array) that OpenAI strictly follows.
+
+This PR updates the list type handling logic to move `oneOf` inside `items` for GraphQL list types.
+
+# [0.7.2] - 2025-08-19
+
+## 🚀 Features
+
+### Prevent server restarts while polling collections - @DaleSeo PR #261
+
+Right now, the MCP server restarts whenever there's a connectivity issue while polling collections from GraphOS. This causes the entire server to restart instead of handling the error gracefully.
+
+```
+Error: Failed to create operation: Error loading collection: error sending request for url (https://graphql.api.apollographql.com/api/graphql)
+Caused by:
+    Error loading collection: error sending request for url (https://graphql.api.apollographql.com/api/graphql)
+```
+
+This PR prevents server restarts by distinguishing between transient errors and permanent errors.
+
+## 🐛 Fixes
+
+### Keycloak OIDC discovery URL transformation - @DaleSeo PR #238
+
+The MCP server currently replaces the entire path when building OIDC discovery URLs. This causes authentication failures for identity providers like Keycloak, which have path-based realms in the URL. This PR updates the URL transformation logic to preserve the existing path from the OAuth server URL.
+
+### fix: build error, let expressions unstable in while - @ThoreKoritzius #263
+
+Fix unstable let expressions in while loop
+Replaced the unstable while let = expr syntax with a stable alternative, ensuring the code compiles on stable Rust without requiring nightly features.
+
+## 🛠 Maintenance
+
+### Address Security Vulnerabilities - @DaleSeo PR #264
+
+This PR addresses the security vulnerabilities and dependency issues tracked in Dependency Dashboard #41 (https://osv.dev/vulnerability/RUSTSEC-2024-0388).
+
+- Replaced the unmaintained `derivate` crate with the `educe` crate instead.
+- Updated the `tantivy` crate.
+
 # [0.7.1] - 2025-08-13
 
 ## 🚀 Features

@@ -5,11 +5,13 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
   workflow_dispatch:
-    inputs:
+    inputs: &release_inputs
       version:
         description: Version to publish
         required: true
         type: string
+  workflow_call:
+    inputs: *release_inputs
 
 env:
   REGISTRY: ghcr.io
@@ -30,7 +32,7 @@ jobs:
       attestations: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.ref }}
 
@@ -101,9 +103,8 @@ jobs:
         shell: bash
         run: |
           docker manifest push $FQDN:$VERSION
-
-          # Only push the latest tag if this isn't a release candidate (ends with
-          # `rc.#`.
-          if [[ ! "$VERSION" =~ -rc\.[0-9]+$ ]]; then
+          
+          # push :latest only if version DOES NOT start with canary OR end with -rc.<digits>
+          if [[ ! "$VERSION" =~ (^canary|-rc\.[0-9]+$) ]]; then
             docker manifest push $FQDN:latest
           fi

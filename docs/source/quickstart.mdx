@@ -3,11 +3,11 @@ title: Get Started
 subtitle: Run Apollo MCP Server for the first time
 ---
 
-<ExperimentalFeature>
+<PreviewFeature>
 
-This feature is [experimental](/graphos/resources/feature-launch-stages#experimental). Your questions and feedback are highly valued—don't hesitate to get in touch with your Apollo contact or post in the [Apollo Community MCP Server Category](https://community.apollographql.com/c/mcp-server/41).
+This feature is in [preview](/graphos/resources/feature-launch-stages#preview). Your questions and feedback are highly valued—don't hesitate to get in touch with your Apollo contact or post in the [Apollo Community MCP Server Category](https://community.apollographql.com/c/mcp-server/41).
 
-</ExperimentalFeature>
+</PreviewFeature>
 
 Let's run Apollo MCP Server for the first time! You will:
 
@@ -61,6 +61,12 @@ The example files located in `graphql/TheSpaceDevs/` include:
 
 ## Step 2: Run the MCP Server
 
+You can run the MCP Server using the Rover CLI or Docker. 
+
+> **Note**: We recommend using Docker if you typically use it in your developer workflow. Otherwise, use Rover.
+
+### Run with Rover
+
 1. From the root directory of your local repo, run `rover dev` to start a local graph with an MCP Server:
     ```sh showLineNumbers=false
     rover dev --supergraph-config ./graphql/TheSpaceDevs/supergraph.yaml \
@@ -72,24 +78,67 @@ The example files located in `graphql/TheSpaceDevs/` include:
     - Starts an MCP Server with the `--mcp` flag
     - Provides a configuration file with MCP Server options
 
-    See the [command reference](/apollo-mcp-server/command-reference#config-options) for a list of available configuration options. 
+    See the [config file reference](/apollo-mcp-server/config-file) for a list of available configuration options. 
 
-2. Start MCP Inspector to verify the server is running:
+### Run with Docker
+
+1. Modify the MCP server configuration in `graphql/TheSpaceDevs/config.yaml`. Update the paths to point to the `/data` directory, as the Docker container expects:
+    ```yaml title="graphql/TheSpaceDevs/config.yaml" {7, 10}
+    endpoint: https://thespacedevs-production.up.railway.app/
+    transport:
+      type: streamable_http
+    operations:
+      source: local
+      paths:
+        - /data/operations
+    schema:
+      source: local
+      path: /data/api.graphql
+    overrides:
+      mutation_mode: all
+    introspection:
+      execute:
+        enabled: true
+      introspect:
+        enabled: true
+      search:
+        enabled: true
+    ```
+
+1. In a new terminal, from the root directory of your local repo, run this Docker command to start the MCP Server:
+    ```sh showLineNumbers=false
+    docker run \
+      -it --rm \
+      --name apollo-mcp-server \
+      -p 5000:5000 \
+      -v $PWD/graphql/TheSpaceDevs/config.yaml:/config.yaml \
+      -v $PWD/graphql/TheSpaceDevs:/data \
+      ghcr.io/apollographql/apollo-mcp-server:latest /config.yaml
+    ```
+
+    This command:
+    - Starts an MCP Server in a Docker container
+    - Maps configuration files into the proper place for the Apollo MCP Server container
+    - Forwards port 5000 for accessing the MCP Server
+
+## Step 3: Verify the MCP Server with MCP Inspector
+
+1. Start MCP Inspector to verify the server is running:
 
     ```sh
     npx @modelcontextprotocol/inspector
     ```
 
-3. Open a browser and go to [`http://127.0.0.1:6274`](http://127.0.0.1:6274)
+1. Open a browser and go to [`http://127.0.0.1:6274`](http://127.0.0.1:6274)
 
-4. In Inspector:
+1. In Inspector:
     - Select `Streamable HTTP` as the Transport Type
     - Enter `http://127.0.0.1:5000/mcp` as the URL
     - Click **Connect**, then **List Tools**
 
     You should see the tools from your server listed.
 
-## Step 3: Connect Claude Desktop
+## Step 4: Connect Claude Desktop
 
 We're using [Claude](https://claude.ai/download) as our AI Assistant (acting as our MCP Client).
 
@@ -124,7 +173,7 @@ You need Node v18 or later installed for `mcp-remote` to work. If you have an ol
 
 2. Restart Claude.
 
-## Step 4: Test Your Setup
+## Step 5: Test Your Setup with Claude
 
 Let's verify everything is working:
 
@@ -185,12 +234,13 @@ If you're still having issues:
 
 ## Next Steps
 
-See the [user guide](/apollo-mcp-server/guides) to learn how to create tools from:
-- [Operation files](/apollo-mcp-server/guides#from-operation-files)
-- [Persisted query manifests](/apollo-mcp-server/guides/#from-persisted-query-manifests)
-- [Schema introspection](/apollo-mcp-server/guides/#introspection-tools)
+Learn how to define tools from:
+- [Operation files](/apollo-mcp-server/define-tools#from-operation-files)
+- [Persisted query manifests](/apollo-mcp-server/define-tools#from-persisted-query-manifests)
+- [Operation collections](/apollo-mcp-server/define-tools#from-operation-collection)
+- [Schema introspection](/apollo-mcp-server/define-tools#introspection-tools)
 
-When you are ready, [deploy the MCP server](https://www.apollographql.com/docs/apollo-mcp-server/guides#deploying-the-mcp-server).
+When you are ready, [deploy the MCP server](https://www.apollographql.com/docs/apollo-mcp-server/deploy).
 
 ### Additional Resources
 
