@@ -5,7 +5,7 @@ use rmcp::model::{
     ReadResourceRequestParam, ReadResourceResult, ServerInfo,
 };
 use rmcp::service::{NotificationContext, RequestContext};
-use rmcp::{Error as McpError, Peer, RoleClient, RoleServer, ServerHandler};
+use rmcp::{ErrorData, Peer, RoleClient, RoleServer, ServerHandler};
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
@@ -23,7 +23,10 @@ impl ProxyServer {
                 protocol_version: info.protocol_version.clone(),
                 server_info: Implementation {
                     name: info.server_info.name.clone(),
+                    title: None,
                     version: info.server_info.version.clone(),
+                    icons: None,
+                    website_url: None,
                 },
                 instructions: info.instructions.clone(),
                 capabilities: info.capabilities.clone(),
@@ -44,7 +47,7 @@ impl ServerHandler for ProxyServer {
         &self,
         _request: InitializeRequestParam,
         context: RequestContext<RoleServer>,
-    ) -> Result<InitializeResult, McpError> {
+    ) -> Result<InitializeResult, ErrorData> {
         if let Some(http_request_part) = context.extensions.get::<axum::http::request::Parts>() {
             let initialize_headers = &http_request_part.headers;
             let initialize_uri = &http_request_part.uri;
@@ -58,7 +61,7 @@ impl ServerHandler for ProxyServer {
         &self,
         request: rmcp::model::CompleteRequestParam,
         _context: RequestContext<RoleServer>,
-    ) -> Result<rmcp::model::CompleteResult, McpError> {
+    ) -> Result<rmcp::model::CompleteResult, ErrorData> {
         match self.client.complete(request).await {
             Ok(result) => {
                 debug!("[Proxy] Proxying complete response");
@@ -66,7 +69,7 @@ impl ServerHandler for ProxyServer {
             }
             Err(err) => {
                 error!("[Proxy] Error completing: {:?}", err);
-                Err(McpError::internal_error(
+                Err(ErrorData::internal_error(
                     format!("Error completing: {err}"),
                     None,
                 ))
@@ -78,10 +81,10 @@ impl ServerHandler for ProxyServer {
         &self,
         request: GetPromptRequestParam,
         _context: RequestContext<RoleServer>,
-    ) -> Result<GetPromptResult, McpError> {
+    ) -> Result<GetPromptResult, ErrorData> {
         if self.server_info.capabilities.prompts.is_none() {
             error!("[Proxy] Server doesn't support the prompts capability");
-            return Err(McpError::internal_error(
+            return Err(ErrorData::internal_error(
                 "Server doesn't support the prompts capability".to_string(),
                 None,
             ));
@@ -94,7 +97,7 @@ impl ServerHandler for ProxyServer {
             }
             Err(err) => {
                 error!("[Proxy] Error getting prompt: {:?}", err);
-                Err(McpError::internal_error(
+                Err(ErrorData::internal_error(
                     format!("Error getting prompt: {err}"),
                     None,
                 ))
@@ -106,10 +109,10 @@ impl ServerHandler for ProxyServer {
         &self,
         request: Option<PaginatedRequestParam>,
         _context: RequestContext<RoleServer>,
-    ) -> Result<ListPromptsResult, McpError> {
+    ) -> Result<ListPromptsResult, ErrorData> {
         if self.server_info.capabilities.prompts.is_none() {
             error!("[Proxy] Server doesn't support the prompts capability");
-            return Err(McpError::internal_error(
+            return Err(ErrorData::internal_error(
                 "Server doesn't support the prompts capability".to_string(),
                 None,
             ));
@@ -131,10 +134,10 @@ impl ServerHandler for ProxyServer {
         &self,
         request: Option<PaginatedRequestParam>,
         _: RequestContext<RoleServer>,
-    ) -> Result<ListResourcesResult, McpError> {
+    ) -> Result<ListResourcesResult, ErrorData> {
         if self.server_info.capabilities.resources.is_none() {
             error!("[Proxy] Server doesn't support the resources capability");
-            return Err(McpError::internal_error(
+            return Err(ErrorData::internal_error(
                 "Server doesn't support the resources capability".to_string(),
                 None,
             ));
@@ -159,10 +162,10 @@ impl ServerHandler for ProxyServer {
         &self,
         request: Option<PaginatedRequestParam>,
         _context: RequestContext<RoleServer>,
-    ) -> Result<ListResourceTemplatesResult, McpError> {
+    ) -> Result<ListResourceTemplatesResult, ErrorData> {
         if self.server_info.capabilities.resources.is_none() {
             error!("[Proxy] Server doesn't support the resources capability");
-            return Err(McpError::internal_error(
+            return Err(ErrorData::internal_error(
                 "Server doesn't support the resources capability".to_string(),
                 None,
             ));
@@ -187,10 +190,10 @@ impl ServerHandler for ProxyServer {
         &self,
         request: ReadResourceRequestParam,
         _context: RequestContext<RoleServer>,
-    ) -> Result<ReadResourceResult, McpError> {
+    ) -> Result<ReadResourceResult, ErrorData> {
         if self.server_info.capabilities.resources.is_none() {
             error!("[Proxy] Server doesn't support the resources capability");
-            return Err(McpError::internal_error(
+            return Err(ErrorData::internal_error(
                 "Server doesn't support the resources capability".to_string(),
                 None,
             ));
@@ -212,7 +215,7 @@ impl ServerHandler for ProxyServer {
             }
             Err(err) => {
                 error!("[Proxy] Error reading resource: {:?}", err);
-                Err(McpError::internal_error(
+                Err(ErrorData::internal_error(
                     format!("Error reading resource: {err}"),
                     None,
                 ))
@@ -224,10 +227,10 @@ impl ServerHandler for ProxyServer {
         &self,
         request: CallToolRequestParam,
         _context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResult, McpError> {
+    ) -> Result<CallToolResult, ErrorData> {
         if self.server_info.capabilities.tools.is_none() {
             error!("[Proxy] Server doesn't support the tools capability");
-            return Err(McpError::internal_error(
+            return Err(ErrorData::internal_error(
                 "Server doesn't support the tools capability".to_string(),
                 None,
             ));
@@ -251,10 +254,10 @@ impl ServerHandler for ProxyServer {
         &self,
         request: Option<PaginatedRequestParam>,
         _context: RequestContext<RoleServer>,
-    ) -> Result<ListToolsResult, McpError> {
+    ) -> Result<ListToolsResult, ErrorData> {
         if self.server_info.capabilities.tools.is_none() {
             error!("[Proxy] Server doesn't support the tools capability");
-            return Err(McpError::internal_error(
+            return Err(ErrorData::internal_error(
                 "Server doesn't support the tools capability".to_string(),
                 None,
             ));

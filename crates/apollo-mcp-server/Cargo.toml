@@ -31,12 +31,7 @@ jwks = "0.4.0"
 lz-str = "0.2.1"
 regex = "1.11.1"
 reqwest.workspace = true
-rmcp = { version = "0.6", features = [
-  "server",
-  "transport-io",
-  "transport-sse-server",
-  "transport-streamable-http-server",
-] }
+rmcp.workspace = true
 schemars = { version = "1.0.1", features = ["url2"] }
 serde.workspace = true
 serde_json.workspace = true

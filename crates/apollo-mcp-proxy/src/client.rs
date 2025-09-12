@@ -20,7 +20,10 @@ pub async fn start_proxy_client(
         capabilities: ClientCapabilities::default(),
         client_info: Implementation {
             name: "mcp remote rust client".to_string(),
+            title: None,
             version: env!("CARGO_PKG_VERSION").to_string(),
+            icons: None,
+            website_url: None,
         },
     };
 
