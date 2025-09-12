@@ -13,7 +13,7 @@ mod overrides;
 mod schema_source;
 mod schemas;
 pub mod telemetry;
-mod telemetry_exporter;
+mod filtering_exporter;
 
 use std::path::Path;
 
