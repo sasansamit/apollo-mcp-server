@@ -31,3 +31,20 @@ pub enum TelemetryAttribute {
 pub const APOLLO_MCP_ATTRIBUTE_MY_ATTRIBUTE: &str = "apollo.mcp.attribute.my_attribute";
 pub const APOLLO_MCP_METRIC_SOME_COUNT: &str = "apollo.mcp.metric.some.count";
 ```
+The configuration for this would look like the following:
+```
+telemetry:
+  exporters:
+    metrics:
+      otlp:
+        endpoint: "http://localhost:4317"
+        protocol: "grpc"
+      omitted_attributes:
+        - tool_name
+    tracing:
+      otlp:
+        endpoint: "http://localhost:4317"
+        protocol: "grpc"
+      omitted_attributes:
+        - request_id
+```
